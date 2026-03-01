@@ -13,10 +13,11 @@ import (
 
 // Load reads the config file from the config directory.
 // If the file does not exist, it returns Default() config.
+// Returns error on non-ENOENT failures (permissions, corrupt TOML).
 func Load() (*Config, error) {
 	configDir, err := ConfigDir()
 	if err != nil {
-		return Default(), nil
+		return nil, fmt.Errorf("finding config directory: %w", err)
 	}
 
 	path := filepath.Join(configDir, "config.toml")

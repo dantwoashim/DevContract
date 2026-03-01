@@ -104,12 +104,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("  ▸ Encrypted store initialized at %s/store/\n", dataDir)
 
-	// Warn about no passphrase (per spec)
-	fmt.Println()
-	fmt.Println("  ⚠ Your SSH key has no passphrase. This means your EnvSync")
-	fmt.Println("    encryption keys are only as secure as your filesystem.")
-	fmt.Printf("    Consider adding a passphrase: ssh-keygen -p -f %s\n", keyPath)
-
 	fmt.Println()
 	fmt.Println("  ✓ Ready. Run 'envsync invite @teammate' to start a team.")
 

@@ -157,9 +157,9 @@ func Pull(ctx context.Context, opts PullOptions) (*PullResult, error) {
 		return nil, fmt.Errorf("data checksum mismatch — possible corruption")
 	}
 
-	// Validate sequence: reject replays (sequence must be > last known for this peer)
-	peerFP := conn.RemotePublicKey()
-	lastSeq := loadLastSequence(peerFP)
+	// Validate sequence: reject replays (use hex-encoded remote PK as stable peer ID)
+	peerID := hex.EncodeToString(conn.RemotePublicKey())
+	lastSeq := loadLastSequence([]byte(peerID))
 	if payload.Sequence <= lastSeq {
 		SendMessage(conn, Message{Type: MsgNack, Payload: []byte("replayed sequence number")})
 		return nil, fmt.Errorf("replay detected: sequence %d ≤ last seen %d from peer", payload.Sequence, lastSeq)
@@ -236,7 +236,7 @@ func Pull(ctx context.Context, opts PullOptions) (*PullResult, error) {
 	result.Applied = true
 
 	// Persist the sequence number for this peer to prevent future replays
-	saveLastSequence(peerFP, payload.Sequence)
+	saveLastSequence([]byte(peerID), payload.Sequence)
 
 	if opts.OnApplied != nil {
 		opts.OnApplied(envPath)
