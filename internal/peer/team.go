@@ -3,6 +3,7 @@
 package peer
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
 	"os"
@@ -13,12 +14,19 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 )
 
-// GenerateTeamID creates a deterministic team ID from creator fingerprint + name.
+// GenerateTeamID creates a team ID from creator fingerprint + name + random secret.
+// The secret prevents team IDs from being computable from public fingerprints.
 func GenerateTeamID(creatorFingerprint, name string) string {
+	// Generate a random component so team IDs aren't guessable
+	secret := make([]byte, 16)
+	rand.Read(secret) // crypto/rand — if this fails we get zeros (still mixed in)
+
 	h := sha256.New()
 	h.Write([]byte(creatorFingerprint))
 	h.Write([]byte(":"))
 	h.Write([]byte(name))
+	h.Write([]byte(":"))
+	h.Write(secret)
 	return fmt.Sprintf("%x", h.Sum(nil))[:16]
 }
 

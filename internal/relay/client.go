@@ -239,17 +239,18 @@ func (c *Client) ConsumeInvite(tokenHash string) (*InviteResponse, error) {
 
 // UploadBlob uploads an encrypted blob to the relay.
 // Uses doRequest for retry and consistent signing, then adds blob-specific headers.
-func (c *Client) UploadBlob(teamID, blobID string, data []byte, senderFP, recipientFP, ephemeralKey, filename string) error {
+func (c *Client) UploadBlob(teamID, blobID string, data []byte, senderFP, recipientFP, ephemeralKey, filename, senderSig string) error {
 	path := "/relay/" + teamID + "/" + blobID
 
 	// Use doRequest for retry + signing consistency
 	// We need to temporarily override httpClient to inject headers
 	resp, err := c.doUploadRequest("PUT", path, data, map[string]string{
-		"Content-Type":          "application/octet-stream",
-		"X-EnvSync-Sender":     senderFP,
-		"X-EnvSync-Recipient":  recipientFP,
+		"Content-Type":            "application/octet-stream",
+		"X-EnvSync-Sender":       senderFP,
+		"X-EnvSync-Recipient":    recipientFP,
 		"X-EnvSync-EphemeralKey": ephemeralKey,
-		"X-EnvSync-Filename":   filename,
+		"X-EnvSync-Filename":     filename,
+		"X-EnvSync-Signature":    senderSig,
 	})
 	if err != nil {
 		return err

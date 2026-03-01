@@ -16,8 +16,8 @@ func NewBlobFlow(client *Client) *BlobFlow {
 }
 
 // Upload encrypts and uploads a blob to the relay.
-func (f *BlobFlow) Upload(teamID, blobID string, data []byte, senderFP, recipientFP, ephemeralKey, filename string) error {
-	return f.client.UploadBlob(teamID, blobID, data, senderFP, recipientFP, ephemeralKey, filename)
+func (f *BlobFlow) Upload(teamID, blobID string, data []byte, senderFP, recipientFP, ephemeralKey, filename, senderSig string) error {
+	return f.client.UploadBlob(teamID, blobID, data, senderFP, recipientFP, ephemeralKey, filename, senderSig)
 }
 
 // ListPending returns pending blobs for the current identity.

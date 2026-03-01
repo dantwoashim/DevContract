@@ -91,3 +91,24 @@ func abs64(x int64) int64 {
 	}
 	return x
 }
+
+// SignBlob signs an encrypted blob for sender authentication on relay uploads.
+// Signs SHA-256(encrypted_data || ephemeral_key || sender_fingerprint).
+func SignBlob(privateKey ed25519.PrivateKey, encryptedData, ephemeralKey []byte, senderFP string) []byte {
+	h := sha256.New()
+	h.Write(encryptedData)
+	h.Write(ephemeralKey)
+	h.Write([]byte(senderFP))
+	digest := h.Sum(nil)
+	return ed25519.Sign(privateKey, digest)
+}
+
+// VerifyBlobSignature verifies a sender's signature on a relay blob.
+func VerifyBlobSignature(publicKey ed25519.PublicKey, encryptedData, ephemeralKey []byte, senderFP string, signature []byte) bool {
+	h := sha256.New()
+	h.Write(encryptedData)
+	h.Write(ephemeralKey)
+	h.Write([]byte(senderFP))
+	digest := h.Sum(nil)
+	return ed25519.Verify(publicKey, digest, signature)
+}

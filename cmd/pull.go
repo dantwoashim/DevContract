@@ -38,6 +38,17 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
+	// Verify identity is configured
+	if cfg.Identity.Fingerprint == "" {
+		ui.RenderError(ui.StructuredError{
+			Category:   ui.ErrConfig,
+			Message:    "Not initialized",
+			Cause:      "No identity configured",
+			Suggestion: "Run 'envsync init' to set up your identity",
+		})
+		return fmt.Errorf("not initialized: run 'envsync init' first")
+	}
+
 	noiseKP := crypto.NewNoiseKeypair(kp.X25519Private, kp.X25519Public)
 	targetFile, _ := cmd.Flags().GetString("file")
 	if targetFile == "" {

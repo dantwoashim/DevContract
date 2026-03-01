@@ -3,6 +3,7 @@
 package crypto
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
@@ -181,9 +182,14 @@ func (sc *SecureConn) SetWriteDeadline(t time.Time) error {
 }
 
 // writeFrame writes a length-prefixed frame to the connection.
+// Enforces a maximum frame size of 65535 bytes (matching readFrame).
 func writeFrame(conn net.Conn, data []byte) error {
+	if len(data) > 65535 {
+		return fmt.Errorf("frame too large to send: %d bytes (max 65535)", len(data))
+	}
 	// 4-byte big-endian length prefix
-	lenBuf := uint32ToBytes(uint32(len(data)))
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(data)))
 	if _, err := conn.Write(lenBuf); err != nil {
 		return err
 	}
@@ -198,7 +204,7 @@ func readFrame(conn net.Conn) ([]byte, error) {
 		return nil, err
 	}
 
-	length := uint32(lenBuf[0])<<24 | uint32(lenBuf[1])<<16 | uint32(lenBuf[2])<<8 | uint32(lenBuf[3])
+	length := binary.BigEndian.Uint32(lenBuf)
 	if length > 65535 {
 		return nil, fmt.Errorf("frame too large: %d bytes (max 65535)", length)
 	}

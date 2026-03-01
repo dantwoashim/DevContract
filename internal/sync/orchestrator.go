@@ -203,10 +203,15 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 			blobID := fmt.Sprintf("%s-%d-%d", fileName, opts.Sequence, time.Now().UnixMilli())
 			ephPubB64 := base64.StdEncoding.EncodeToString(ephPub[:])
 
+			// Sign the encrypted blob for sender authentication
+			sig := crypto.SignBlob(opts.KeyPair.Ed25519Private, encrypted, ephPub[:], opts.KeyPair.Fingerprint)
+			sigB64 := base64.StdEncoding.EncodeToString(sig)
+
 			err = opts.RelayClient.UploadBlob(
 				opts.TeamID, blobID, encrypted,
 				opts.KeyPair.Fingerprint, tp.Fingerprint,
 				ephPubB64, fileName,
+				sigB64,
 			)
 			if err != nil {
 				report(fmt.Sprintf("Relay upload failed for %s: %s", tp.GitHubUsername, err))
