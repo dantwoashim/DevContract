@@ -57,7 +57,10 @@ func saveConfig(cfg *config.Config) error {
 
 // loadIdentity reads the SSH key and derives the crypto identity.
 func loadIdentity() (*crypto.KeyPair, error) {
-	cfg, _ := loadConfig()
+	cfg, err := loadConfig()
+	if err != nil {
+		return nil, fmt.Errorf("loading config: %w", err)
+	}
 	keyPath := ""
 	if cfg != nil {
 		keyPath = cfg.Identity.SSHKeyPath
@@ -91,4 +94,3 @@ func readLocalEnv(path string) ([]byte, error) {
 func writeEnvFile(path string, data []byte) error {
 	return os.WriteFile(path, data, 0600)
 }
-

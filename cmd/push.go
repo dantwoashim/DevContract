@@ -35,11 +35,22 @@ func runPush(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		ui.RenderError(ui.StructuredError{
 			Category:   ui.ErrConfig,
-			Message:    "Config not found",
+			Message:    "Config not found or corrupted",
 			Cause:      err.Error(),
 			Suggestion: "Run 'envsync init' first",
 		})
-		return fmt.Errorf("%s", err)
+		return fmt.Errorf("config: %w", err)
+	}
+
+	// Verify identity is configured (loadConfig returns defaults on ENOENT)
+	if cfg.Identity.Fingerprint == "" {
+		ui.RenderError(ui.StructuredError{
+			Category:   ui.ErrConfig,
+			Message:    "Not initialized",
+			Cause:      "No identity configured",
+			Suggestion: "Run 'envsync init' to set up your identity",
+		})
+		return fmt.Errorf("not initialized: run 'envsync init' first")
 	}
 
 	noiseKP := crypto.NewNoiseKeypair(kp.X25519Private, kp.X25519Public)
@@ -95,16 +106,18 @@ func runPush(cmd *cobra.Command, args []string) error {
 	ui.Success(fmt.Sprintf("Pushed to %d/%d peers via %s (%s)",
 		result.SyncedCount, result.PeerCount, result.Method, result.Duration.Truncate(1e6)))
 
-	// Write audit entry
+	// Write audit entry (best-effort: don't fail push on audit error)
 	logger, logErr := audit.NewLogger()
 	if logErr == nil {
-		logger.Log(audit.Entry{
+		if auditErr := logger.Log(audit.Entry{
 			Event:       audit.EventPush,
 			File:        targetFile,
 			VarsChanged: result.SyncedCount,
 			Method:      result.Method,
 			Details:     fmt.Sprintf("%d peers, %s", result.PeerCount, result.Duration.Truncate(1e6)),
-		})
+		}); auditErr != nil {
+			ui.Warning(fmt.Sprintf("Audit log write failed: %s", auditErr))
+		}
 	}
 
 	ui.Blank()

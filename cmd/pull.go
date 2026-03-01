@@ -94,18 +94,22 @@ func runPull(cmd *cobra.Command, args []string) error {
 			}
 
 			if applied {
-				// Clean up the blob from relay
-				relayClient.DeleteBlob(teamID, blob.BlobID)
+				// Clean up the blob from relay (best-effort)
+				if delErr := relayClient.DeleteBlob(teamID, blob.BlobID); delErr != nil {
+					ui.Warning(fmt.Sprintf("  Failed to clean up blob: %s", delErr))
+				}
 
-				// Audit
+				// Audit (best-effort)
 				logger, _ := audit.NewLogger()
 				if logger != nil {
-					logger.Log(audit.Entry{
+					if auditErr := logger.Log(audit.Entry{
 						Event:  audit.EventPull,
 						Peer:   blob.SenderFingerprint,
 						File:   targetFile,
 						Method: "relay",
-					})
+					}); auditErr != nil {
+						ui.Warning(fmt.Sprintf("  Audit log write failed: %s", auditErr))
+					}
 				}
 			}
 		}

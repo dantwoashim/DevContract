@@ -71,10 +71,7 @@ func runInvite(cmd *cobra.Command, args []string) error {
 		ExpectedFingerprint: inviteeFP,
 	})
 	if err != nil {
-		// Relay might not be available — create local invite anyway
-		fmt.Printf("  ⚠ Relay unavailable: %s\n", err)
-		fmt.Println("    Invite created locally. Peer must be on the same LAN.")
-		fmt.Println()
+		return fmt.Errorf("creating invite on relay: %w\n\n  If running LAN-only, use 'envsync invite --lan-only'", err)
 	}
 
 	// Save team locally
