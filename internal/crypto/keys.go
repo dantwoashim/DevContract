@@ -129,7 +129,7 @@ func Ed25519PrivateToX25519(privateKey ed25519.PrivateKey) ([32]byte, error) {
 	seed := privateKey.Seed()
 
 	// SHA-512 hash of the seed, take first 32 bytes, then clamp
-	h := sha256Of512(seed)
+	h := sha512First32(seed)
 
 	// Clamp (per RFC 7748)
 	h[0] &= 248
@@ -183,8 +183,9 @@ func isPassphraseError(err error) bool {
 		strings.Contains(msg, "bcrypt_pbkdf")
 }
 
-// sha256Of512 computes SHA-512 of input and returns the first 32 bytes.
-func sha256Of512(input []byte) [32]byte {
+// sha512First32 computes SHA-512 of input and returns the first 32 bytes.
+// Used for Ed25519 → X25519 seed conversion per the Ed25519 spec.
+func sha512First32(input []byte) [32]byte {
 	// We use crypto/sha512 for the Ed25519 → X25519 conversion
 	// as specified in the Ed25519 paper.
 	// Import is at the top level to avoid confusion with sha256.

@@ -226,7 +226,23 @@ func curve25519Basepoint() []byte {
 
 // padTo1KB pads data to the nearest 1KB boundary for traffic analysis prevention.
 // Format: 2-byte big-endian length prefix + original data + zero padding.
+// For payloads > 65535 bytes: 2-byte marker (0xFF, 0xFF) + 4-byte uint32 length + data.
 func padTo1KB(data []byte) []byte {
+	if len(data) > 65535 {
+		// Extended format: 2-byte marker + 4-byte uint32 length + data
+		totalNeeded := 6 + len(data)
+		paddedLen := ((totalNeeded + 1023) / 1024) * 1024
+		result := make([]byte, paddedLen)
+		result[0] = 0xFF
+		result[1] = 0xFF
+		result[2] = byte(len(data) >> 24)
+		result[3] = byte(len(data) >> 16)
+		result[4] = byte(len(data) >> 8)
+		result[5] = byte(len(data))
+		copy(result[6:], data)
+		return result
+	}
+
 	totalNeeded := 2 + len(data) // 2 bytes for length prefix + data
 	// Round up to nearest 1024 boundary
 	paddedLen := ((totalNeeded + 1023) / 1024) * 1024
@@ -235,26 +251,34 @@ func padTo1KB(data []byte) []byte {
 	}
 
 	result := make([]byte, paddedLen)
-	// Write length as big-endian uint16 (max 65535 bytes)
-	if len(data) > 65535 {
-		// For very large payloads, skip padding
-		result = make([]byte, 2+len(data))
-	}
+	// Write length as big-endian uint16
 	result[0] = byte(len(data) >> 8)
 	result[1] = byte(len(data))
 	copy(result[2:], data)
 	return result
 }
 
-// unpadFrom1KB removes 1KB boundary padding by reading the 2-byte length prefix.
+// unpadFrom1KB removes 1KB boundary padding by reading the length prefix.
 func unpadFrom1KB(padded []byte) ([]byte, error) {
 	if len(padded) < 2 {
 		return nil, errors.New("padded data too short")
 	}
+
+	// Check for extended format marker (0xFF, 0xFF)
+	if padded[0] == 0xFF && padded[1] == 0xFF {
+		if len(padded) < 6 {
+			return nil, errors.New("extended padded data too short")
+		}
+		dataLen := int(padded[2])<<24 | int(padded[3])<<16 | int(padded[4])<<8 | int(padded[5])
+		if 6+dataLen > len(padded) {
+			return nil, fmt.Errorf("data length %d exceeds padded buffer %d", dataLen, len(padded)-6)
+		}
+		return padded[6 : 6+dataLen], nil
+	}
+
 	dataLen := int(padded[0])<<8 | int(padded[1])
 	if 2+dataLen > len(padded) {
 		return nil, fmt.Errorf("data length %d exceeds padded buffer %d", dataLen, len(padded)-2)
 	}
 	return padded[2 : 2+dataLen], nil
 }
-

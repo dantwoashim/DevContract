@@ -51,6 +51,7 @@ type Logger struct {
 }
 
 // NewLogger creates a new audit logger.
+// It loads the hash of the last entry to maintain chain continuity.
 func NewLogger() (*Logger, error) {
 	dataDir, err := config.DataDir()
 	if err != nil {
@@ -61,9 +62,27 @@ func NewLogger() (*Logger, error) {
 		return nil, err
 	}
 
-	return &Logger{
-		path: filepath.Join(dataDir, "audit.jsonl"),
-	}, nil
+	logPath := filepath.Join(dataDir, "audit.jsonl")
+
+	l := &Logger{
+		path: logPath,
+	}
+
+	// Load last hash from existing audit log for chain continuity
+	data, err := os.ReadFile(logPath)
+	if err == nil && len(data) > 0 {
+		// Find the last newline-terminated entry
+		lines := splitLines(data)
+		for i := len(lines) - 1; i >= 0; i-- {
+			if len(lines[i]) > 0 {
+				h := cryptosha256.Sum256(lines[i])
+				l.lastHash = hex.EncodeToString(h[:])
+				break
+			}
+		}
+	}
+
+	return l, nil
 }
 
 // Log appends a tamper-evident event to the audit log.

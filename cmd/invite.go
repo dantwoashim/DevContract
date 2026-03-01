@@ -4,7 +4,6 @@ package cmd
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -256,9 +255,9 @@ func generateMnemonic() string {
 }
 
 // generateTeamID creates a deterministic team ID from fingerprint.
+// Delegates to peer.GenerateTeamID for a single source of truth.
 func generateTeamID(fingerprint string) string {
-	h := sha256.Sum256([]byte(fingerprint + ":default"))
-	return fmt.Sprintf("%x", h[:8])
+	return peer.GenerateTeamID(fingerprint, "default")
 }
 
 func init() {

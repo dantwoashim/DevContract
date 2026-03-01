@@ -39,7 +39,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 			Cause:      err.Error(),
 			Suggestion: "Run 'envsync init' first",
 		})
-		return nil
+		return fmt.Errorf("%s", err)
 	}
 
 	noiseKP := crypto.NewNoiseKeypair(kp.X25519Private, kp.X25519Public)
@@ -89,7 +89,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 			Cause:      result.Error.Error(),
 			Suggestion: "Check network connectivity or try '--relay' flag",
 		})
-		return nil
+		return result.Error
 	}
 
 	ui.Success(fmt.Sprintf("Pushed to %d/%d peers via %s (%s)",

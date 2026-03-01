@@ -82,9 +82,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	// Last activity from audit log
 	logger, logErr := audit.NewLogger()
 	if logErr == nil {
-		entries, readErr := logger.Read(0)
+		entries, readErr := logger.Read(1)
 		if readErr == nil && len(entries) > 0 {
-			last := entries[len(entries)-1]
+			last := entries[0]
 			ago := time.Since(last.Timestamp).Truncate(time.Second)
 			ui.Line(fmt.Sprintf("  Last activity: %s %s (%s ago)", last.Event, last.Peer, ago))
 		} else {
