@@ -30,16 +30,10 @@ app.use('/invites/*', async (c, next) => {
     return authMiddleware(c, next);
 });
 app.use('/relay/*', async (c, next) => {
-    if (c.req.method === 'GET') {
-        // GET pending and GET blob require auth too (to filter by recipient)
-        return authMiddleware(c, next);
-    }
+    // All relay operations require authentication
     return authMiddleware(c, next);
 });
 app.use('/teams/*', async (c, next) => {
-    if (c.req.method === 'GET') {
-        return authMiddleware(c, next);
-    }
     return authMiddleware(c, next);
 });
 
@@ -72,7 +66,7 @@ async function authMiddleware(c: any, next: any) {
         if (kv) {
             const pubKeyB64 = await kv.get(`pubkey:${parsed.fingerprint}`);
             if (pubKeyB64) {
-                // Decode the base64 public key
+                // Known key — verify signature against pinned key
                 const pubKeyBytes = Uint8Array.from(atob(pubKeyB64), (ch: string) => ch.charCodeAt(0));
                 const sigBytes = Uint8Array.from(atob(parsed.signature), (ch: string) => ch.charCodeAt(0));
 
@@ -88,9 +82,30 @@ async function authMiddleware(c: any, next: any) {
                 if (!valid) {
                     return c.json({ error: 'unauthorized', message: 'Invalid signature' }, 401);
                 }
+            } else if (parsed.publicKey) {
+                // TOFU: First contact — pin the public key, then verify signature
+                const pubKeyBytes = Uint8Array.from(atob(parsed.publicKey), (ch: string) => ch.charCodeAt(0));
+                const sigBytes = Uint8Array.from(atob(parsed.signature), (ch: string) => ch.charCodeAt(0));
+
+                const valid = await verifySignature(
+                    c.req.method,
+                    new URL(c.req.url).pathname,
+                    parsed.timestamp,
+                    bodyHash,
+                    sigBytes,
+                    pubKeyBytes,
+                );
+
+                if (!valid) {
+                    return c.json({ error: 'unauthorized', message: 'Invalid signature on first contact' }, 401);
+                }
+
+                // Pin the key for future requests
+                await kv.put(`pubkey:${parsed.fingerprint}`, parsed.publicKey);
+            } else {
+                // No pinned key and no public key provided — reject
+                return c.json({ error: 'unauthorized', message: 'Unknown fingerprint. Include public key for first-contact registration.' }, 401);
             }
-            // If no public key found, allow through (TOFU — first contact)
-            // The fingerprint is still stored for audit and rate-limiting
         } else {
             // KV binding unavailable — fail closed, do not silently allow
             return c.json({ error: 'service_unavailable', message: 'Auth backend unavailable' }, 503);

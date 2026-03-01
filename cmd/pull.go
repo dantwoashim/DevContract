@@ -35,7 +35,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 
 	cfg, err := loadConfig()
 	if err != nil {
-		cfg = config.Default()
+		return fmt.Errorf("loading config: %w", err)
 	}
 
 	noiseKP := crypto.NewNoiseKeypair(kp.X25519Private, kp.X25519Public)
@@ -72,7 +72,11 @@ func runPull(cmd *cobra.Command, args []string) error {
 			}
 
 			// Decrypt the blob
-			ephKeyBytes, _ := base64.StdEncoding.DecodeString(ephKeyB64)
+			ephKeyBytes, decErr := base64.StdEncoding.DecodeString(ephKeyB64)
+			if decErr != nil {
+				ui.Warning(fmt.Sprintf("  Invalid ephemeral key: %s", decErr))
+				continue
+			}
 			var ephKey [32]byte
 			copy(ephKey[:], ephKeyBytes)
 

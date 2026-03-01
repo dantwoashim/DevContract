@@ -14,6 +14,7 @@ import (
 
 // SignRequest signs a relay API request using Ed25519.
 // Returns the Authorization header value.
+// Includes the public key for TOFU key-pinning on first contact.
 func SignRequest(privateKey ed25519.PrivateKey, fingerprint, method, path string, bodyHash []byte) string {
 	timestamp := time.Now().Unix()
 	bodyHashHex := fmt.Sprintf("%x", sha256.Sum256(bodyHash))
@@ -21,9 +22,10 @@ func SignRequest(privateKey ed25519.PrivateKey, fingerprint, method, path string
 
 	signature := ed25519.Sign(privateKey, []byte(payload))
 	sigBase64 := base64.StdEncoding.EncodeToString(signature)
+	pubKeyBase64 := base64.StdEncoding.EncodeToString(privateKey.Public().(ed25519.PublicKey))
 
-	return fmt.Sprintf("ES-SIG timestamp=%d,fingerprint=%s,signature=%s",
-		timestamp, fingerprint, sigBase64)
+	return fmt.Sprintf("ES-SIG timestamp=%d,fingerprint=%s,signature=%s,public_key=%s",
+		timestamp, fingerprint, sigBase64, pubKeyBase64)
 }
 
 // VerifyRequestSignature verifies a relay API request signature.

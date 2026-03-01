@@ -235,9 +235,10 @@ func loadOrCreateAuditKey(auditPath string) []byte {
 	// Generate new key
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
-		// Fallback: derive from audit path (better than hostname)
-		h := cryptosha256.Sum256([]byte(auditPath))
-		return h[:]
+		// crypto/rand failure is catastrophic — log and use zeroed key
+		// (HMAC with zero key is still a MAC, just not secret)
+		fmt.Fprintf(os.Stderr, "envsync: WARNING: crypto/rand failed, audit HMAC integrity degraded\n")
+		return make([]byte, 32)
 	}
 
 	_ = os.WriteFile(keyPath, key, 0600)

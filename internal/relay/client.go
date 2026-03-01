@@ -88,6 +88,59 @@ func (c *Client) doRequest(method, path string, body []byte) (*http.Response, er
 	return nil, fmt.Errorf("relay request failed after 3 attempts: %w", lastErr)
 }
 
+// doUploadRequest is like doRequest but adds custom headers for blob uploads.
+func (c *Client) doUploadRequest(method, path string, body []byte, headers map[string]string) (*http.Response, error) {
+	var lastErr error
+
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
+		}
+
+		url := c.baseURL + path
+
+		var reqBody io.Reader
+		if body != nil {
+			reqBody = bytes.NewReader(body)
+		}
+
+		req, err := http.NewRequest(method, url, reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("creating request: %w", err)
+		}
+
+		// Set custom headers
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+
+		// Sign the request
+		bodyHash := body
+		if bodyHash == nil {
+			bodyHash = []byte{}
+		}
+		authHeader := crypto.SignRequest(c.privateKey, c.fingerprint, method, path, bodyHash)
+		req.Header.Set("Authorization", authHeader)
+		req.Header.Set("X-EnvSync-Fingerprint", c.fingerprint)
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		if resp.StatusCode >= 500 {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("relay returned HTTP %d", resp.StatusCode)
+			continue
+		}
+
+		return resp, nil
+	}
+
+	return nil, fmt.Errorf("relay upload failed after 3 attempts: %w", lastErr)
+}
+
 // Health checks the relay health.
 func (c *Client) Health() (map[string]interface{}, error) {
 	resp, err := c.doRequest("GET", "/health", nil)
@@ -185,22 +238,19 @@ func (c *Client) ConsumeInvite(tokenHash string) (*InviteResponse, error) {
 // --- Blob operations ---
 
 // UploadBlob uploads an encrypted blob to the relay.
+// Uses doRequest for retry and consistent signing, then adds blob-specific headers.
 func (c *Client) UploadBlob(teamID, blobID string, data []byte, senderFP, recipientFP, ephemeralKey, filename string) error {
-	req, err := http.NewRequest("PUT", c.baseURL+"/relay/"+teamID+"/"+blobID, bytes.NewReader(data))
-	if err != nil {
-		return err
-	}
+	path := "/relay/" + teamID + "/" + blobID
 
-	req.Header.Set("Content-Type", "application/octet-stream")
-	req.Header.Set("X-EnvSync-Sender", senderFP)
-	req.Header.Set("X-EnvSync-Recipient", recipientFP)
-	req.Header.Set("X-EnvSync-EphemeralKey", ephemeralKey)
-	req.Header.Set("X-EnvSync-Filename", filename)
-
-	authHeader := crypto.SignRequest(c.privateKey, c.fingerprint, "PUT", "/relay/"+teamID+"/"+blobID, data)
-	req.Header.Set("Authorization", authHeader)
-
-	resp, err := c.httpClient.Do(req)
+	// Use doRequest for retry + signing consistency
+	// We need to temporarily override httpClient to inject headers
+	resp, err := c.doUploadRequest("PUT", path, data, map[string]string{
+		"Content-Type":          "application/octet-stream",
+		"X-EnvSync-Sender":     senderFP,
+		"X-EnvSync-Recipient":  recipientFP,
+		"X-EnvSync-EphemeralKey": ephemeralKey,
+		"X-EnvSync-Filename":   filename,
+	})
 	if err != nil {
 		return err
 	}

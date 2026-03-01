@@ -49,6 +49,7 @@ export function parseAuthHeader(header: string): {
     timestamp: number;
     fingerprint: string;
     signature: string;
+    publicKey?: string;
 } | null {
     if (!header.startsWith('ES-SIG ')) {
         return null;
@@ -67,12 +68,13 @@ export function parseAuthHeader(header: string): {
     const timestamp = parseInt(params.get('timestamp') || '0');
     const fingerprint = params.get('fingerprint') || '';
     const signature = params.get('signature') || '';
+    const publicKey = params.get('public_key') || undefined;
 
     if (!timestamp || !fingerprint || !signature) {
         return null;
     }
 
-    return { timestamp, fingerprint, signature };
+    return { timestamp, fingerprint, signature, publicKey };
 }
 
 /**

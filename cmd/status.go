@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/envsync/envsync/internal/audit"
-	"github.com/envsync/envsync/internal/config"
 	"github.com/envsync/envsync/internal/peer"
 	"github.com/envsync/envsync/internal/relay"
 	"github.com/envsync/envsync/internal/store"
@@ -30,7 +29,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	cfg, err := loadConfig()
 	if err != nil {
-		cfg = config.Default()
+		return fmt.Errorf("loading config: %w", err)
 	}
 
 	ui.Header("EnvSync Status")
