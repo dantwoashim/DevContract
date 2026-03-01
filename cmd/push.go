@@ -63,6 +63,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 		KeyPair:      kp,
 		NoiseKeypair: noiseKP,
 		RelayClient:  relayClient,
+		RelayURL:     cfg.Relay.URL,
 		Sequence:     seq,
 		OnStatus: func(status string) {
 			ui.Line(fmt.Sprintf("  %s", status))

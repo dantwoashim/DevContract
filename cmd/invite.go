@@ -207,7 +207,10 @@ func generateMnemonic() string {
 	selected := make([]string, 6)
 	for i := 0; i < 6; i++ {
 		b := make([]byte, 1)
-		rand.Read(b)
+		if _, err := rand.Read(b); err != nil {
+			// Fail hard — crypto randomness is critical for invite security
+			panic(fmt.Sprintf("crypto/rand failed: %v", err))
+		}
 		selected[i] = words[int(b[0])%len(words)]
 	}
 

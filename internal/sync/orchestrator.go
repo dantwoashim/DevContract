@@ -23,6 +23,7 @@ type OrchestratorOptions struct {
 	KeyPair      *crypto.KeyPair
 	NoiseKeypair noise.DHKey
 	RelayClient  *relay.Client
+	RelayURL     string // Signal/relay base URL (from config)
 	Sequence     int64
 	OnStatus     func(status string)
 }
@@ -106,8 +107,12 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 	// Phase 2: Hole-punch attempt
 	report("Attempting hole-punch...")
 	if opts.RelayClient != nil && opts.TeamID != "" {
+		relayURL := opts.RelayURL
+		if relayURL == "" {
+			relayURL = "https://relay.envsync.dev"
+		}
 		signal := relay.NewSignalClient(
-			"https://relay.envsync.dev", // TODO: from config
+			relayURL,
 			opts.TeamID,
 			opts.KeyPair,
 		)

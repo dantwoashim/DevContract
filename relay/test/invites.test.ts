@@ -1,6 +1,6 @@
 /**
- * Invite flow tests (Miniflare).
- * 
+ * Invite flow tests (self-bootstrapping via wrangler unstable_dev).
+ *
  * Tests the invite lifecycle:
  *   1. Create invite (POST /invites)
  *   2. Retrieve invite (GET /invites/:hash)
@@ -9,15 +9,27 @@
  *   5. Expired invites are rejected
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { unstable_dev, type UnstableDevWorker } from 'wrangler';
 
-const BASE_URL = 'http://localhost:8787';
+let worker: UnstableDevWorker;
+
+beforeAll(async () => {
+    worker = await unstable_dev('src/index.ts', {
+        experimental: { disableExperimentalWarning: true },
+        vars: {},
+    });
+});
+
+afterAll(async () => {
+    await worker?.stop();
+});
 
 describe('Invite Flow', () => {
     const tokenHash = 'test-token-hash-' + Date.now();
 
     it('should create an invite', async () => {
-        const res = await fetch(`${BASE_URL}/invites`, {
+        const res = await worker.fetch(`/invites`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -32,7 +44,7 @@ describe('Invite Flow', () => {
     });
 
     it('should retrieve the invite', async () => {
-        const res = await fetch(`${BASE_URL}/invites/${tokenHash}`);
+        const res = await worker.fetch(`/invites/${tokenHash}`);
         expect(res.status).toBe(200);
         const data = await res.json() as any;
         expect(data.team_id).toBe('test-team-id');
@@ -40,7 +52,7 @@ describe('Invite Flow', () => {
     });
 
     it('should consume the invite', async () => {
-        const res = await fetch(`${BASE_URL}/invites/${tokenHash}/consume`, {
+        const res = await worker.fetch(`/invites/${tokenHash}/consume`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -51,7 +63,7 @@ describe('Invite Flow', () => {
     });
 
     it('should reject already-consumed invite', async () => {
-        const res = await fetch(`${BASE_URL}/invites/${tokenHash}/consume`, {
+        const res = await worker.fetch(`/invites/${tokenHash}/consume`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -62,7 +74,7 @@ describe('Invite Flow', () => {
     });
 
     it('should return 404 for unknown invite', async () => {
-        const res = await fetch(`${BASE_URL}/invites/nonexistent-hash`);
+        const res = await worker.fetch(`/invites/nonexistent-hash`);
         expect(res.status).toBe(404);
     });
 });

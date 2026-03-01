@@ -1,34 +1,50 @@
 /**
- * Auth middleware tests.
- * 
+ * Auth middleware tests (self-bootstrapping via wrangler unstable_dev).
+ *
  * Tests Ed25519 signature verification:
- *   1. Valid signature passes
- *   2. Invalid signature is rejected
- *   3. Missing auth header is rejected
- *   4. Expired timestamp is rejected
- *   5. Tampered body is rejected
+ *   1. Missing auth header is rejected on protected routes
+ *   2. Invalid signature format is rejected
+ *   3. Health endpoint does not require auth
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { unstable_dev, type UnstableDevWorker } from 'wrangler';
 
-const BASE_URL = 'http://localhost:8787';
+let worker: UnstableDevWorker;
+
+beforeAll(async () => {
+    worker = await unstable_dev('src/index.ts', {
+        experimental: { disableExperimentalWarning: true },
+        vars: {},
+    });
+});
+
+afterAll(async () => {
+    await worker?.stop();
+});
 
 describe('Auth Middleware', () => {
-    it('should reject requests without auth header', async () => {
-        const res = await fetch(`${BASE_URL}/relay/test-team/pending`, {
-            headers: {},
+    it('should reject POST /invites without auth header', async () => {
+        const res = await worker.fetch(`/invites`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                token_hash: 'test',
+                team_id: 'test',
+                inviter: 'alice',
+                inviter_fingerprint: 'fp',
+                invitee: 'bob',
+            }),
         });
-        // Should either work (no auth on GET) or reject
-        // The actual behavior depends on route-level auth config
-        expect(res.status).toBeDefined();
+        expect(res.status).toBe(401);
     });
 
-    it('should reject requests with invalid signature', async () => {
-        const res = await fetch(`${BASE_URL}/invites`, {
+    it('should reject requests with invalid auth format', async () => {
+        const res = await worker.fetch(`/invites`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': 'EnvSync invalid-signature-here',
+                'Authorization': 'InvalidFormat garbage',
             },
             body: JSON.stringify({
                 token_hash: 'test',
@@ -38,14 +54,19 @@ describe('Auth Middleware', () => {
                 invitee: 'bob',
             }),
         });
-        // Depending on auth middleware config, this may be 401 or pass
-        expect(res.status).toBeDefined();
+        expect(res.status).toBe(401);
     });
 
     it('health endpoint should not require auth', async () => {
-        const res = await fetch(`${BASE_URL}/health`);
+        const res = await worker.fetch(`/health`);
         expect(res.status).toBe(200);
         const data = await res.json() as any;
         expect(data.status).toBe('ok');
+    });
+
+    it('should allow GET /invites/:hash without auth (public lookup)', async () => {
+        const res = await worker.fetch(`/invites/some-hash`);
+        // 404 is expected (invite doesn't exist), but NOT 401
+        expect(res.status).not.toBe(401);
     });
 });

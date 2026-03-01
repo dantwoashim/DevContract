@@ -9,6 +9,7 @@ import (
 
 	"github.com/envsync/envsync/internal/crypto"
 	"github.com/envsync/envsync/internal/discovery"
+	"github.com/envsync/envsync/internal/envfile"
 	"github.com/envsync/envsync/internal/transport"
 	"github.com/flynn/noise"
 )
@@ -72,11 +73,9 @@ func Push(ctx context.Context, opts PushOptions) (*PushResult, error) {
 		FileSize: len(data),
 	}
 
-	// Count variables
-	for _, b := range data {
-		if b == '=' {
-			result.VarCount++
-		}
+	// Count variables using parser for accuracy (not raw '=' counting)
+	if parsed, parseErr := envfile.Parse(string(data)); parseErr == nil {
+		result.VarCount = parsed.VariableCount()
 	}
 
 	// Create wire protocol payload
