@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -15,40 +16,44 @@ import (
 
 	"github.com/envsync/envsync/internal/config"
 	"github.com/envsync/envsync/internal/crypto"
+	"github.com/envsync/envsync/internal/discovery"
 	"github.com/envsync/envsync/internal/envfile"
 	"github.com/envsync/envsync/internal/peer"
+	"github.com/envsync/envsync/internal/store"
 	"github.com/envsync/envsync/internal/transport"
 	"github.com/flynn/noise"
 )
 
+type pullPeerRegistry interface {
+	ListTeams() ([]string, error)
+	ListPeers(teamID string) ([]peer.Peer, error)
+}
+
+var newPullPeerRegistry = func() (pullPeerRegistry, error) {
+	return peer.NewRegistry()
+}
+
 // PullOptions configures a pull operation.
 type PullOptions struct {
-	// EnvFilePath is where to write the received .env file.
 	EnvFilePath string
+	Port        int
+	TeamID      string
 
-	// Port to listen on for incoming connections.
-	Port int
-
-	// KeyPair is the local identity.
-	KeyPair *crypto.KeyPair
-
-	// NoiseKeypair derived from KeyPair.
+	KeyPair      *crypto.KeyPair
 	NoiseKeypair noise.DHKey
 
-	// ConfirmBeforeApply prompts before overwriting.
 	ConfirmBeforeApply bool
+	ProjectID          string
+	BackupEnabled      bool
+	BackupKey          [32]byte
+	MaxVersions        int
+	Advertise          bool
+	AdvertiseVersion   string
 
-	// OnListening is called when the listener is ready.
 	OnListening func(port int)
-
-	// OnReceived is called when data is received and verified.
-	OnReceived func(payload EnvPayload, diff *envfile.DiffResult)
-
-	// OnConfirm is called to ask for user confirmation. Return true to apply.
-	OnConfirm func(diff *envfile.DiffResult) bool
-
-	// OnApplied is called after the file is written.
-	OnApplied func(fileName string)
+	OnReceived  func(payload EnvPayload, diff *envfile.DiffResult)
+	OnConfirm   func(diff *envfile.DiffResult) bool
+	OnApplied   func(fileName string)
 }
 
 // PullResult summarizes the pull operation.
@@ -69,51 +74,36 @@ func Pull(ctx context.Context, opts PullOptions) (*PullResult, error) {
 
 	result := &PullResult{}
 
-	// Start listener
 	listener, err := transport.Listen(transport.ListenerOptions{
 		Port:         port,
 		LocalKeypair: opts.NoiseKeypair,
 		VerifyPeer: func(publicKey []byte) error {
-			// Verify against trust registry — reject revoked peers
-			if len(publicKey) != 32 {
-				return fmt.Errorf("invalid public key length: %d", len(publicKey))
-			}
-			var pk [32]byte
-			copy(pk[:], publicKey)
-			fp := crypto.ComputeFingerprint(pk)
-
-			// Load registry and check trust across all teams
-			reg, err := peer.NewRegistry()
-			if err != nil {
-				// If registry can't be loaded, allow (first use)
-				return nil
-			}
-
-			teams, err := reg.ListTeams()
-			if err != nil || len(teams) == 0 {
-				// No teams yet — TOFU: accept first connection
-				return nil
-			}
-
-			// Search all teams for this peer
-			for _, teamID := range teams {
-				p, err := reg.LoadPeer(teamID, fp)
-				if err == nil {
-					if !p.CanSync() {
-						return fmt.Errorf("peer %s is not trusted (status: %s)", fp[:12], p.Trust)
-					}
-					return nil // Found and trusted
-				}
-			}
-
-			// Unknown peer — reject: they must be invited first
-			return fmt.Errorf("unknown peer %s — use 'envsync invite @username' to add them", fp[:12])
+			return verifyTrustedPullPeer(publicKey, opts.TeamID)
 		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("starting listener: %w", err)
 	}
 	defer listener.Close()
+
+	var advertiser *discovery.Advertiser
+	if opts.Advertise && opts.TeamID != "" {
+		addr := listener.Addr()
+		advertisePort := port
+		if tcpAddr, ok := addr.(*net.TCPAddr); ok {
+			advertisePort = tcpAddr.Port
+		}
+
+		advertiser, _ = discovery.NewAdvertiser(
+			advertisePort,
+			crypto.ComputeFingerprint(opts.KeyPair.X25519Public),
+			opts.TeamID,
+			opts.AdvertiseVersion,
+		)
+	}
+	if advertiser != nil {
+		defer advertiser.Stop()
+	}
 
 	if opts.OnListening != nil {
 		addr := listener.Addr()
@@ -124,56 +114,49 @@ func Pull(ctx context.Context, opts PullOptions) (*PullResult, error) {
 		}
 	}
 
-	// Wait for a connection
 	conn, err := listener.Accept(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("waiting for connection: %w", err)
 	}
 	defer conn.Close()
 
-	// Receive message
 	msg, err := ReceiveMessage(conn)
 	if err != nil {
 		return nil, fmt.Errorf("receiving message: %w", err)
 	}
 
 	if msg.Type != MsgEnvPush {
-		// Send NACK
-		SendMessage(conn, Message{Type: MsgNack, Payload: []byte("expected ENV_PUSH")})
+		_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("expected ENV_PUSH")})
 		return nil, fmt.Errorf("unexpected message type: 0x%02x", msg.Type)
 	}
 
-	// Decode payload
 	payload, err := DecodeEnvPayload(msg.Payload)
 	if err != nil {
-		SendMessage(conn, Message{Type: MsgNack, Payload: []byte("invalid payload")})
+		_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("invalid payload")})
 		return nil, fmt.Errorf("decoding payload: %w", err)
 	}
 
-	// Verify checksum
 	actualChecksum := sha256.Sum256(payload.Data)
 	if actualChecksum != payload.Checksum {
-		SendMessage(conn, Message{Type: MsgNack, Payload: []byte("checksum mismatch")})
-		return nil, fmt.Errorf("data checksum mismatch — possible corruption")
+		_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("checksum mismatch")})
+		return nil, fmt.Errorf("data checksum mismatch")
 	}
 
-	// Validate sequence: reject replays (use hex-encoded remote PK as stable peer ID)
 	peerID := hex.EncodeToString(conn.RemotePublicKey())
 	lastSeq := loadLastSequence([]byte(peerID))
 	if payload.Sequence <= lastSeq {
-		SendMessage(conn, Message{Type: MsgNack, Payload: []byte("replayed sequence number")})
-		return nil, fmt.Errorf("replay detected: sequence %d ≤ last seen %d from peer", payload.Sequence, lastSeq)
+		_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("replayed sequence number")})
+		return nil, fmt.Errorf("replay detected: sequence %d <= last seen %d from peer", payload.Sequence, lastSeq)
 	}
 
-	// Validate timestamp: reject payloads older than 72 hours
 	if payload.Timestamp > 0 {
 		age := time.Now().Unix() - payload.Timestamp
 		if age > 72*3600 {
-			SendMessage(conn, Message{Type: MsgNack, Payload: []byte("payload expired (>72h old)")})
+			_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("payload expired (>72h old)")})
 			return nil, fmt.Errorf("payload timestamp too old: %ds ago", age)
 		}
-		if age < -300 { // 5 min clock skew tolerance
-			SendMessage(conn, Message{Type: MsgNack, Payload: []byte("payload timestamp in the future")})
+		if age < -300 {
+			_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("payload timestamp in the future")})
 			return nil, fmt.Errorf("payload timestamp in the future by %ds", -age)
 		}
 	}
@@ -181,15 +164,13 @@ func Pull(ctx context.Context, opts PullOptions) (*PullResult, error) {
 	result.FileName = payload.FileName
 	result.FileSize = len(payload.Data)
 
-	// Parse received env
 	receivedEnv, err := envfile.Parse(string(payload.Data))
 	if err != nil {
-		SendMessage(conn, Message{Type: MsgNack, Payload: []byte("invalid .env format")})
+		_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("invalid .env format")})
 		return nil, fmt.Errorf("parsing received .env: %w", err)
 	}
 	result.VarCount = receivedEnv.VariableCount()
 
-	// Compute diff against local file
 	envPath := opts.EnvFilePath
 	if envPath == "" {
 		envPath = ".env"
@@ -203,39 +184,53 @@ func Pull(ctx context.Context, opts PullOptions) (*PullResult, error) {
 			diff = envfile.Diff(localEnv, receivedEnv)
 		}
 	}
-	// If local file doesn't exist, all vars are "added"
 
 	if opts.OnReceived != nil {
 		opts.OnReceived(payload, diff)
 	}
-
 	if diff != nil {
 		result.DiffSummary = diff.Summary()
 	}
 
-	// Confirm before apply
-	if opts.ConfirmBeforeApply && diff != nil && diff.HasChanges() {
-		if opts.OnConfirm != nil {
-			if !opts.OnConfirm(diff) {
-				SendMessage(conn, Message{Type: MsgNack, Payload: []byte("user rejected changes")})
-				result.Applied = false
-				return result, nil
-			}
+	if opts.ConfirmBeforeApply && diff != nil && diff.HasChanges() && opts.OnConfirm != nil {
+		if !opts.OnConfirm(diff) {
+			_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("user rejected changes")})
+			result.Applied = false
+			return result, nil
 		}
 	}
 
-	// Write the file
+	if opts.BackupEnabled && len(localData) > 0 && opts.ProjectID != "" {
+		maxVersions := opts.MaxVersions
+		if maxVersions <= 0 {
+			maxVersions = 10
+		}
+		vStore, err := store.New(maxVersions)
+		if err != nil {
+			_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("failed to create backup store")})
+			return nil, fmt.Errorf("creating backup store: %w", err)
+		}
+
+		seq, err := vStore.NextSequence(opts.ProjectID)
+		if err != nil {
+			_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("failed to compute backup sequence")})
+			return nil, fmt.Errorf("computing backup sequence: %w", err)
+		}
+
+		if err := vStore.Save(opts.ProjectID, localData, seq, opts.BackupKey); err != nil {
+			_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("failed to create backup")})
+			return nil, fmt.Errorf("creating pre-apply backup: %w", err)
+		}
+	}
+
 	if err := os.WriteFile(envPath, payload.Data, 0600); err != nil {
-		SendMessage(conn, Message{Type: MsgNack, Payload: []byte("failed to write file")})
+		_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("failed to write file")})
 		return nil, fmt.Errorf("writing %s: %w", envPath, err)
 	}
 
-	// Send ACK
-	SendMessage(conn, Message{Type: MsgAck})
+	_ = SendMessage(conn, Message{Type: MsgAck})
 
 	result.Applied = true
-
-	// Persist the sequence number for this peer to prevent future replays
 	saveLastSequence([]byte(peerID), payload.Sequence)
 
 	if opts.OnApplied != nil {
@@ -246,12 +241,58 @@ func Pull(ctx context.Context, opts PullOptions) (*PullResult, error) {
 }
 
 // loadLastSequence reads the last-seen sequence number for a peer from disk.
+// Uses a lock file to prevent race conditions with concurrent pulls.
 func loadLastSequence(peerPK []byte) int64 {
 	dataDir, err := config.DataDir()
 	if err != nil {
 		return 0
 	}
-	path := filepath.Join(dataDir, "sequences", hex.EncodeToString(peerPK)+".seq")
+	dir := filepath.Join(dataDir, "sequences")
+	_ = os.MkdirAll(dir, 0700)
+
+	path := filepath.Join(dir, hex.EncodeToString(peerPK)+".seq")
+	lockPath := path + ".lock"
+
+	// Acquire lock
+	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		// Fallback: read without lock
+		return readSequenceFile(path)
+	}
+	defer lock.Close()
+	defer os.Remove(lockPath)
+
+	return readSequenceFile(path)
+}
+
+// saveLastSequence persists the last-seen sequence number for a peer to disk.
+// Uses a lock file to prevent race conditions with concurrent pulls.
+func saveLastSequence(peerPK []byte, seq int64) {
+	dataDir, err := config.DataDir()
+	if err != nil {
+		return
+	}
+	dir := filepath.Join(dataDir, "sequences")
+	_ = os.MkdirAll(dir, 0700)
+
+	path := filepath.Join(dir, hex.EncodeToString(peerPK)+".seq")
+	lockPath := path + ".lock"
+
+	// Acquire lock
+	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		// Fallback: write without lock
+		_ = os.WriteFile(path, []byte(strconv.FormatInt(seq, 10)), 0600)
+		return
+	}
+	defer lock.Close()
+	defer os.Remove(lockPath)
+
+	_ = os.WriteFile(path, []byte(strconv.FormatInt(seq, 10)), 0600)
+}
+
+// readSequenceFile reads a sequence number from a file path.
+func readSequenceFile(path string) int64 {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0
@@ -263,14 +304,54 @@ func loadLastSequence(peerPK []byte) int64 {
 	return seq
 }
 
-// saveLastSequence persists the last-seen sequence number for a peer to disk.
-func saveLastSequence(peerPK []byte, seq int64) {
-	dataDir, err := config.DataDir()
+func verifyTrustedPullPeer(publicKey []byte, teamID string) error {
+	reg, err := newPullPeerRegistry()
 	if err != nil {
-		return
+		return fmt.Errorf("loading local trust registry: %w", err)
 	}
-	dir := filepath.Join(dataDir, "sequences")
-	os.MkdirAll(dir, 0700)
-	path := filepath.Join(dir, hex.EncodeToString(peerPK)+".seq")
-	os.WriteFile(path, []byte(strconv.FormatInt(seq, 10)), 0600)
+
+	teams := []string{}
+	if teamID != "" {
+		teams = []string{teamID}
+	} else {
+		teams, err = reg.ListTeams()
+		if err != nil {
+			return fmt.Errorf("listing trusted projects: %w", err)
+		}
+	}
+
+	if len(teams) == 0 {
+		return errors.New("no trusted projects configured for LAN pull; run 'envsync invite' or 'envsync join' first")
+	}
+
+	hadPeers := false
+	for _, trustedTeamID := range teams {
+		peers, err := reg.ListPeers(trustedTeamID)
+		if err != nil {
+			return fmt.Errorf("loading trusted peers for %s: %w", trustedTeamID, err)
+		}
+		if len(peers) == 0 {
+			continue
+		}
+		hadPeers = true
+
+		for _, p := range peers {
+			if !p.MatchesTransportPublicKey(publicKey) {
+				continue
+			}
+			if !p.CanSync() {
+				return fmt.Errorf("peer %s is not trusted (status: %s)", p.Fingerprint, p.Trust)
+			}
+			return nil
+		}
+	}
+
+	if !hadPeers {
+		if teamID != "" {
+			return fmt.Errorf("no trusted peers configured for project %s; run 'envsync invite' or 'envsync join' first", teamID)
+		}
+		return errors.New("no trusted peers configured for LAN pull; run 'envsync invite' or 'envsync join' first")
+	}
+
+	return fmt.Errorf("unknown peer transport key - use 'envsync invite' or 'envsync join' first")
 }
