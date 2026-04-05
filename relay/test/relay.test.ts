@@ -1,16 +1,6 @@
-/**
- * Relay blob CRUD tests (self-bootstrapping via wrangler unstable_dev).
- *
- * Tests encrypted blob lifecycle:
- *   1. Upload blob (PUT /relay/:team/blobs/:id)
- *   2. List pending blobs (GET /relay/:team/pending)
- *   3. Download blob (GET /relay/:team/blobs/:id)
- *   4. Delete blob (DELETE /relay/:team/blobs/:id)
- *   5. Verify deleted blob returns 404
- */
-
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { unstable_dev, type UnstableDevWorker } from 'wrangler';
+import { createIdentity, registerMember, signedFetch, transportKey } from './helpers';
 
 let worker: UnstableDevWorker;
 
@@ -25,48 +15,70 @@ afterAll(async () => {
     await worker?.stop();
 });
 
-const TEAM_ID = 'test-team-relay';
-const BLOB_ID = 'blob-' + Date.now();
+const TEAM_ID = `test-team-relay-${Date.now()}`;
+const BLOB_ID = `blob-${Date.now()}`;
+const ENCRYPTED_BODY = Buffer.from('ENCRYPTED_DATA_HERE');
 
 describe('Relay Blob Operations', () => {
-    it('should upload a blob', async () => {
-        const res = await worker.fetch(`/relay/${TEAM_ID}/blobs/${BLOB_ID}`, {
+    let sender: Awaited<ReturnType<typeof createIdentity>>;
+    let recipient: Awaited<ReturnType<typeof createIdentity>>;
+
+    beforeAll(async () => {
+        sender = await createIdentity('relay-sender');
+        recipient = await createIdentity('relay-recipient');
+
+        expect((await registerMember(worker, sender, TEAM_ID, 'alice', transportKey(11), 'owner')).status).toBe(200);
+        expect((await signedFetch(worker, sender, `/teams/${TEAM_ID}/members/bob`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                sender_fingerprint: 'fp_alice',
-                recipient_fingerprint: 'fp_bob',
-                ephemeral_key: 'base64-eph-key',
-                filename: '.env',
-                data: btoa('ENCRYPTED_DATA_HERE'),
+                fingerprint: recipient.fingerprint,
+                public_key: recipient.publicKeyB64,
+                transport_public_key: transportKey(22),
+                role: 'member',
             }),
+        })).status).toBe(200);
+    });
+
+    it('should upload a blob', async () => {
+        const res = await signedFetch(worker, sender, `/relay/${TEAM_ID}/${BLOB_ID}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/octet-stream',
+                'X-EnvSync-Sender': sender.fingerprint,
+                'X-EnvSync-Recipient': recipient.fingerprint,
+                'X-EnvSync-EphemeralKey': transportKey(33),
+                'X-EnvSync-Filename': '.env',
+                'X-EnvSync-Signature': Buffer.from('test-signature').toString('base64'),
+            },
+            body: ENCRYPTED_BODY,
         });
-        expect(res.status).toBeLessThan(300);
+        expect(res.status).toBe(201);
     });
 
-    it('should list pending blobs', async () => {
-        const res = await worker.fetch(`/relay/${TEAM_ID}/pending`);
+    it('should list pending blobs for the recipient', async () => {
+        const res = await signedFetch(worker, recipient, `/relay/${TEAM_ID}/pending?for=${encodeURIComponent(recipient.fingerprint)}`);
         expect(res.status).toBe(200);
-        const data = await res.json() as any[];
-        expect(data.length).toBeGreaterThanOrEqual(1);
+        const data = await res.json() as { pending: Array<{ blob_id: string }> };
+        expect(data.pending.some((blob) => blob.blob_id === BLOB_ID)).toBe(true);
     });
 
-    it('should download a blob', async () => {
-        const res = await worker.fetch(`/relay/${TEAM_ID}/blobs/${BLOB_ID}`);
+    it('should download a blob as the intended recipient', async () => {
+        const res = await signedFetch(worker, recipient, `/relay/${TEAM_ID}/${BLOB_ID}`);
         expect(res.status).toBe(200);
-        const data = await res.json() as any;
-        expect(data.sender_fingerprint).toBe('fp_alice');
+        expect(await res.text()).toBe(ENCRYPTED_BODY.toString());
+        expect(res.headers.get('X-EnvSync-Sender')).toBe(sender.fingerprint);
     });
 
-    it('should delete a blob', async () => {
-        const res = await worker.fetch(`/relay/${TEAM_ID}/blobs/${BLOB_ID}`, {
+    it('should delete a blob as the intended recipient', async () => {
+        const res = await signedFetch(worker, recipient, `/relay/${TEAM_ID}/${BLOB_ID}`, {
             method: 'DELETE',
         });
-        expect(res.status).toBeLessThan(300);
+        expect(res.status).toBe(200);
     });
 
     it('should return 404 for deleted blob', async () => {
-        const res = await worker.fetch(`/relay/${TEAM_ID}/blobs/${BLOB_ID}`);
+        const res = await signedFetch(worker, recipient, `/relay/${TEAM_ID}/${BLOB_ID}`);
         expect(res.status).toBe(404);
     });
 });

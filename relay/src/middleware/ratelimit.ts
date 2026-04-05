@@ -15,7 +15,7 @@ export async function rateLimitMiddleware(c: Context<{ Bindings: Env }>, next: N
     const key = `ratelimit:${ip}:${Math.floor(Date.now() / 60000)}`; // per-minute window
 
     try {
-        const kv = c.env.ENVSYNC_KV;
+        const kv = c.env.ENVSYNC_DATA;
         const current = await kv.get(key);
         const count = current ? parseInt(current, 10) : 0;
 
@@ -51,7 +51,7 @@ export async function teamRateLimitMiddleware(teamID: string, c: Context<{ Bindi
     const key = `teamlimit:${teamID}:${new Date().toISOString().slice(0, 10)}`;
 
     try {
-        const kv = c.env.ENVSYNC_KV;
+        const kv = c.env.ENVSYNC_DATA;
         const current = await kv.get(key);
         const count = current ? parseInt(current, 10) : 0;
 
