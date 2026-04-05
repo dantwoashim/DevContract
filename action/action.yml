@@ -74,24 +74,24 @@ runs:
         set -e
 
         METHOD="$(python - "$PULL_REPORT" <<'PY'
-import json
-import pathlib
-import sys
+        import json
+        import pathlib
+        import sys
 
-path = pathlib.Path(sys.argv[1])
-if not path.exists():
-    print("none")
-    raise SystemExit(0)
+        path = pathlib.Path(sys.argv[1])
+        if not path.exists():
+            print("none")
+            raise SystemExit(0)
 
-text = path.read_text(encoding="utf-8").strip()
-if not text:
-    print("none")
-    raise SystemExit(0)
+        text = path.read_text(encoding="utf-8").strip()
+        if not text:
+            print("none")
+            raise SystemExit(0)
 
-data = json.loads(text)
-print(data.get("method", "none"))
-PY
-)"
+        data = json.loads(text)
+        print(data.get("method", "none"))
+        PY
+        )"
 
         echo "pull_method=${METHOD}" >> "$GITHUB_OUTPUT"
 
@@ -101,7 +101,9 @@ PY
             exit 0
           fi
           echo "::error::EnvSync pull failed."
-          cat "$PULL_REPORT"
+          if [ -f "$PULL_REPORT" ]; then
+            cat "$PULL_REPORT"
+          fi
           exit "$STATUS"
         fi
 
