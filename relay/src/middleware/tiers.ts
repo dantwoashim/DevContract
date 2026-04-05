@@ -3,10 +3,15 @@ import type { Env } from '../types';
 export type TierName = 'free' | 'team' | 'enterprise';
 
 export interface TierLimits {
-    maxMembers: number;      // -1 = unlimited
-    maxBlobsPerDay: number;  // -1 = unlimited
+    maxMembers: number;
+    maxBlobsPerDay: number;
     blobTtlHours: number;
     historyDays: number;
+}
+
+export interface TierStatus {
+    tier: TierName;
+    limits: TierLimits;
 }
 
 const TIER_CONFIG: Record<TierName, TierLimits> = {
@@ -19,63 +24,50 @@ const TIER_CONFIG: Record<TierName, TierLimits> = {
     team: {
         maxMembers: -1,
         maxBlobsPerDay: -1,
-        blobTtlHours: 720, // 30 days
+        blobTtlHours: 720,
         historyDays: 30,
     },
     enterprise: {
         maxMembers: -1,
         maxBlobsPerDay: -1,
-        blobTtlHours: 8760, // 365 days
+        blobTtlHours: 8760,
         historyDays: 365,
     },
 };
 
-/**
- * Get the tier for a team.
- */
 export async function getTeamTier(env: Env, teamId: string): Promise<TierName> {
     const tier = await env.ENVSYNC_DATA.get(`team:${teamId}:tier`);
-    if (tier && (tier === 'team' || tier === 'enterprise')) {
+    if (tier === 'team' || tier === 'enterprise') {
         return tier;
     }
     return 'free';
 }
 
-/**
- * Get the limits for a team's tier.
- */
 export async function getTeamLimits(env: Env, teamId: string): Promise<TierLimits> {
     const tier = await getTeamTier(env, teamId);
     return TIER_CONFIG[tier];
 }
 
-/**
- * Check if a team can add more members.
- */
+export async function getTeamTierStatus(env: Env, teamId: string): Promise<TierStatus> {
+    const tier = await getTeamTier(env, teamId);
+    return { tier, limits: TIER_CONFIG[tier] };
+}
+
 export async function canAddMember(env: Env, teamId: string, currentCount: number): Promise<boolean> {
     const limits = await getTeamLimits(env, teamId);
     return limits.maxMembers < 0 || currentCount < limits.maxMembers;
 }
 
-/**
- * Check if a team can upload more blobs today.
- */
 export async function canUploadBlob(env: Env, teamId: string, currentCount: number): Promise<boolean> {
     const limits = await getTeamLimits(env, teamId);
     return limits.maxBlobsPerDay < 0 || currentCount < limits.maxBlobsPerDay;
 }
 
-/**
- * Get the blob TTL for a team's tier.
- */
 export async function getBlobTtl(env: Env, teamId: string): Promise<number> {
     const limits = await getTeamLimits(env, teamId);
     return limits.blobTtlHours * 3600;
 }
 
-/**
- * Format an upgrade message for tier limit errors.
- */
-export function upgradeMessage(limit: string): string {
-    return `${limit}. Upgrade at https://envsync.dev/pricing or run: envsync upgrade`;
+export function limitMessage(limit: string): string {
+    return `${limit}. Managed billing is disabled on this relay deployment. Contact the relay administrator to change entitlements.`;
 }

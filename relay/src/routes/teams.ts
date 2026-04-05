@@ -1,57 +1,69 @@
 import { Hono } from 'hono';
 import type { Env, Team, TeamMember } from '../types';
+import { canAddMember, limitMessage } from '../middleware/tiers';
 
 export const teamRoutes = new Hono<{ Bindings: Env }>();
 
-// GET /:team/members — List team members
 teamRoutes.get('/:team/members', async (c) => {
     const teamId = c.req.param('team');
+    const actorFingerprint = c.get('fingerprint' as never) as string;
 
-    const data = await c.env.ENVSYNC_DATA.get(`team:${teamId}`);
-    if (!data) {
+    const team = await loadTeam(c.env, teamId);
+    if (!team) {
         return c.json({ members: [] });
     }
 
-    const team: Team = JSON.parse(data);
+    const actor = team.members.find((member) => member.fingerprint === actorFingerprint);
+    if (!actor) {
+        return c.json({ error: 'forbidden', message: 'Only team members can list members' }, 403);
+    }
+
     return c.json({ members: team.members });
 });
 
-// PUT /:team/members/:user — Add or update a member
 teamRoutes.put('/:team/members/:user', async (c) => {
     const teamId = c.req.param('team');
     const username = c.req.param('user');
+    const actorFingerprint = c.get('fingerprint' as never) as string;
 
     const body = await c.req.json<{
         fingerprint: string;
         public_key: string;
+        transport_public_key: string;
         role?: 'owner' | 'member';
     }>();
 
-    if (!body.fingerprint || !body.public_key) {
-        return c.json({ error: 'missing_fields', message: 'fingerprint and public_key required' }, 400);
+    if (!body.fingerprint || !body.public_key || !body.transport_public_key) {
+        return c.json({ error: 'missing_fields', message: 'fingerprint, public_key, and transport_public_key are required' }, 400);
     }
 
-    // Load or create team
-    const data = await c.env.ENVSYNC_DATA.get(`team:${teamId}`);
-    let team: Team;
+    let team = await loadTeam(c.env, teamId);
+    if (!team) {
+        if (actorFingerprint !== body.fingerprint) {
+            return c.json({ error: 'forbidden', message: 'Only the authenticated device may bootstrap a team' }, 403);
+        }
 
-    if (data) {
-        team = JSON.parse(data);
-    } else {
         team = {
             id: teamId,
             name: teamId,
             members: [],
             created_at: Math.floor(Date.now() / 1000),
         };
+    } else {
+        const actor = team.members.find((member) => member.fingerprint === actorFingerprint);
+        if (!actor) {
+            return c.json({ error: 'forbidden', message: 'Only team members can update membership' }, 403);
+        }
+        if (actor.role !== 'owner' && actorFingerprint !== body.fingerprint) {
+            return c.json({ error: 'forbidden', message: 'Only owners can add or update other members' }, 403);
+        }
     }
 
-    // Check member limit (free tier: 3)
-    const existingIdx = team.members.findIndex(m => m.username === username);
-    if (existingIdx < 0 && team.members.length >= 3) {
+    const existingIdx = team.members.findIndex((member) => member.username === username);
+    if (existingIdx < 0 && !(await canAddMember(c.env, teamId, team.members.length))) {
         return c.json({
             error: 'member_limit',
-            message: 'Free tier: maximum 3 team members. Upgrade at https://envsync.dev/pricing',
+            message: limitMessage('Team member limit reached'),
         }, 429);
     }
 
@@ -59,7 +71,9 @@ teamRoutes.put('/:team/members/:user', async (c) => {
         username,
         fingerprint: body.fingerprint,
         public_key: body.public_key,
-        role: body.role || 'member',
+        transport_public_key: body.transport_public_key,
+        transport_fingerprint: '',
+        role: team.members.length === 0 ? 'owner' : (body.role || 'member'),
         added_at: Math.floor(Date.now() / 1000),
     };
 
@@ -70,29 +84,38 @@ teamRoutes.put('/:team/members/:user', async (c) => {
     }
 
     await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
-
     return c.json({ status: 'added', member_count: team.members.length });
 });
 
-// DELETE /:team/members/:user — Remove a member
 teamRoutes.delete('/:team/members/:user', async (c) => {
     const teamId = c.req.param('team');
     const username = c.req.param('user');
+    const actorFingerprint = c.get('fingerprint' as never) as string;
 
-    const data = await c.env.ENVSYNC_DATA.get(`team:${teamId}`);
-    if (!data) {
+    const team = await loadTeam(c.env, teamId);
+    if (!team) {
         return c.json({ error: 'not_found', message: 'Team not found' }, 404);
     }
 
-    const team: Team = JSON.parse(data);
-    const before = team.members.length;
-    team.members = team.members.filter(m => m.username !== username);
-
-    if (team.members.length === before) {
+    const actor = team.members.find((member) => member.fingerprint === actorFingerprint);
+    const target = team.members.find((member) => member.username === username);
+    if (!actor || !target) {
         return c.json({ error: 'not_found', message: `User @${username} not in team` }, 404);
     }
+    if (actor.role !== 'owner' && actor.fingerprint !== target.fingerprint) {
+        return c.json({ error: 'forbidden', message: 'Only owners can remove other members' }, 403);
+    }
 
+    team.members = team.members.filter((member) => member.username !== username);
     await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
 
     return c.json({ status: 'removed', member_count: team.members.length });
 });
+
+async function loadTeam(env: Env, teamId: string): Promise<Team | null> {
+    const data = await env.ENVSYNC_DATA.get(`team:${teamId}`);
+    if (!data) {
+        return null;
+    }
+    return JSON.parse(data) as Team;
+}
