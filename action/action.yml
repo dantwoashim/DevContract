@@ -1,5 +1,5 @@
-name: 'EnvSync - Sync Environment Variables'
-description: 'Securely inject .env variables from your EnvSync team into CI workflows'
+name: 'EnvSync - Bootstrap Shared Env'
+description: 'Pull shared repo secrets with EnvSync and inject them into GitHub Actions'
 author: 'EnvSync'
 
 branding:
@@ -11,7 +11,7 @@ inputs:
     description: 'Base64-encoded service key (from ENVSYNC_SERVICE_KEY secret)'
     required: true
   team_id:
-    description: 'EnvSync team ID'
+    description: 'EnvSync project or team ID'
     required: true
   env_file:
     description: 'Target .env file to pull'
@@ -25,12 +25,16 @@ inputs:
     description: 'Mask secret values in logs'
     required: false
     default: 'true'
+  soft_fail:
+    description: 'Allow pull failures without failing the workflow'
+    required: false
+    default: 'false'
 
 outputs:
   env_count:
     description: 'Number of environment variables injected'
   pull_method:
-    description: 'Sync method used (relay/cache)'
+    description: 'Pull method used (relay, lan, relay+lan, or none)'
 
 runs:
   using: 'composite'
@@ -38,7 +42,11 @@ runs:
     - name: Install EnvSync
       shell: bash
       run: |
-        curl -fsSL https://envsync.dev/install.sh | bash
+        if command -v envsync >/dev/null 2>&1; then
+          echo "Using existing EnvSync from PATH"
+        else
+          curl -fsSL https://envsync.dev/install.sh | bash
+        fi
         echo "EnvSync installed: $(envsync version --short 2>/dev/null || echo 'unknown')"
 
     - name: Import service key
@@ -49,63 +57,77 @@ runs:
         echo "$ENVSYNC_SERVICE_KEY" | base64 -d > /tmp/envsync-service-key
         chmod 600 /tmp/envsync-service-key
 
-    - name: Pull environment variables
+    - name: Pull shared environment
       shell: bash
       run: |
-        # Pull .env from relay
+        PULL_REPORT="$RUNNER_TEMP/envsync-pull.json"
+        set +e
         envsync pull \
           --service-key /tmp/envsync-service-key \
           --team "${{ inputs.team_id }}" \
           --file "${{ inputs.env_file }}" \
           --relay "${{ inputs.relay_url }}" \
-          --quiet || {
-            echo "::warning::EnvSync pull failed. Check service key and team configuration."
-            exit 0
-          }
+          --timeout 10 \
+          --quiet \
+          --json > "$PULL_REPORT"
+        STATUS=$?
+        set -e
 
-    - name: Inject into environment
+        METHOD="$(python - "$PULL_REPORT" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+if not path.exists():
+    print("none")
+    raise SystemExit(0)
+
+text = path.read_text(encoding="utf-8").strip()
+if not text:
+    print("none")
+    raise SystemExit(0)
+
+data = json.loads(text)
+print(data.get("method", "none"))
+PY
+)"
+
+        echo "pull_method=${METHOD}" >> "$GITHUB_OUTPUT"
+
+        if [ "$STATUS" -ne 0 ]; then
+          if [ "${{ inputs.soft_fail }}" = "true" ]; then
+            echo "::warning::EnvSync pull failed but soft_fail=true. Check service key, relay access, and project membership."
+            exit 0
+          fi
+          echo "::error::EnvSync pull failed."
+          cat "$PULL_REPORT"
+          exit "$STATUS"
+        fi
+
+    - name: Inject env file into GitHub Actions
       shell: bash
       run: |
         ENV_FILE="${{ inputs.env_file }}"
         MASK="${{ inputs.mask_values }}"
-        COUNT=0
 
         if [ ! -f "$ENV_FILE" ]; then
           echo "::warning::No .env file found after pull"
+          echo "env_count=0" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
-        while IFS= read -r line || [ -n "$line" ]; do
-          # Skip comments and blank lines
-          [[ "$line" =~ ^[[:space:]]*# ]] && continue
-          [[ -z "${line// }" ]] && continue
+        MASK_FLAG=""
+        if [ "$MASK" = "true" ]; then
+          MASK_FLAG="--mask-values"
+        fi
 
-          # Extract key=value (handle quoted values)
-          if [[ "$line" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z_0-9]*)=(.*) ]]; then
-            key="${BASH_REMATCH[2]}"
-            value="${BASH_REMATCH[3]}"
-
-            # Strip surrounding quotes
-            value="${value#\"}"
-            value="${value%\"}"
-            value="${value#\'}"
-            value="${value%\'}"
-
-            # Inject into GITHUB_ENV
-            echo "${key}=${value}" >> "$GITHUB_ENV"
-
-            # Mask if requested
-            if [ "$MASK" = "true" ]; then
-              echo "::add-mask::${value}"
-            fi
-
-            COUNT=$((COUNT + 1))
-          fi
-        done < "$ENV_FILE"
-
-        echo "env_count=${COUNT}" >> "$GITHUB_OUTPUT"
-        echo "pull_method=relay" >> "$GITHUB_OUTPUT"
-        echo "✓ Injected ${COUNT} environment variables"
+        envsync env export \
+          --source "$ENV_FILE" \
+          --format github-actions \
+          --write "$GITHUB_ENV" \
+          --github-output "$GITHUB_OUTPUT" \
+          $MASK_FLAG
 
     - name: Cleanup
       shell: bash
