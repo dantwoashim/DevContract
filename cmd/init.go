@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,8 +15,8 @@ import (
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize EnvSync (reads SSH key, creates config)",
-	Long:  "Reads your SSH Ed25519 key, derives cryptographic identity, and creates the EnvSync configuration.",
+	Short: "Initialize EnvSync for the current project",
+	Long:  "Reads your SSH Ed25519 key, derives the EnvSync identity bundle, writes config, creates a stable project ID, and scaffolds a repo contract.",
 	RunE:  runInit,
 }
 
@@ -23,16 +24,14 @@ func runInit(cmd *cobra.Command, args []string) error {
 	cfg := config.Default()
 
 	fmt.Println()
-	fmt.Printf("  ✦ EnvSync %s\n", Version)
+	fmt.Printf("  * EnvSync %s\n", Version)
 	fmt.Println()
 
-	// Resolve SSH key path
 	keyPath := cfg.Identity.SSHKeyPath
-	if envFile, _ := cmd.Flags().GetString("ssh-key"); envFile != "" {
-		keyPath = envFile
+	if flagValue, _ := cmd.Flags().GetString("ssh-key"); flagValue != "" {
+		keyPath = flagValue
 	}
 
-	// Expand ~ if needed
 	if len(keyPath) >= 2 && (keyPath[:2] == "~/" || keyPath[:2] == "~\\") {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -41,16 +40,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 		keyPath = filepath.Join(home, keyPath[2:])
 	}
 
-	fmt.Printf("  ▸ Reading SSH key from %s\n", keyPath)
+	fmt.Printf("  - Reading SSH key from %s\n", keyPath)
 
-	// Check if key exists
 	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
-		return fmt.Errorf("SSH key not found at %s\n\n"+
-			"  Generate one with:\n"+
-			"    ssh-keygen -t ed25519 -f %s\n", keyPath, keyPath)
+		return fmt.Errorf("SSH key not found at %s\n\n  Generate one with:\n    ssh-keygen -t ed25519 -f %s", keyPath, keyPath)
 	}
 
-	// Check for passphrase before loading
 	keyData, err := os.ReadFile(keyPath)
 	if err != nil {
 		return fmt.Errorf("reading SSH key: %w", err)
@@ -58,54 +53,63 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	if crypto.IsPassphraseProtected(keyData) {
 		fmt.Println()
-		fmt.Println("  ⚠ SSH key is passphrase-protected.")
-		fmt.Println("    EnvSync needs access to the raw key for encryption.")
+		fmt.Println("  ! SSH key is passphrase-protected.")
+		fmt.Println("    This build of EnvSync still needs direct access to the raw Ed25519 key material.")
 		fmt.Println("    Options:")
 		fmt.Printf("    1. Remove passphrase: ssh-keygen -p -f %s\n", keyPath)
-		fmt.Println("    2. Use ssh-agent (EnvSync will read from agent)")
+		fmt.Println("    2. Use a dedicated unencrypted Ed25519 key just for EnvSync")
 		fmt.Println()
-		return fmt.Errorf("passphrase-protected SSH keys are not yet supported")
+		return fmt.Errorf("passphrase-protected SSH keys are not yet supported in this build")
 	}
 
-	// Load and derive keys
 	kp, err := crypto.LoadSSHKey(keyPath)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("  ▸ Key type: Ed25519\n")
-	fmt.Printf("  ▸ Fingerprint: %s\n", kp.Fingerprint)
+	hostname, _ := os.Hostname()
 
-	// Update config
 	cfg.Identity.SSHKeyPath = keyPath
 	cfg.Identity.Fingerprint = kp.Fingerprint
+	cfg.Identity.IdentityPublicKey = base64.StdEncoding.EncodeToString(kp.Ed25519Public)
+	cfg.Identity.TransportPublicKey = x25519PublicKeyBase64(kp)
+	cfg.Identity.TransportFingerprint = crypto.ComputeFingerprint(kp.X25519Public)
+	cfg.Identity.DeviceName = hostname
+	cfg.Network.HolePunchEnabled = false
 
-	// Create directories
 	if err := config.EnsureDirs(); err != nil {
 		return fmt.Errorf("creating EnvSync directories: %w", err)
 	}
 
-	configDir, err := config.ConfigDir()
-	if err != nil {
-		return err
-	}
-
-	configPath := filepath.Join(configDir, "config.toml")
-
-	// Actually write the config file to disk
 	if err := config.SaveConfig(cfg); err != nil {
 		return fmt.Errorf("writing config file: %w", err)
 	}
-	fmt.Printf("  ▸ Created config at %s\n", configPath)
 
-	dataDir, err := config.DataDir()
+	project, err := ensureProjectContext(cfg)
 	if err != nil {
-		return err
+		return fmt.Errorf("writing project config: %w", err)
 	}
-	fmt.Printf("  ▸ Encrypted store initialized at %s/store/\n", dataDir)
 
+	contractPath, createdContract, err := ensureProjectContract(project)
+	if err != nil {
+		return fmt.Errorf("writing repo contract: %w", err)
+	}
+
+	configPath, _ := config.ConfigFilePath()
+	dataDir, _ := config.DataDir()
+
+	fmt.Printf("  - Fingerprint: %s\n", kp.Fingerprint)
+	fmt.Printf("  - Transport:   %s\n", cfg.Identity.TransportFingerprint)
+	fmt.Printf("  - Device:      %s\n", cfg.Identity.DeviceName)
+	fmt.Printf("  - Config:      %s\n", configPath)
+	fmt.Printf("  - Project ID:  %s\n", project.ProjectID)
+	fmt.Printf("  - Contract:    %s\n", contractPath)
+	fmt.Printf("  - Store:       %s\\store\\\n", dataDir)
 	fmt.Println()
-	fmt.Println("  ✓ Ready. Run 'envsync invite @teammate' to start a team.")
+	if createdContract {
+		fmt.Println("  - Created a starter AI onboarding contract at .envsync/contract.yaml")
+	}
+	fmt.Println("  x Ready. Run 'envsync bootstrap' to scaffold local onboarding, then invite teammates.")
 
 	return nil
 }

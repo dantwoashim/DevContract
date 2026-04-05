@@ -60,19 +60,23 @@ const DefaultPort = 7733
 
 // Config represents the global EnvSync configuration.
 type Config struct {
-	Identity IdentityConfig `toml:"identity"`
-	Relay    RelayConfig    `toml:"relay"`
-	Network  NetworkConfig  `toml:"network"`
-	Sync     SyncConfig     `toml:"sync"`
-	UI       UIConfig       `toml:"ui"`
+	Identity  IdentityConfig  `toml:"identity"`
+	Relay     RelayConfig     `toml:"relay"`
+	Network   NetworkConfig   `toml:"network"`
+	Sync      SyncConfig      `toml:"sync"`
+	UI        UIConfig        `toml:"ui"`
 	Telemetry TelemetryConfig `toml:"telemetry"`
 }
 
 // IdentityConfig holds the user's cryptographic identity.
 type IdentityConfig struct {
-	SSHKeyPath     string `toml:"ssh_key_path"`
-	GitHubUsername string `toml:"github_username"`
-	Fingerprint    string `toml:"fingerprint"`
+	SSHKeyPath           string `toml:"ssh_key_path"`
+	GitHubUsername       string `toml:"github_username"`
+	Fingerprint          string `toml:"fingerprint"`
+	IdentityPublicKey    string `toml:"identity_public_key,omitempty"`
+	TransportPublicKey   string `toml:"transport_public_key,omitempty"`
+	TransportFingerprint string `toml:"transport_fingerprint,omitempty"`
+	DeviceName           string `toml:"device_name,omitempty"`
 }
 
 // RelayConfig holds relay server settings.
@@ -87,7 +91,9 @@ type NetworkConfig struct {
 	MDNSEnabled        bool `toml:"mdns_enabled"`
 	MDNSTimeoutMs      int  `toml:"mdns_timeout_ms"`
 	HolePunchTimeoutMs int  `toml:"holepunch_timeout_ms"`
-	HolePunchEnabled   bool `toml:"holepunch_enabled"`
+	// HolePunchEnabled is retained for compatibility with older configs.
+	// Production EnvSync uses LAN direct plus encrypted relay fallback.
+	HolePunchEnabled bool `toml:"holepunch_enabled"`
 }
 
 // SyncConfig holds synchronization settings.
@@ -125,7 +131,7 @@ func Default() *Config {
 			MDNSEnabled:        true,
 			MDNSTimeoutMs:      2000,
 			HolePunchTimeoutMs: 5000,
-			HolePunchEnabled:   true,
+			HolePunchEnabled:   false,
 		},
 		Sync: SyncConfig{
 			DefaultFile:        ".env",

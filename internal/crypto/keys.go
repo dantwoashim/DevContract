@@ -56,7 +56,7 @@ func ParseSSHKey(data []byte, keyPath string) (*KeyPair, error) {
 		if isPassphraseError(err) {
 			return nil, fmt.Errorf("SSH key is passphrase-protected. EnvSync needs the raw key.\n"+
 				"  Decrypt it temporarily: ssh-keygen -p -f %s\n"+
-				"  Or export without passphrase: ssh-keygen -p -m PEM -f %s", keyPath, keyPath)
+				"  Or use a dedicated unencrypted Ed25519 key for EnvSync: ssh-keygen -t ed25519 -f %s.envsync", keyPath, keyPath)
 		}
 
 		// Try PEM format
