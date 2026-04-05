@@ -21,7 +21,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.24.2'
 
       - name: Vet
         run: go vet ./...
@@ -39,7 +39,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.24.2'
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v4
@@ -54,7 +54,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.24.2'
 
       - name: Install gosec
         run: go install github.com/securego/gosec/v2/cmd/gosec@latest
@@ -66,4 +66,146 @@ jobs:
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
+
+  source-build:
+    name: Relay And Extension Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.2'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Go build
+        run: go build ./...
+
+      - name: Install relay dependencies
+        working-directory: relay
+        run: npm ci
+
+      - name: Test relay
+        working-directory: relay
+        run: npm test
+
+      - name: Install extension dependencies
+        working-directory: extension
+        run: npm ci
+
+      - name: Compile extension
+        working-directory: extension
+        run: npm run compile
+
+  repo-hygiene:
+    name: Repo Hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for tracked build artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden="$(git ls-files \
+            'envsync.exe' \
+            '.gocache/**' \
+            'relay/node_modules/**' \
+            'extension/node_modules/**' \
+            'extension/out/**' \
+            'relay/.wrangler/**' \
+            'extension/*.vsix' \
+            '.envsync/generated/**')"
+          if [ -n "$forbidden" ]; then
+            echo "Tracked artifacts must not be committed:"
+            echo "$forbidden"
+            exit 1
+          fi
+
+  action-smoke:
+    name: Action Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.2'
+
+      - name: Build local EnvSync
+        run: go build -o "$RUNNER_TEMP/envsync-real" ./
+
+      - name: Install action test shim
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          cat > "$RUNNER_TEMP/bin/envsync" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          REAL_BIN="${RUNNER_TEMP}/envsync-real"
+          case "${1:-}" in
+            version)
+              if [[ "${2:-}" == "--short" ]]; then
+                echo "smoke"
+                exit 0
+              fi
+              exec "$REAL_BIN" "$@"
+              ;;
+            pull)
+              FILE=".env"
+              JSON="false"
+              shift
+              while [[ $# -gt 0 ]]; do
+                case "$1" in
+                  --file)
+                    FILE="$2"
+                    shift 2
+                    ;;
+                  --json)
+                    JSON="true"
+                    shift
+                    ;;
+                  *)
+                    shift
+                    ;;
+                esac
+              done
+              cat > "$FILE" <<'ENVEOF'
+          API_KEY=abc123
+          MULTILINE="line1\nline2"
+          ENVEOF
+              if [[ "$JSON" == "true" ]]; then
+                printf '{"project_id":"smoke","target_file":"%s","relay_checked":true,"relay_applied":1,"lan_applied":false,"method":"relay","methods":["relay"]}\n' "$FILE"
+              fi
+              ;;
+            env)
+              exec "$REAL_BIN" "$@"
+              ;;
+            *)
+              exec "$REAL_BIN" "$@"
+              ;;
+          esac
+          EOF
+          chmod +x "$RUNNER_TEMP/bin/envsync"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Run local action
+        id: action
+        uses: ./action
+        with:
+          service_key: ZmFrZQ==
+          team_id: smoke-team
+          env_file: .env.test
+          mask_values: false
+
+      - name: Verify action outputs
+        shell: bash
+        run: |
+          test "${{ steps.action.outputs.pull_method }}" = "relay"
+          test "${{ steps.action.outputs.env_count }}" = "2"
+          test "${API_KEY}" = "abc123"
+          test "${MULTILINE}" = $'line1\nline2'
 
