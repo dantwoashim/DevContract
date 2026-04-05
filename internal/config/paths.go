@@ -58,15 +58,24 @@ func ProjectConfigPath() string {
 	return ".envsync.toml"
 }
 
-// FindProjectConfig searches up from cwd to find .envsync.toml.
-func FindProjectConfig() (string, error) {
+// ContractDirPath returns the path to the repo-owned contract directory.
+func ContractDirPath() string {
+	return ".envsync"
+}
+
+// ContractFilePath returns the path to the repo-owned contract file.
+func ContractFilePath() string {
+	return filepath.Join(ContractDirPath(), "contract.yaml")
+}
+
+func findUp(relativePath string) (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
 
 	for {
-		candidate := filepath.Join(dir, ".envsync.toml")
+		candidate := filepath.Join(dir, relativePath)
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate, nil
 		}
@@ -78,5 +87,36 @@ func FindProjectConfig() (string, error) {
 		dir = parent
 	}
 
-	return "", fmt.Errorf(".envsync.toml not found (run 'envsync init' to create one)")
+	return "", fmt.Errorf("%s not found", relativePath)
+}
+
+// FindProjectConfig searches up from cwd to find .envsync.toml.
+func FindProjectConfig() (string, error) {
+	path, err := findUp(ProjectConfigPath())
+	if err != nil {
+		return "", fmt.Errorf(".envsync.toml not found (run 'envsync init' to create one)")
+	}
+	return path, nil
+}
+
+// FindContractFile searches up from cwd to find .envsync/contract.yaml.
+func FindContractFile() (string, error) {
+	path, err := findUp(ContractFilePath())
+	if err != nil {
+		return "", fmt.Errorf("%s not found (run 'envsync init' to create one)", ContractFilePath())
+	}
+	return path, nil
+}
+
+// FindProjectRoot resolves the repository root using either project config or contract metadata.
+func FindProjectRoot() (string, error) {
+	if projectPath, err := FindProjectConfig(); err == nil {
+		return filepath.Dir(projectPath), nil
+	}
+
+	contractPath, err := FindContractFile()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Dir(filepath.Dir(contractPath)), nil
 }
