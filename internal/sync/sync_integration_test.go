@@ -32,7 +32,10 @@ func TestProtocolRoundTripIntegration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			payload := sync.NewEnvPayload(tt.file, []byte(tt.content), tt.seq)
-			encoded := sync.EncodeEnvPayload(payload)
+			encoded, err := sync.EncodeEnvPayload(payload)
+			if err != nil {
+				t.Fatalf("encode failed: %v", err)
+			}
 
 			decoded, err := sync.DecodeEnvPayload(encoded)
 			if err != nil {
@@ -65,7 +68,10 @@ func TestProtocolRoundTripIntegration(t *testing.T) {
 func TestPayloadChecksumIntegrity(t *testing.T) {
 	content := "SECRET=hunter2\nAPI_KEY=abc123\nDB_PASS=correcthorsebatterystaple\n"
 	payload := sync.NewEnvPayload(".env", []byte(content), 1)
-	encoded := sync.EncodeEnvPayload(payload)
+	encoded, err := sync.EncodeEnvPayload(payload)
+	if err != nil {
+		t.Fatalf("encode failed: %v", err)
+	}
 
 	// Corrupt a byte in the data section of the encoded payload
 	// The data starts after: version(2) + seq(8) + ts(8) + nameLen(2) + name(4) + dataLen(4) = 28 bytes
@@ -96,7 +102,10 @@ func TestLargePayloadBoundary(t *testing.T) {
 	}
 
 	payload := sync.NewEnvPayload(".env", data, 1)
-	encoded := sync.EncodeEnvPayload(payload)
+	encoded, err := sync.EncodeEnvPayload(payload)
+	if err != nil {
+		t.Fatalf("encode failed: %v", err)
+	}
 
 	decoded, err := sync.DecodeEnvPayload(encoded)
 	if err != nil {
@@ -121,7 +130,10 @@ func TestLargePayloadBoundary(t *testing.T) {
 func TestEncodeDecodeIdempotent(t *testing.T) {
 	content := "KEY=value\nOTHER=data\n"
 	payload := sync.NewEnvPayload(".env", []byte(content), 42)
-	encoded1 := sync.EncodeEnvPayload(payload)
+	encoded1, err := sync.EncodeEnvPayload(payload)
+	if err != nil {
+		t.Fatalf("first encode failed: %v", err)
+	}
 
 	decoded, err := sync.DecodeEnvPayload(encoded1)
 	if err != nil {
@@ -129,7 +141,10 @@ func TestEncodeDecodeIdempotent(t *testing.T) {
 	}
 
 	// Re-encode (timestamp is preserved from decode, so should match)
-	encoded2 := sync.EncodeEnvPayload(decoded)
+	encoded2, err := sync.EncodeEnvPayload(decoded)
+	if err != nil {
+		t.Fatalf("second encode failed: %v", err)
+	}
 
 	if len(encoded1) != len(encoded2) {
 		t.Errorf("re-encoded length differs: %d vs %d", len(encoded1), len(encoded2))
@@ -146,7 +161,10 @@ func TestEncodeDecodeIdempotent(t *testing.T) {
 // TestEmptyPayload tests edge case of completely empty payload.
 func TestEmptyPayload(t *testing.T) {
 	payload := sync.NewEnvPayload("", []byte{}, 0)
-	encoded := sync.EncodeEnvPayload(payload)
+	encoded, err := sync.EncodeEnvPayload(payload)
+	if err != nil {
+		t.Fatalf("encode failed for empty payload: %v", err)
+	}
 
 	decoded, err := sync.DecodeEnvPayload(encoded)
 	if err != nil {

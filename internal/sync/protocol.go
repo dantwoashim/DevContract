@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"time"
 
 	"github.com/envsync/envsync/internal/crypto"
@@ -77,8 +78,20 @@ func ReceiveMessage(conn *crypto.SecureConn) (Message, error) {
 }
 
 // EncodeEnvPayload serializes an env payload into bytes.
-func EncodeEnvPayload(p EnvPayload) []byte {
+func EncodeEnvPayload(p EnvPayload) ([]byte, error) {
 	nameBytes := []byte(p.FileName)
+	if p.Sequence < 0 {
+		return nil, fmt.Errorf("sequence must be non-negative")
+	}
+	if p.Timestamp < 0 {
+		return nil, fmt.Errorf("timestamp must be non-negative")
+	}
+	if len(nameBytes) > math.MaxUint16 {
+		return nil, fmt.Errorf("filename too long: %d bytes", len(nameBytes))
+	}
+	if len(p.Data) > math.MaxUint32 {
+		return nil, fmt.Errorf("payload too large: %d bytes", len(p.Data))
+	}
 
 	// Version(2) + Sequence(8) + Timestamp(8) + NameLen(2) + Name + DataLen(4) + Data + Checksum(32)
 	size := 2 + 8 + 8 + 2 + len(nameBytes) + 4 + len(p.Data) + 32
@@ -91,15 +104,17 @@ func EncodeEnvPayload(p EnvPayload) []byte {
 	// Timestamp
 	buf = binary.BigEndian.AppendUint64(buf, uint64(p.Timestamp))
 	// FileName
+	// #nosec G115 -- length is bounded by the check above.
 	buf = binary.BigEndian.AppendUint16(buf, uint16(len(nameBytes)))
 	buf = append(buf, nameBytes...)
 	// Data
+	// #nosec G115 -- length is bounded by the check above.
 	buf = binary.BigEndian.AppendUint32(buf, uint32(len(p.Data)))
 	buf = append(buf, p.Data...)
 	// Checksum
 	buf = append(buf, p.Checksum[:]...)
 
-	return buf
+	return buf, nil
 }
 
 // DecodeEnvPayload deserializes an env payload from bytes.
@@ -119,12 +134,18 @@ func DecodeEnvPayload(data []byte) (EnvPayload, error) {
 	if err != nil {
 		return p, fmt.Errorf("reading sequence: %w", err)
 	}
+	if seq > math.MaxInt64 {
+		return p, fmt.Errorf("sequence overflows int64: %d", seq)
+	}
 	p.Sequence = int64(seq)
 
 	// Timestamp
 	ts, err := r.readUint64()
 	if err != nil {
 		return p, fmt.Errorf("reading timestamp: %w", err)
+	}
+	if ts > math.MaxInt64 {
+		return p, fmt.Errorf("timestamp overflows int64: %d", ts)
 	}
 	p.Timestamp = int64(ts)
 

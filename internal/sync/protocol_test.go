@@ -11,7 +11,10 @@ func TestProtocolRoundTrip(t *testing.T) {
 	original := NewEnvPayload(".env", []byte("DATABASE_URL=postgres://localhost:5432/mydb\nAPI_KEY=sk_test_12345\n"), 42)
 
 	// Encode
-	encoded := EncodeEnvPayload(original)
+	encoded, err := EncodeEnvPayload(original)
+	if err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
 	if len(encoded) == 0 {
 		t.Fatal("encoded payload is empty")
 	}
