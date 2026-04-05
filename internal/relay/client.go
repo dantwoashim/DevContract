@@ -17,10 +17,21 @@ import (
 
 // Client is an HTTP client for the EnvSync relay API.
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
-	privateKey ed25519.PrivateKey
+	baseURL     string
+	httpClient  *http.Client
+	privateKey  ed25519.PrivateKey
 	fingerprint string
+}
+
+// TeamMember represents a registered project member on the relay.
+type TeamMember struct {
+	Username             string `json:"username"`
+	Fingerprint          string `json:"fingerprint"`
+	PublicKey            string `json:"public_key"`
+	TransportPublicKey   string `json:"transport_public_key"`
+	TransportFingerprint string `json:"transport_fingerprint"`
+	Role                 string `json:"role"`
+	AddedAt              int64  `json:"added_at"`
 }
 
 // NewClient creates a new relay client.
@@ -35,7 +46,6 @@ func NewClient(baseURL string, kp *crypto.KeyPair) *Client {
 	}
 }
 
-// doRequest performs a signed HTTP request with retry.
 func (c *Client) doRequest(method, path string, body []byte) (*http.Response, error) {
 	var lastErr error
 
@@ -45,7 +55,6 @@ func (c *Client) doRequest(method, path string, body []byte) (*http.Response, er
 		}
 
 		url := c.baseURL + path
-
 		var reqBody io.Reader
 		if body != nil {
 			reqBody = bytes.NewReader(body)
@@ -60,7 +69,6 @@ func (c *Client) doRequest(method, path string, body []byte) (*http.Response, er
 			req.Header.Set("Content-Type", "application/json")
 		}
 
-		// Sign the request
 		bodyHash := body
 		if bodyHash == nil {
 			bodyHash = []byte{}
@@ -75,7 +83,6 @@ func (c *Client) doRequest(method, path string, body []byte) (*http.Response, er
 			continue
 		}
 
-		// Retry on 5xx
 		if resp.StatusCode >= 500 {
 			resp.Body.Close()
 			lastErr = fmt.Errorf("relay returned HTTP %d", resp.StatusCode)
@@ -88,7 +95,6 @@ func (c *Client) doRequest(method, path string, body []byte) (*http.Response, er
 	return nil, fmt.Errorf("relay request failed after 3 attempts: %w", lastErr)
 }
 
-// doUploadRequest is like doRequest but adds custom headers for blob uploads.
 func (c *Client) doUploadRequest(method, path string, body []byte, headers map[string]string) (*http.Response, error) {
 	var lastErr error
 
@@ -98,7 +104,6 @@ func (c *Client) doUploadRequest(method, path string, body []byte, headers map[s
 		}
 
 		url := c.baseURL + path
-
 		var reqBody io.Reader
 		if body != nil {
 			reqBody = bytes.NewReader(body)
@@ -109,12 +114,10 @@ func (c *Client) doUploadRequest(method, path string, body []byte, headers map[s
 			return nil, fmt.Errorf("creating request: %w", err)
 		}
 
-		// Set custom headers
 		for k, v := range headers {
 			req.Header.Set(k, v)
 		}
 
-		// Sign the request
 		bodyHash := body
 		if bodyHash == nil {
 			bodyHash = []byte{}
@@ -156,25 +159,21 @@ func (c *Client) Health() (map[string]interface{}, error) {
 	return result, nil
 }
 
-// --- Invite operations ---
-
 // InviteRequest is the request body for creating an invite.
 type InviteRequest struct {
-	TokenHash           string `json:"token_hash"`
-	TeamID              string `json:"team_id"`
-	Inviter             string `json:"inviter"`
-	InviterFingerprint  string `json:"inviter_fingerprint"`
-	Invitee             string `json:"invitee"`
-	ExpectedFingerprint string `json:"expected_fingerprint"`
+	TokenHash          string `json:"token_hash"`
+	TeamID             string `json:"team_id"`
+	Inviter            string `json:"inviter"`
+	InviterFingerprint string `json:"inviter_fingerprint"`
+	Invitee            string `json:"invitee"`
 }
 
 // InviteResponse is the response from the invite endpoint.
 type InviteResponse struct {
-	TeamID              string `json:"team_id"`
-	Inviter             string `json:"inviter"`
-	InviterFingerprint  string `json:"inviter_fingerprint"`
-	ExpectedFingerprint string `json:"expected_fingerprint"`
-	ExpiresAt           int64  `json:"expires_at"`
+	TeamID             string `json:"team_id"`
+	Inviter            string `json:"inviter"`
+	InviterFingerprint string `json:"inviter_fingerprint"`
+	ExpiresAt          int64  `json:"expires_at"`
 }
 
 // CreateInvite creates a new invite on the relay.
@@ -193,7 +192,6 @@ func (c *Client) CreateInvite(req InviteRequest) error {
 	if resp.StatusCode != 201 {
 		return readError(resp)
 	}
-
 	return nil
 }
 
@@ -216,7 +214,7 @@ func (c *Client) GetInvite(tokenHash string) (*InviteResponse, error) {
 	return &invite, nil
 }
 
-// ConsumeInvite consumes (redeems) an invite via doRequest for retry + signing.
+// ConsumeInvite consumes (redeems) an invite.
 func (c *Client) ConsumeInvite(tokenHash string) (*InviteResponse, error) {
 	resp, err := c.doRequest("DELETE", "/invites/"+tokenHash, nil)
 	if err != nil {
@@ -235,17 +233,11 @@ func (c *Client) ConsumeInvite(tokenHash string) (*InviteResponse, error) {
 	return &result, nil
 }
 
-// --- Blob operations ---
-
 // UploadBlob uploads an encrypted blob to the relay.
-// Uses doRequest for retry and consistent signing, then adds blob-specific headers.
 func (c *Client) UploadBlob(teamID, blobID string, data []byte, senderFP, recipientFP, ephemeralKey, filename, senderSig string) error {
 	path := "/relay/" + teamID + "/" + blobID
-
-	// Use doRequest for retry + signing consistency
-	// We need to temporarily override httpClient to inject headers
 	resp, err := c.doUploadRequest("PUT", path, data, map[string]string{
-		"Content-Type":            "application/octet-stream",
+		"Content-Type":           "application/octet-stream",
 		"X-EnvSync-Sender":       senderFP,
 		"X-EnvSync-Recipient":    recipientFP,
 		"X-EnvSync-EphemeralKey": ephemeralKey,
@@ -260,19 +252,18 @@ func (c *Client) UploadBlob(teamID, blobID string, data []byte, senderFP, recipi
 	if resp.StatusCode != 201 {
 		return readError(resp)
 	}
-
 	return nil
 }
 
 // BlobInfo describes a pending blob.
 type BlobInfo struct {
-	BlobID              string `json:"blob_id"`
-	TeamID              string `json:"team_id"`
-	SenderFingerprint   string `json:"sender_fingerprint"`
-	EphemeralPublicKey  string `json:"ephemeral_public_key"`
-	Size                int    `json:"size"`
-	UploadedAt          int64  `json:"uploaded_at"`
-	Filename            string `json:"filename"`
+	BlobID             string `json:"blob_id"`
+	TeamID             string `json:"team_id"`
+	SenderFingerprint  string `json:"sender_fingerprint"`
+	EphemeralPublicKey string `json:"ephemeral_public_key"`
+	Size               int    `json:"size"`
+	UploadedAt         int64  `json:"uploaded_at"`
+	Filename           string `json:"filename"`
 }
 
 // ListPending lists pending blobs for the current identity.
@@ -298,27 +289,28 @@ func (c *Client) ListPending(teamID string) ([]BlobInfo, error) {
 }
 
 // DownloadBlob downloads an encrypted blob from the relay.
-func (c *Client) DownloadBlob(teamID, blobID string) ([]byte, string, string, error) {
+func (c *Client) DownloadBlob(teamID, blobID string) ([]byte, string, string, string, error) {
 	path := fmt.Sprintf("/relay/%s/%s", teamID, blobID)
 	resp, err := c.doRequest("GET", path, nil)
 	if err != nil {
-		return nil, "", "", err
+		return nil, "", "", "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return nil, "", "", readError(resp)
+		return nil, "", "", "", readError(resp)
 	}
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return nil, "", "", err
+		return nil, "", "", "", err
 	}
 
-	ephemeralKey := resp.Header.Get("X-EnvSync-EphemeralKey")
-	filename := resp.Header.Get("X-EnvSync-Filename")
-
-	return data, ephemeralKey, filename, nil
+	return data,
+		resp.Header.Get("X-EnvSync-EphemeralKey"),
+		resp.Header.Get("X-EnvSync-Filename"),
+		resp.Header.Get("X-EnvSync-Signature"),
+		nil
 }
 
 // DeleteBlob removes a blob after download.
@@ -336,13 +328,13 @@ func (c *Client) DeleteBlob(teamID, blobID string) error {
 	return nil
 }
 
-// --- Team operations ---
-
-// AddTeamMember adds a member to a team on the relay.
-func (c *Client) AddTeamMember(teamID, username, fingerprint, publicKey string) error {
+// AddTeamMember adds or updates a member on the relay.
+func (c *Client) AddTeamMember(teamID, username, fingerprint, publicKey, transportPublicKey, role string) error {
 	body, _ := json.Marshal(map[string]string{
-		"fingerprint": fingerprint,
-		"public_key":  publicKey,
+		"fingerprint":          fingerprint,
+		"public_key":           publicKey,
+		"transport_public_key": transportPublicKey,
+		"role":                 role,
 	})
 
 	path := fmt.Sprintf("/teams/%s/members/%s", teamID, username)
@@ -373,7 +365,27 @@ func (c *Client) RemoveTeamMember(teamID, username string) error {
 	return nil
 }
 
-// --- Helpers ---
+// ListTeamMembers returns the current relay-side project member list.
+func (c *Client) ListTeamMembers(teamID string) ([]TeamMember, error) {
+	path := fmt.Sprintf("/teams/%s/members", teamID)
+	resp, err := c.doRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, readError(resp)
+	}
+
+	var result struct {
+		Members []TeamMember `json:"members"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.Members, nil
+}
 
 func readError(resp *http.Response) error {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))

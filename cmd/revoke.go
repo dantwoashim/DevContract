@@ -13,9 +13,9 @@ import (
 )
 
 var revokeCmd = &cobra.Command{
-	Use:   "revoke @username",
-	Short: "Remove a peer from your team",
-	Long:  "Revokes a team member's access and removes them from the relay.",
+	Use:   "revoke <label>",
+	Short: "Remove a member from your project",
+	Long:  "Revokes a member's access and removes them from the relay.",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runRevoke,
 }
@@ -32,6 +32,8 @@ func runRevoke(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	project, _ := loadProjectContext()
 
 	registry, err := peer.NewRegistry()
 	if err != nil {
@@ -57,7 +59,7 @@ func runRevoke(cmd *cobra.Command, args []string) error {
 	}
 
 	// Remove from relay
-	client := relay.NewClient(cfg.Relay.URL, kp)
+	client := relay.NewClient(projectRelayURL(project, cfg), kp)
 	if err := client.RemoveTeamMember(teamID, username); err != nil {
 		fmt.Printf("  ⚠ Relay: %s\n", err)
 	}

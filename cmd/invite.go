@@ -4,24 +4,21 @@ package cmd
 
 import (
 	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/envsync/envsync/internal/audit"
 	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/discovery"
 	"github.com/envsync/envsync/internal/peer"
 	"github.com/envsync/envsync/internal/relay"
 	"github.com/spf13/cobra"
-	"golang.org/x/crypto/ssh"
 )
 
 var inviteCmd = &cobra.Command{
-	Use:   "invite @username",
-	Short: "Invite a teammate to your team",
-	Long:  "Creates an invite for a GitHub user. Share the generated 6-word code with them.",
+	Use:   "invite <label>",
+	Short: "Invite a teammate to your project",
+	Long:  "Creates an expiring invite code for this project's stable ID. The label is display metadata only.",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runInvite,
 }
@@ -39,73 +36,65 @@ func runInvite(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Println()
-	fmt.Printf("  ✦ Inviting @%s to your team\n", username)
-	fmt.Println()
-
-	// Generate 6-word mnemonic token
-	token := generateMnemonic()
-	tokenHash := relay.HashToken(token)
-
-	// Create team ID from fingerprint + project
-	teamID := generateTeamID(kp.Fingerprint)
-
-	// Fetch invitee's GitHub SSH keys to get their expected fingerprint
-	inviteeFP := ""
-	if cacheDir, dirErr := config.DataDir(); dirErr == nil {
-		ghCache := discovery.NewGitHubKeyCache(cacheDir)
-		ghKeys, ghErr := ghCache.FetchEd25519Keys(username)
-		if ghErr == nil && len(ghKeys) > 0 {
-			inviteeFP = ssh.FingerprintSHA256(ghKeys[0])
-		}
-	}
-
-	// Create invite on relay
-	client := relay.NewClient(cfg.Relay.URL, kp)
-	err = client.CreateInvite(relay.InviteRequest{
-		TokenHash:           tokenHash,
-		TeamID:              teamID,
-		Inviter:             cfg.Identity.GitHubUsername,
-		InviterFingerprint:  kp.Fingerprint,
-		Invitee:             username,
-		ExpectedFingerprint: inviteeFP,
-	})
+	project, err := ensureProjectContext(cfg)
 	if err != nil {
-		return fmt.Errorf("creating invite on relay: %w\n\n  If running LAN-only, use 'envsync invite --lan-only'", err)
+		return err
 	}
 
-	// Save team locally
+	fmt.Println()
+	fmt.Printf("  ✦ Inviting @%s to project %s\n", username, project.ProjectID)
+	fmt.Println()
+
 	registry, err := peer.NewRegistry()
 	if err != nil {
 		return err
 	}
 
-	team := &peer.Team{
-		ID:        teamID,
-		Name:      fmt.Sprintf("Team %s", username),
-		CreatedBy: kp.Fingerprint,
-		CreatedAt: time.Now(),
-	}
+	team := defaultTeam(project.Config.Name, project.ProjectID, kp.Fingerprint)
 	if err := registry.SaveTeam(team); err != nil {
 		return err
 	}
 
-	// Display the join code
+	client := relay.NewClient(projectRelayURL(project, cfg), kp)
+	if err := client.AddTeamMember(
+		project.ProjectID,
+		displayIdentityName(cfg, kp),
+		kp.Fingerprint,
+		ed25519PublicKeyBase64(kp),
+		x25519PublicKeyBase64(kp),
+		"owner",
+	); err != nil {
+		return fmt.Errorf("registering project owner on relay: %w", err)
+	}
+
+	token := generateMnemonic()
+	tokenHash := relay.HashToken(token)
+
+	err = client.CreateInvite(relay.InviteRequest{
+		TokenHash:          tokenHash,
+		TeamID:             project.ProjectID,
+		Inviter:            displayIdentityName(cfg, kp),
+		InviterFingerprint: kp.Fingerprint,
+		Invitee:            username,
+	})
+	if err != nil {
+		return fmt.Errorf("creating invite on relay: %w", err)
+	}
+
 	fmt.Printf("  ▸ Share this code with @%s:\n", username)
 	fmt.Println()
-	fmt.Printf("    📋  %s\n", token)
+	fmt.Printf("    %s\n", token)
 	fmt.Println()
 	fmt.Printf("  They run: envsync join %s\n", token)
 	fmt.Println()
 	fmt.Println("  ⏳ Code expires in 24 hours.")
 
-	// Audit
 	logger, _ := audit.NewLogger()
 	if logger != nil {
-		logger.Log(audit.Entry{
+		_ = logger.Log(audit.Entry{
 			Event:   audit.EventInvite,
 			Peer:    username,
-			Details: fmt.Sprintf("team %s", teamID),
+			Details: fmt.Sprintf("project %s", project.ProjectID),
 		})
 	}
 
@@ -114,8 +103,8 @@ func runInvite(cmd *cobra.Command, args []string) error {
 
 var joinCmd = &cobra.Command{
 	Use:   "join <code>",
-	Short: "Join a team using an invite code",
-	Long:  "Redeems a 6-word invite code and joins the team.",
+	Short: "Join a project using an invite code",
+	Long:  "Redeems an invite code, registers this device, and stores the trusted peer transport keys locally.",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runJoin,
 }
@@ -133,70 +122,96 @@ func runJoin(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Println()
-	fmt.Printf("  ✦ Joining team with invite code\n")
-	fmt.Println()
-
-	tokenHash := relay.HashToken(token)
-
-	// Consume invite from relay
-	client := relay.NewClient(cfg.Relay.URL, kp)
-	inviteResp, err := client.ConsumeInvite(tokenHash)
+	project, err := ensureProjectContext(cfg)
 	if err != nil {
-		fmt.Printf("  ⚠ Relay: %s\n", err)
-		fmt.Println("    Attempting local join...")
-		fmt.Println()
-		return fmt.Errorf("could not redeem invite code. Check the code and try again")
+		return err
 	}
 
-	// Save team and peer locally
+	fmt.Println()
+	fmt.Println("  ✦ Joining project with invite code")
+	fmt.Println()
+
+	client := relay.NewClient(projectRelayURL(project, cfg), kp)
+	inviteResp, err := client.ConsumeInvite(relay.HashToken(token))
+	if err != nil {
+		return fmt.Errorf("could not redeem invite code: %w", err)
+	}
+
+	if project.ProjectID != "" && project.ProjectID != inviteResp.TeamID {
+		project.Config.ProjectID = inviteResp.TeamID
+		project.Config.TeamID = inviteResp.TeamID
+		project.ProjectID = inviteResp.TeamID
+	}
+	if err := peer.SaveProjectConfig(project.Config); err != nil {
+		return err
+	}
+
 	registry, err := peer.NewRegistry()
 	if err != nil {
 		return err
 	}
 
-	team := &peer.Team{
-		ID:        inviteResp.TeamID,
-		Name:      fmt.Sprintf("Team %s", inviteResp.Inviter),
-		CreatedBy: inviteResp.InviterFingerprint,
-		CreatedAt: time.Now(),
+	team := defaultTeam(inviteResp.TeamID, inviteResp.TeamID, inviteResp.InviterFingerprint)
+	if project.Config.Name != "" {
+		team.Name = project.Config.Name
 	}
 	if err := registry.SaveTeam(team); err != nil {
 		return err
 	}
 
-	// Register inviter as trusted peer
-	inviterPeer := &peer.Peer{
-		GitHubUsername: inviteResp.Inviter,
-		Fingerprint:   inviteResp.InviterFingerprint,
-		Trust:         peer.TrustTrusted,
-		FirstSeen:     time.Now(),
-		LastSeen:      time.Now(),
-		TrustedAt:     time.Now(),
+	if err := client.AddTeamMember(
+		inviteResp.TeamID,
+		displayIdentityName(cfg, kp),
+		kp.Fingerprint,
+		ed25519PublicKeyBase64(kp),
+		x25519PublicKeyBase64(kp),
+		"member",
+	); err != nil {
+		return fmt.Errorf("registering device on relay: %w", err)
 	}
-	if err := registry.SavePeer(inviteResp.TeamID, inviterPeer); err != nil {
+
+	members, err := client.ListTeamMembers(inviteResp.TeamID)
+	if err != nil {
+		return fmt.Errorf("fetching team members: %w", err)
+	}
+
+	for _, member := range members {
+		if member.Fingerprint == kp.Fingerprint {
+			continue
+		}
+
+		p := &peer.Peer{
+			GitHubUsername:       member.Username,
+			Fingerprint:          member.Fingerprint,
+			Ed25519Public:        member.PublicKey,
+			X25519Public:         member.TransportPublicKey,
+			TransportFingerprint: member.TransportFingerprint,
+			Trust:                peer.TrustTrusted,
+			FirstSeen:            time.Now(),
+			LastSeen:             time.Now(),
+			TrustedAt:            time.Now(),
+		}
+		if err := registry.SavePeer(inviteResp.TeamID, p); err != nil {
+			return err
+		}
+		team.AddMember(member.Fingerprint)
+	}
+	team.AddMember(kp.Fingerprint)
+	if err := registry.SaveTeam(team); err != nil {
 		return err
 	}
 
-	// Register ourselves on the relay team
-	publicKeyB64 := base64.StdEncoding.EncodeToString(kp.Ed25519Public)
-	if err := client.AddTeamMember(inviteResp.TeamID, cfg.Identity.GitHubUsername, kp.Fingerprint, publicKeyB64); err != nil {
-		fmt.Printf("  ⚠ Relay registration: %s\n", err)
-	}
-
-	fmt.Printf("  ✓ Joined team from @%s\n", inviteResp.Inviter)
-	fmt.Printf("  ▸ Team ID: %s\n", inviteResp.TeamID)
-	fmt.Printf("  ▸ Inviter trusted: %s\n", inviteResp.InviterFingerprint)
+	fmt.Printf("  ✓ Joined project %s from %s\n", inviteResp.TeamID, inviteResp.Inviter)
+	fmt.Printf("  ▸ Trusted identity: %s\n", inviteResp.InviterFingerprint)
 	fmt.Println()
 	fmt.Println("  Ready. Run 'envsync pull' to receive the latest .env.")
 
-	// Audit
 	logger, _ := audit.NewLogger()
 	if logger != nil {
-		logger.Log(audit.Entry{
+		_ = logger.Log(audit.Entry{
 			Event:   audit.EventJoin,
 			Peer:    inviteResp.Inviter,
-			Details: fmt.Sprintf("team %s", inviteResp.TeamID),
+			Details: fmt.Sprintf("project %s", inviteResp.TeamID),
 		})
 	}
 
@@ -204,9 +219,7 @@ func runJoin(cmd *cobra.Command, args []string) error {
 }
 
 // generateMnemonic creates an 8-word random mnemonic token with 64 bits of entropy.
-// Uses a 256-word pool (8 bits per word × 8 words = 64 bits).
 func generateMnemonic() string {
-	// 256-word curated pool — exactly 2^8 words to eliminate modular bias
 	words := []string{
 		"tiger", "castle", "moon", "river", "flame", "hope", "storm", "eagle",
 		"frost", "blade", "ocean", "crown", "spark", "stone", "cloud", "forest",
@@ -237,24 +250,28 @@ func generateMnemonic() string {
 		"titan", "umbral", "vortex", "zenith", "alpine", "basalt", "cosmos", "delphi",
 	}
 
-	// Generate 8 random indices (8 words × 8 bits = 64 bits of entropy)
 	selected := make([]string, 8)
 	for i := 0; i < 8; i++ {
-		b := make([]byte, 1)
+		b := make([]byte, 2)
 		if _, err := rand.Read(b); err != nil {
-			// Fail hard — crypto randomness is critical for invite security
 			panic(fmt.Sprintf("crypto/rand failed: %v", err))
 		}
-		selected[i] = words[int(b[0])] // Exactly 256 words = no modular bias
+		// Use 2 bytes (16 bits) for unbiased modulo selection across the word list
+		idx := int(b[0])<<8 | int(b[1])
+		selected[i] = words[idx%len(words)]
 	}
 
 	return strings.Join(selected, "-")
 }
 
-// generateTeamID creates a deterministic team ID from fingerprint.
-// Delegates to peer.GenerateTeamID for a single source of truth.
-func generateTeamID(fingerprint string) string {
-	return peer.GenerateTeamID(fingerprint, "default")
+func projectRelayURL(project *projectContext, cfg *config.Config) string {
+	if project != nil && project.Config != nil && project.Config.RelayURL != "" {
+		return project.Config.RelayURL
+	}
+	if cfg != nil && cfg.Relay.URL != "" {
+		return cfg.Relay.URL
+	}
+	return "https://relay.envsync.dev"
 }
 
 func init() {
