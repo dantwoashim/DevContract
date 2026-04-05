@@ -18,13 +18,13 @@ type TierStatus struct {
 
 // TierUsage tracks current usage.
 type TierUsage struct {
-	Members   int `json:"members"`
+	Members    int `json:"members"`
 	BlobsToday int `json:"blobs_today"`
 }
 
 // TierLimits describes the limits for a tier.
 type TierLimits struct {
-	Members     int `json:"members"`      // -1 = unlimited
+	Members     int `json:"members"`       // -1 = unlimited
 	BlobsPerDay int `json:"blobs_per_day"` // -1 = unlimited
 	HistoryDays int `json:"history_days"`
 }
@@ -47,32 +47,6 @@ func (c *Client) GetTierStatus(teamID string) (*TierStatus, error) {
 		return nil, err
 	}
 	return &status, nil
-}
-
-// CreateCheckout initiates a Stripe checkout for upgrading.
-func (c *Client) CreateCheckout(teamID, plan string) (string, error) {
-	body, _ := json.Marshal(map[string]string{
-		"team_id": teamID,
-		"plan":    plan,
-	})
-
-	resp, err := c.doRequest("POST", "/billing/checkout", body)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return "", readError(resp)
-	}
-
-	var result struct {
-		CheckoutURL string `json:"checkout_url"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
-	}
-	return result.CheckoutURL, nil
 }
 
 // IsUnlimited returns true if the limit value means unlimited.
