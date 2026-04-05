@@ -241,12 +241,14 @@ func TestNoiseHandshakeTimeout(t *testing.T) {
 	go func() {
 		raw, _ := ln.Accept()
 		if raw != nil {
-			raw.Close()
+			_ = raw.Close()
 		}
 	}()
 
 	raw, _ := net.Dial("tcp", ln.Addr().String())
-	raw.SetDeadline(time.Now().Add(2 * time.Second))
+	if err := raw.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("set deadline: %v", err)
+	}
 
 	_, err = PerformHandshake(raw, NoiseConfig{
 		StaticKeypair: aliceKP,

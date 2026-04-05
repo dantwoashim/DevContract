@@ -72,7 +72,7 @@ func runRevoke(cmd *cobra.Command, args []string) error {
 	// Audit
 	logger, _ := audit.NewLogger()
 	if logger != nil {
-		logger.Log(audit.Entry{
+		_ = logger.Log(audit.Entry{
 			Event:   audit.EventRevoke,
 			Peer:    username,
 			Details: fmt.Sprintf("team %s", teamID),

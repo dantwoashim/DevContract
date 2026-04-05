@@ -50,7 +50,9 @@ func TestReadWithLimit(t *testing.T) {
 	logger := newTestLogger(t)
 
 	for i := 0; i < 10; i++ {
-		logger.Log(Entry{Event: EventPush, Peer: "alice"})
+		if err := logger.Log(Entry{Event: EventPush, Peer: "alice"}); err != nil {
+			t.Fatalf("log: %v", err)
+		}
 	}
 
 	result, err := logger.Read(3)
@@ -65,9 +67,15 @@ func TestReadWithLimit(t *testing.T) {
 func TestFilterByPeer(t *testing.T) {
 	logger := newTestLogger(t)
 
-	logger.Log(Entry{Event: EventPush, Peer: "alice"})
-	logger.Log(Entry{Event: EventPush, Peer: "bob"})
-	logger.Log(Entry{Event: EventPull, Peer: "alice"})
+	for _, entry := range []Entry{
+		{Event: EventPush, Peer: "alice"},
+		{Event: EventPush, Peer: "bob"},
+		{Event: EventPull, Peer: "alice"},
+	} {
+		if err := logger.Log(entry); err != nil {
+			t.Fatalf("log: %v", err)
+		}
+	}
 
 	result, err := logger.FilterByPeer("alice", 0)
 	if err != nil {
@@ -81,9 +89,15 @@ func TestFilterByPeer(t *testing.T) {
 func TestFilterByEvent(t *testing.T) {
 	logger := newTestLogger(t)
 
-	logger.Log(Entry{Event: EventPush, Peer: "alice"})
-	logger.Log(Entry{Event: EventPull, Peer: "bob"})
-	logger.Log(Entry{Event: EventPush, Peer: "charlie"})
+	for _, entry := range []Entry{
+		{Event: EventPush, Peer: "alice"},
+		{Event: EventPull, Peer: "bob"},
+		{Event: EventPush, Peer: "charlie"},
+	} {
+		if err := logger.Log(entry); err != nil {
+			t.Fatalf("log: %v", err)
+		}
+	}
 
 	result, err := logger.FilterByEvent(EventPush, 0)
 	if err != nil {
@@ -110,7 +124,9 @@ func TestTimestampAutoSet(t *testing.T) {
 	logger := newTestLogger(t)
 
 	before := time.Now().Add(-time.Second)
-	logger.Log(Entry{Event: EventPush, Peer: "alice"})
+	if err := logger.Log(Entry{Event: EventPush, Peer: "alice"}); err != nil {
+		t.Fatalf("log: %v", err)
+	}
 	after := time.Now().Add(time.Second)
 
 	entries, _ := logger.Read(0)
@@ -127,8 +143,14 @@ func TestTimestampAutoSet(t *testing.T) {
 func TestLogFileAppendOnly(t *testing.T) {
 	logger := newTestLogger(t)
 
-	logger.Log(Entry{Event: EventPush, Peer: "alice"})
-	logger.Log(Entry{Event: EventPull, Peer: "bob"})
+	for _, entry := range []Entry{
+		{Event: EventPush, Peer: "alice"},
+		{Event: EventPull, Peer: "bob"},
+	} {
+		if err := logger.Log(entry); err != nil {
+			t.Fatalf("log: %v", err)
+		}
+	}
 
 	// Read raw file — should have exactly 2 lines
 	data, err := os.ReadFile(logger.path)
