@@ -32,3 +32,20 @@ coverage.html
 # Temporary
 tmp/
 dist/
+.gocache/
+extension/node_modules/
+extension/out/
+extension/*.vsix
+relay/node_modules/
+relay/.wrangler/
+relay/src/**/*.js
+relay/src/**/*.js.map
+
+# Agent-safe local repo onboarding outputs
+.env.local
+.env.agent
+.envsync-service-key
+.envsync/generated/
+.vscode/mcp.json
+.cursor/mcp.json
+.claude/mcp.json
