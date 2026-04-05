@@ -1,56 +1,51 @@
 import * as vscode from 'vscode';
 
-export function createStatusBar(context: vscode.ExtensionContext): vscode.StatusBarItem {
-    const item = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Right,
-        100,
-    );
+type StatusBarState = {
+    icon: 'check' | 'warning';
+    text: string;
+    tooltip: string;
+};
 
-    item.text = '$(sync) EnvSync';
-    item.tooltip = 'EnvSync: Click for options';
+export function createStatusBar(context: vscode.ExtensionContext): vscode.StatusBarItem {
+    const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     item.command = 'envsync.showQuickPick';
 
-    // Register the quick pick command
     context.subscriptions.push(
         vscode.commands.registerCommand('envsync.showQuickPick', showQuickPick),
     );
 
+    setStatusBarState(item, {
+        icon: 'warning',
+        text: 'Loading',
+        tooltip: 'Checking EnvSync CLI availability...',
+    });
+
     item.show();
     context.subscriptions.push(item);
-
     return item;
 }
 
+export function setStatusBarState(item: vscode.StatusBarItem, state: StatusBarState) {
+    item.text = `$(${state.icon}) EnvSync ${state.text}`;
+    item.tooltip = state.tooltip;
+    item.color = state.icon === 'check' ? '#10B981' : '#F59E0B';
+}
+
 async function showQuickPick() {
-    const items: vscode.QuickPickItem[] = [
-        { label: '$(cloud-upload) Push', description: 'Push .env to peers', detail: 'envsync push' },
-        { label: '$(cloud-download) Pull', description: 'Pull .env from peers', detail: 'envsync pull' },
-        { label: '$(diff) Diff', description: 'Compare local vs synced', detail: 'envsync diff' },
-        { label: '$(person) Peers', description: 'List team members', detail: 'envsync peers' },
-        { label: '$(history) Audit', description: 'View sync history', detail: 'envsync audit' },
+    const items: Array<vscode.QuickPickItem & { command: string }> = [
+        { label: '$(play) Bootstrap', description: 'Prepare the repo from .envsync/contract.yaml', command: 'envsync.bootstrap' },
+        { label: '$(pulse) Doctor', description: 'Validate runtimes, services, agent files, and guard state', command: 'envsync.doctor' },
+        { label: '$(tools) Install Agent Files', description: 'Generate AGENTS and MCP templates', command: 'envsync.agentInstall' },
+        { label: '$(shield) Guard Scan', description: 'Scan agent-facing files for leaked secrets', command: 'envsync.guardScan' },
+        { label: '$(terminal) Run Default Target', description: 'Execute the repo contract default run target', command: 'envsync.run' },
+        { label: '$(info) Status', description: 'Show current project sync status', command: 'envsync.status' },
     ];
 
     const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: 'EnvSync: Choose an action',
+        placeHolder: 'Choose an EnvSync workflow',
     });
 
     if (selected) {
-        switch (selected.detail) {
-            case 'envsync push':
-                vscode.commands.executeCommand('envsync.push');
-                break;
-            case 'envsync pull':
-                vscode.commands.executeCommand('envsync.pull');
-                break;
-            case 'envsync diff':
-                vscode.commands.executeCommand('envsync.diff');
-                break;
-            case 'envsync peers':
-                vscode.commands.executeCommand('envsync.peers');
-                break;
-            case 'envsync audit':
-                vscode.commands.executeCommand('envsync.audit');
-                break;
-        }
+        await vscode.commands.executeCommand(selected.command);
     }
 }

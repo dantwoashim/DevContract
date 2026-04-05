@@ -1,42 +1,49 @@
 import * as vscode from 'vscode';
 import { registerCommands } from './commands';
-import { createStatusBar } from './statusbar';
+import { execEnvSync, getWorkspaceFolder } from './cli';
+import { createStatusBar, setStatusBarState } from './statusbar';
 import { registerSidebar } from './sidebar';
 
-let statusBarItem: vscode.StatusBarItem;
-
-export function activate(context: vscode.ExtensionContext) {
-    console.log('EnvSync extension activated');
-
-    // Register commands
+export async function activate(context: vscode.ExtensionContext) {
     registerCommands(context);
 
-    // Create status bar
-    statusBarItem = createStatusBar(context);
-
-    // Register sidebar views
+    const statusBarItem = createStatusBar(context);
     registerSidebar(context);
 
-    // Check sync status on activation
-    checkSyncStatus();
-}
+    const refresh = async () => {
+        const workspace = getWorkspaceFolder();
+        if (!workspace) {
+            setStatusBarState(statusBarItem, {
+                icon: 'warning',
+                text: 'No Workspace',
+                tooltip: 'Open a repository to use EnvSync.',
+            });
+            return;
+        }
 
-async function checkSyncStatus() {
-    try {
-        const { execSync } = require('child_process');
-        execSync('envsync version --short', { timeout: 5000 });
-        statusBarItem.text = '$(check) EnvSync';
-        statusBarItem.tooltip = 'EnvSync: Synced';
-        statusBarItem.color = '#10B981';
-    } catch {
-        statusBarItem.text = '$(warning) EnvSync';
-        statusBarItem.tooltip = 'EnvSync: CLI not found. Install from envsync.dev';
-        statusBarItem.color = '#F59E0B';
-    }
+        try {
+            await execEnvSync(['version', '--short'], { cwd: workspace, timeout: 5000 });
+            setStatusBarState(statusBarItem, {
+                icon: 'check',
+                text: 'Ready',
+                tooltip: 'EnvSync CLI detected. Open the EnvSync activity view for onboarding actions.',
+            });
+        } catch (error) {
+            setStatusBarState(statusBarItem, {
+                icon: 'warning',
+                text: 'CLI Missing',
+                tooltip: `EnvSync CLI not available: ${error instanceof Error ? error.message : String(error)}`,
+            });
+        }
+    };
+
+    await refresh();
+    const timer = setInterval(() => {
+        void refresh();
+    }, 30000);
+    context.subscriptions.push({ dispose: () => clearInterval(timer) });
 }
 
 export function deactivate() {
-    if (statusBarItem) {
-        statusBarItem.dispose();
-    }
+    return undefined;
 }

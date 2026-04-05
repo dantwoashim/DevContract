@@ -1,31 +1,52 @@
 import * as vscode from 'vscode';
-import { execSync } from 'child_process';
+import { execEnvSync, getWorkspaceFolder } from './cli';
+
+type DoctorReport = {
+    blocking: number;
+    warnings: number;
+    checks: Array<{
+        name: string;
+        status: string;
+        detail: string;
+    }>;
+};
 
 export function registerSidebar(context: vscode.ExtensionContext) {
-    const peersProvider = new EnvSyncTreeProvider('peers');
-    const auditProvider = new EnvSyncTreeProvider('audit');
+    const actionsProvider = new ActionsProvider();
+    const healthProvider = new HealthProvider();
 
-    vscode.window.registerTreeDataProvider('envsync.peers', peersProvider);
-    vscode.window.registerTreeDataProvider('envsync.audit', auditProvider);
+    context.subscriptions.push(
+        vscode.window.registerTreeDataProvider('envsync.actions', actionsProvider),
+        vscode.window.registerTreeDataProvider('envsync.health', healthProvider),
+    );
 
-    // Refresh on interval
-    setInterval(() => {
-        peersProvider.refresh();
-        auditProvider.refresh();
-    }, 30000);
+    const timer = setInterval(() => healthProvider.refresh(), 30000);
+    context.subscriptions.push({ dispose: () => clearInterval(timer) });
 }
 
-class EnvSyncTreeProvider implements vscode.TreeDataProvider<EnvSyncItem> {
-    private _onDidChangeTreeData = new vscode.EventEmitter<void>();
-    readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
-    private type: 'peers' | 'audit';
-
-    constructor(type: 'peers' | 'audit') {
-        this.type = type;
+class ActionsProvider implements vscode.TreeDataProvider<EnvSyncItem> {
+    getTreeItem(element: EnvSyncItem): vscode.TreeItem {
+        return element;
     }
 
+    getChildren(): EnvSyncItem[] {
+        return [
+            new EnvSyncItem('Bootstrap Repo', 'Scaffold local outputs and run setup', 'envsync.bootstrap'),
+            new EnvSyncItem('Run Doctor', 'Check repo health and onboarding prerequisites', 'envsync.doctor'),
+            new EnvSyncItem('Install Agent Files', 'Generate agent instructions and MCP configs', 'envsync.agentInstall'),
+            new EnvSyncItem('Run Guard Scan', 'Scan prompts, agent docs, and config for secrets', 'envsync.guardScan'),
+            new EnvSyncItem('Run Default Target', 'Execute the contract default workflow', 'envsync.run'),
+            new EnvSyncItem('Show Status', 'Inspect current project sync status', 'envsync.status'),
+        ];
+    }
+}
+
+class HealthProvider implements vscode.TreeDataProvider<EnvSyncItem> {
+    private readonly emitter = new vscode.EventEmitter<void>();
+    readonly onDidChangeTreeData = this.emitter.event;
+
     refresh() {
-        this._onDidChangeTreeData.fire();
+        this.emitter.fire();
     }
 
     getTreeItem(element: EnvSyncItem): vscode.TreeItem {
@@ -33,48 +54,57 @@ class EnvSyncTreeProvider implements vscode.TreeDataProvider<EnvSyncItem> {
     }
 
     async getChildren(): Promise<EnvSyncItem[]> {
+        const cwd = getWorkspaceFolder();
+        if (!cwd) {
+            return [new EnvSyncItem('Open a workspace folder', 'EnvSync health is repo-scoped')];
+        }
+
         try {
-            if (this.type === 'peers') {
-                return this.getPeers();
+            const output = await execEnvSync(['doctor', '--json', '--skip-relay', '--quiet'], {
+                cwd,
+                timeout: 15000,
+            });
+            const report = JSON.parse(output) as DoctorReport;
+            const items: EnvSyncItem[] = [];
+            items.push(new EnvSyncItem('Blocking Issues', String(report.blocking)));
+            items.push(new EnvSyncItem('Warnings', String(report.warnings)));
+
+            for (const check of report.checks.slice(0, 6)) {
+                items.push(new EnvSyncItem(`${iconForStatus(check.status)} ${check.name}`, check.detail));
             }
-            return this.getAuditEntries();
-        } catch {
-            return [new EnvSyncItem('EnvSync CLI not found', 'Install from envsync.dev')];
-        }
-    }
 
-    private getPeers(): EnvSyncItem[] {
-        try {
-            const output = execSync('envsync peers --no-color', {
-                timeout: 5000,
-                encoding: 'utf-8',
-            });
-
-            const lines = output.split('\n').filter(l => l.trim());
-            return lines.map(l => new EnvSyncItem(l.trim(), ''));
-        } catch {
-            return [new EnvSyncItem('No peers', 'Run envsync invite @teammate')];
-        }
-    }
-
-    private getAuditEntries(): EnvSyncItem[] {
-        try {
-            const output = execSync('envsync audit --last 5 --no-color', {
-                timeout: 5000,
-                encoding: 'utf-8',
-            });
-
-            const lines = output.split('\n').filter(l => l.trim());
-            return lines.map(l => new EnvSyncItem(l.trim(), ''));
-        } catch {
-            return [new EnvSyncItem('No events', 'Push or pull to create audit entries')];
+            return items;
+        } catch (error) {
+            return [
+                new EnvSyncItem(
+                    'Doctor unavailable',
+                    error instanceof Error ? error.message : String(error),
+                ),
+            ];
         }
     }
 }
 
 class EnvSyncItem extends vscode.TreeItem {
-    constructor(label: string, description: string) {
+    constructor(label: string, description: string, command?: string) {
         super(label, vscode.TreeItemCollapsibleState.None);
         this.description = description;
+        if (command) {
+            this.command = {
+                command,
+                title: label,
+            };
+        }
+    }
+}
+
+function iconForStatus(status: string): string {
+    switch (status) {
+        case 'pass':
+            return '$(check)';
+        case 'warn':
+            return '$(warning)';
+        default:
+            return '$(error)';
     }
 }

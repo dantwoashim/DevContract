@@ -1,84 +1,97 @@
 {
-    "name": "envsync-vscode",
-    "displayName": "EnvSync",
-    "description": "Securely sync .env files between developers — right from VS Code",
-    "version": "1.0.0",
-    "publisher": "envsync",
-    "engines": {
-        "vscode": "^1.85.0"
-    },
-    "categories": [
-        "Other"
+  "name": "envsync-vscode",
+  "displayName": "EnvSync",
+  "description": "Repo onboarding, agent safety, and shared local secrets for AI-heavy development teams",
+  "version": "1.0.0",
+  "publisher": "envsync",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "onboarding",
+    "agents",
+    "mcp",
+    "secrets",
+    "bootstrap"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/envsync/envsync"
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "workspaceContains:.envsync/contract.yaml",
+    "workspaceContains:AGENTS.md"
+  ],
+  "files": [
+    "out/**/*",
+    "src/**/*",
+    "package.json",
+    "tsconfig.json",
+    "LICENSE.txt"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "envsync.bootstrap",
+        "title": "EnvSync: Bootstrap"
+      },
+      {
+        "command": "envsync.doctor",
+        "title": "EnvSync: Doctor"
+      },
+      {
+        "command": "envsync.agentInstall",
+        "title": "EnvSync: Install Agent Files"
+      },
+      {
+        "command": "envsync.guardScan",
+        "title": "EnvSync: Guard Scan"
+      },
+      {
+        "command": "envsync.run",
+        "title": "EnvSync: Run Default Target"
+      },
+      {
+        "command": "envsync.status",
+        "title": "EnvSync: Status"
+      }
     ],
-    "keywords": [
-        "env",
-        "dotenv",
-        "sync",
-        "secrets",
-        "environment"
-    ],
-    "icon": "icon.png",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/envsync/envsync"
-    },
-    "activationEvents": [
-        "workspaceContains:.env"
-    ],
-    "main": "./out/extension.js",
-    "contributes": {
-        "commands": [
-            {
-                "command": "envsync.push",
-                "title": "EnvSync: Push"
-            },
-            {
-                "command": "envsync.pull",
-                "title": "EnvSync: Pull"
-            },
-            {
-                "command": "envsync.diff",
-                "title": "EnvSync: Diff"
-            },
-            {
-                "command": "envsync.audit",
-                "title": "EnvSync: View Audit Log"
-            },
-            {
-                "command": "envsync.peers",
-                "title": "EnvSync: View Peers"
-            }
-        ],
-        "viewsContainers": {
-            "activitybar": [
-                {
-                    "id": "envsync",
-                    "title": "EnvSync",
-                    "icon": "icon.svg"
-                }
-            ]
-        },
-        "views": {
-            "envsync": [
-                {
-                    "id": "envsync.peers",
-                    "name": "Peers"
-                },
-                {
-                    "id": "envsync.audit",
-                    "name": "Recent Activity"
-                }
-            ]
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "envsync",
+          "title": "EnvSync",
+          "icon": "icon.svg"
         }
+      ]
     },
-    "scripts": {
-        "compile": "tsc -p ./",
-        "watch": "tsc -watch -p ./",
-        "package": "vsce package"
-    },
-    "devDependencies": {
-        "@types/vscode": "^1.85.0",
-        "typescript": "^5.0.0",
-        "@vscode/vsce": "^2.0.0"
+    "views": {
+      "envsync": [
+        {
+          "id": "envsync.actions",
+          "name": "Workflow"
+        },
+        {
+          "id": "envsync.health",
+          "name": "Health"
+        }
+      ]
     }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.0.0",
+    "typescript": "^5.0.0"
+  }
 }
