@@ -5,6 +5,8 @@ package store
 import (
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 )
 
@@ -63,7 +65,6 @@ func TestListVersions(t *testing.T) {
 		t.Errorf("got %d versions, want 5", len(versions))
 	}
 
-	// Newest first
 	if versions[0].Sequence != 5 {
 		t.Errorf("first version seq = %d, want 5", versions[0].Sequence)
 	}
@@ -74,8 +75,12 @@ func TestLatestVersion(t *testing.T) {
 	key := testEncryptionKey()
 	project := "test-project"
 
-	s.Save(project, []byte("v1"), 1, key)
-	s.Save(project, []byte("v2"), 2, key)
+	if err := s.Save(project, []byte("v1"), 1, key); err != nil {
+		t.Fatalf("save v1: %v", err)
+	}
+	if err := s.Save(project, []byte("v2"), 2, key); err != nil {
+		t.Fatalf("save v2: %v", err)
+	}
 
 	latest, err := s.Latest(project)
 	if err != nil {
@@ -90,7 +95,7 @@ func TestLatestVersion(t *testing.T) {
 }
 
 func TestRotation(t *testing.T) {
-	s := newTestStore(t, 3) // Keep only 3 versions
+	s := newTestStore(t, 3)
 	key := testEncryptionKey()
 	project := "test-project"
 
@@ -107,8 +112,6 @@ func TestRotation(t *testing.T) {
 	if len(versions) != 3 {
 		t.Errorf("got %d versions after rotation, want 3", len(versions))
 	}
-
-	// Should keep sequences 4, 5, 6
 	if versions[0].Sequence != 6 {
 		t.Errorf("newest = %d, want 6", versions[0].Sequence)
 	}
@@ -122,7 +125,9 @@ func TestRestoreWrongKey(t *testing.T) {
 	key := testEncryptionKey()
 	project := "test-project"
 
-	s.Save(project, []byte("secret data"), 1, key)
+	if err := s.Save(project, []byte("secret data"), 1, key); err != nil {
+		t.Fatalf("save: %v", err)
+	}
 
 	var wrongKey [32]byte
 	copy(wrongKey[:], []byte("wrong-key-32-bytes-exactly-pad!!"))
@@ -160,18 +165,77 @@ func TestEncryptedFileFormat(t *testing.T) {
 	key := testEncryptionKey()
 	project := "test-project"
 
-	s.Save(project, []byte("test"), 1, key)
+	if err := s.Save(project, []byte("test"), 1, key); err != nil {
+		t.Fatalf("save: %v", err)
+	}
 
-	// Check directory structure
 	dir := s.projectDir(project)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("readdir: %v", err)
 	}
-	if len(entries) != 1 {
-		t.Errorf("expected 1 file, got %d", len(entries))
+
+	encFiles := 0
+	for _, entry := range entries {
+		if filepath.Ext(entry.Name()) == ".enc" {
+			encFiles++
+		}
 	}
-	if filepath.Ext(entries[0].Name()) != ".enc" {
-		t.Errorf("expected .enc extension, got %s", entries[0].Name())
+	if encFiles != 1 {
+		t.Errorf("expected 1 encrypted file, got %d", encFiles)
+	}
+}
+
+func TestNextSequenceReservesUniqueNumbersUnderConcurrency(t *testing.T) {
+	s := newTestStore(t, 10)
+	project := "concurrent-project"
+
+	var (
+		wg        sync.WaitGroup
+		mu        sync.Mutex
+		sequences = map[int]struct{}{}
+	)
+
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			seq, err := s.NextSequence(project)
+			if err != nil {
+				t.Errorf("next sequence: %v", err)
+				return
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if _, exists := sequences[seq]; exists {
+				t.Errorf("duplicate reserved sequence %d", seq)
+			}
+			sequences[seq] = struct{}{}
+		}()
+	}
+	wg.Wait()
+
+	if len(sequences) != 8 {
+		t.Fatalf("reserved %d unique sequences, want 8", len(sequences))
+	}
+}
+
+func TestSaveLeavesNoTempFiles(t *testing.T) {
+	s := newTestStore(t, 10)
+	key := testEncryptionKey()
+	project := "temp-cleanup"
+
+	if err := s.Save(project, []byte("hello"), 1, key); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	entries, err := os.ReadDir(s.projectDir(project))
+	if err != nil {
+		t.Fatalf("readdir: %v", err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".envsync-") {
+			t.Fatalf("temporary file %s was left behind", entry.Name())
+		}
 	}
 }
