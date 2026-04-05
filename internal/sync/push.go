@@ -82,7 +82,10 @@ func Push(ctx context.Context, opts PushOptions) (*PushResult, error) {
 
 	// Create wire protocol payload
 	payload := NewEnvPayload(fileName, data, opts.Sequence)
-	encodedPayload := EncodeEnvPayload(payload)
+	encodedPayload, err := EncodeEnvPayload(payload)
+	if err != nil {
+		return result, fmt.Errorf("encoding sync payload: %w", err)
+	}
 
 	// Discover peers via mDNS
 	peers, err := discovery.Discover(ctx, discovery.DefaultMDNSTimeout, opts.KeyPair.Fingerprint)
@@ -108,9 +111,9 @@ func Push(ctx context.Context, opts PushOptions) (*PushResult, error) {
 
 		// Connect + Noise handshake
 		secureConn, err := transport.Dial(transport.DialOptions{
-			Address:      peer.Addr.String(),
-			Timeout:      transport.DefaultDialTimeout,
-			LocalKeypair: opts.NoiseKeypair,
+			Address:             peer.Addr.String(),
+			Timeout:             transport.DefaultDialTimeout,
+			LocalKeypair:        opts.NoiseKeypair,
 			ExpectedFingerprint: peer.Fingerprint,
 		})
 		if err != nil {
@@ -139,19 +142,32 @@ func Push(ctx context.Context, opts PushOptions) (*PushResult, error) {
 				opts.OnError(peer, err)
 			}
 			result.Errors = append(result.Errors, err)
-			secureConn.Close()
+			if closeErr := secureConn.Close(); closeErr != nil {
+				result.Errors = append(result.Errors, fmt.Errorf("closing connection to %s: %w", peer.Fingerprint, closeErr))
+			}
 			continue
 		}
 
 		// Wait for ACK/NACK with timeout to prevent infinite blocking
-		secureConn.SetReadDeadline(time.Now().Add(10 * time.Second))
+		if err := secureConn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+			if opts.OnError != nil {
+				opts.OnError(peer, err)
+			}
+			result.Errors = append(result.Errors, err)
+			if closeErr := secureConn.Close(); closeErr != nil {
+				result.Errors = append(result.Errors, fmt.Errorf("closing connection to %s: %w", peer.Fingerprint, closeErr))
+			}
+			continue
+		}
 		resp, err := ReceiveMessage(secureConn)
 		if err != nil {
 			if opts.OnError != nil {
 				opts.OnError(peer, err)
 			}
 			result.Errors = append(result.Errors, err)
-			secureConn.Close()
+			if closeErr := secureConn.Close(); closeErr != nil {
+				result.Errors = append(result.Errors, fmt.Errorf("closing connection to %s: %w", peer.Fingerprint, closeErr))
+			}
 			continue
 		}
 
@@ -161,7 +177,9 @@ func Push(ctx context.Context, opts PushOptions) (*PushResult, error) {
 				opts.OnError(peer, err)
 			}
 			result.Errors = append(result.Errors, err)
-			secureConn.Close()
+			if closeErr := secureConn.Close(); closeErr != nil {
+				result.Errors = append(result.Errors, fmt.Errorf("closing connection to %s: %w", peer.Fingerprint, closeErr))
+			}
 			continue
 		}
 
@@ -169,7 +187,9 @@ func Push(ctx context.Context, opts PushOptions) (*PushResult, error) {
 		if opts.OnComplete != nil {
 			opts.OnComplete(peer)
 		}
-		secureConn.Close()
+		if closeErr := secureConn.Close(); closeErr != nil {
+			result.Errors = append(result.Errors, fmt.Errorf("closing connection to %s: %w", peer.Fingerprint, closeErr))
+		}
 	}
 
 	return result, nil

@@ -90,8 +90,16 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 			}
 
 			payload := NewEnvPayload(fileName, data, opts.Sequence)
-			err = SendMessage(conn, Message{Type: MsgEnvPush, Payload: EncodeEnvPayload(payload)})
-			conn.Close()
+			encodedPayload, encodeErr := EncodeEnvPayload(payload)
+			if encodeErr != nil {
+				_ = conn.Close()
+				report(fmt.Sprintf("LAN payload encode failed: %s", encodeErr))
+				continue
+			}
+			err = SendMessage(conn, Message{Type: MsgEnvPush, Payload: encodedPayload})
+			if closeErr := conn.Close(); closeErr != nil && err == nil {
+				err = closeErr
+			}
 
 			if err == nil {
 				result.SyncedCount++
@@ -130,8 +138,16 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 		})
 		if err == nil {
 			payload := NewEnvPayload(fileName, data, opts.Sequence)
-			err = SendMessage(secureConn, Message{Type: MsgEnvPush, Payload: EncodeEnvPayload(payload)})
-			secureConn.Close()
+			encodedPayload, encodeErr := EncodeEnvPayload(payload)
+			if encodeErr != nil {
+				_ = secureConn.Close()
+				report(fmt.Sprintf("Hole-punch payload encode failed: %s", encodeErr))
+			} else {
+				err = SendMessage(secureConn, Message{Type: MsgEnvPush, Payload: encodedPayload})
+			}
+			if closeErr := secureConn.Close(); closeErr != nil && err == nil {
+				err = closeErr
+			}
 
 			if err == nil {
 				result.Method = "holepunch"

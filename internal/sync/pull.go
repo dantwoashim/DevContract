@@ -310,7 +310,7 @@ func verifyTrustedPullPeer(publicKey []byte, teamID string) error {
 		return fmt.Errorf("loading local trust registry: %w", err)
 	}
 
-	teams := []string{}
+	var teams []string
 	if teamID != "" {
 		teams = []string{teamID}
 	} else {
