@@ -113,13 +113,13 @@ func compileRules(extraPatterns []string) ([]Rule, error) {
 		{
 			Name:     "openai_api_key",
 			Severity: SeverityError,
-			Message:  "OpenAI-style API key found",
+			Message:  "Provider-style API key found",
 			Pattern:  regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{20,}\b`),
 		},
 		{
 			Name:     "anthropic_api_key",
 			Severity: SeverityError,
-			Message:  "Anthropic API key found",
+			Message:  "Provider API key found",
 			Pattern:  regexp.MustCompile(`\bsk-ant-[A-Za-z0-9_-]{10,}\b`),
 		},
 		{

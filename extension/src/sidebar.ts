@@ -33,8 +33,8 @@ class ActionsProvider implements vscode.TreeDataProvider<EnvSyncItem> {
         return [
             new EnvSyncItem('Bootstrap Repo', 'Scaffold local outputs and run setup', 'envsync.bootstrap'),
             new EnvSyncItem('Run Doctor', 'Check repo health and onboarding prerequisites', 'envsync.doctor'),
-            new EnvSyncItem('Install Agent Files', 'Generate agent instructions and MCP configs', 'envsync.agentInstall'),
-            new EnvSyncItem('Run Guard Scan', 'Scan prompts, agent docs, and config for secrets', 'envsync.guardScan'),
+            new EnvSyncItem('Install Tool Files', 'Generate instruction files and JSON tool config', 'envsync.agentInstall'),
+            new EnvSyncItem('Run Guard Scan', 'Scan instruction files and config for secrets', 'envsync.guardScan'),
             new EnvSyncItem('Run Default Target', 'Execute the contract default workflow', 'envsync.run'),
             new EnvSyncItem('Show Status', 'Inspect current project sync status', 'envsync.status'),
         ];

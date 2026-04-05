@@ -107,9 +107,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  - Store:       %s\\store\\\n", dataDir)
 	fmt.Println()
 	if createdContract {
-		fmt.Println("  - Created a starter AI onboarding contract at .envsync/contract.yaml")
+		fmt.Println("  - Created a starter project contract at .envsync/contract.yaml")
 	}
-	fmt.Println("  x Ready. Run 'envsync bootstrap' to scaffold local onboarding, then invite teammates.")
+	fmt.Println("  x Ready. Run 'envsync bootstrap' to prepare local setup, then invite teammates.")
 
 	return nil
 }

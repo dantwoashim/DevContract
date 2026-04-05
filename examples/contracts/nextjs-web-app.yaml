@@ -1,0 +1,38 @@
+version: 1
+project:
+  slug: nextjs-web-app
+  name: Next.js Web App
+  summary: Example contract for a Next.js application with a local development server.
+env:
+  required:
+    - name: SESSION_SECRET
+      source: shared
+      description: Shared session secret for local development.
+  optional:
+    - name: GITHUB_TOKEN
+      source: developer-local
+      description: Optional GitHub API token for local tooling.
+  public:
+    - NEXT_PUBLIC_API_BASE_URL
+runtimes:
+  - node
+  - npm
+services:
+  - name: web
+    host: 127.0.0.1
+    port: 3000
+    required: false
+    start: npm run dev
+bootstrap:
+  steps:
+    - npm install
+  outputs:
+    - path: .env.local
+      kind: env
+      gitignore: true
+      header: Shared and developer-local values for the Next.js application.
+run:
+  default: dev
+  targets:
+    dev:
+      command: npm run dev

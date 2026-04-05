@@ -240,20 +240,10 @@ func Default(projectName string) *Contract {
 		Project: Project{
 			Slug:    slug,
 			Name:    projectName,
-			Summary: "Agent-safe repo onboarding contract",
+			Summary: "Repository setup contract",
 		},
-		Env: EnvSpec{
-			Optional: []EnvVar{
-				{Name: "OPENAI_API_KEY", Source: "shared", Description: "Shared model provider key"},
-				{Name: "ANTHROPIC_API_KEY", Source: "shared", Description: "Optional Anthropic model provider key"},
-				{Name: "GITHUB_TOKEN", Source: "developer-local", Description: "Optional GitHub API token for tooling"},
-			},
-			Public: []string{"PORT", "NODE_ENV"},
-		},
-		Runtimes: []Runtime{
-			defaultRuntime("node"),
-			defaultRuntime("python"),
-		},
+		Env:      EnvSpec{Public: []string{"PORT", "NODE_ENV"}},
+		Runtimes: []Runtime{},
 		Bootstrap: Bootstrap{
 			Steps: []BootstrapStep{
 				{
@@ -263,38 +253,13 @@ func Default(projectName string) *Contract {
 				},
 			},
 			Outputs: []BootstrapOutput{
-				{Path: ".env.local", Kind: "env", Gitignore: true, Header: "Developer-local overrides"},
-				{Path: ".env.agent", Kind: "env", Gitignore: true, Header: "Agent/session-local overrides"},
+				{Path: ".env.local", Kind: "env", Gitignore: true, Header: "Developer-local environment overrides"},
 			},
 		},
-		Agents: map[string]AgentTarget{
-			"codex": {
-				Output:    "AGENTS.md",
-				MCPOutput: "mcp.json",
-				Header:    "Codex instructions",
-				Instructions: []string{
-					"Run `envsync doctor` before making changes.",
-					"Never paste live secrets into prompts, logs, or generated files.",
-					"Use environment variables and generated MCP config only.",
-				},
-			},
-			"copilot": {Output: ".github/copilot-instructions.md", MCPOutput: filepath.Join(".vscode", "mcp.json"), Header: "GitHub Copilot instructions"},
-			"cursor":  {Output: filepath.Join(".cursor", "rules", "envsync.mdc"), MCPOutput: filepath.Join(".cursor", "mcp.json"), Header: "Cursor rules"},
-			"claude":  {Output: filepath.Join(".claude", "ENVSYNC.md"), MCPOutput: filepath.Join(".claude", "mcp.json"), Header: "Claude instructions"},
-		},
-		MCP: MCPConfig{
-			Servers: []MCPServer{
-				{
-					Name:        "local-docs",
-					Command:     "node",
-					Args:        []string{"scripts/mcp-docs.js"},
-					Env:         []string{"OPENAI_API_KEY"},
-					Description: "Example MCP server placeholder",
-				},
-			},
-		},
+		Agents: map[string]AgentTarget{},
+		MCP:    MCPConfig{},
 		Policies: Policies{
-			RedactPaths: []string{"AGENTS.md", ".github/copilot-instructions.md", ".cursor", ".claude", ".env.local", ".env.agent", ".vscode/mcp.json", "mcp.json", "prompts"},
+			RedactPaths: []string{".env.local"},
 		},
 		Run: RunConfig{
 			Default: "dev",

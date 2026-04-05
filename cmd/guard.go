@@ -26,7 +26,7 @@ var (
 
 var guardCmd = &cobra.Command{
 	Use:   "guard",
-	Short: "Safety checks for agent-facing files and configs",
+	Short: "Safety checks for instruction files and configs",
 }
 
 var guardScanCmd = &cobra.Command{

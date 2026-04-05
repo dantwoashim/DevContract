@@ -44,7 +44,7 @@ var (
 
 var bootstrapCmd = &cobra.Command{
 	Use:   "bootstrap",
-	Short: "Bootstrap a repo from its AI onboarding contract",
+	Short: "Bootstrap a repo from its setup contract",
 	Long:  "Pull shared secrets when available, prepare local files, verify required runtimes, and run the contract's bootstrap steps.",
 	RunE:  runBootstrap,
 }

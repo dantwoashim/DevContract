@@ -8,7 +8,26 @@ import (
 )
 
 func TestGenerateIncludesEnvPlaceholdersInMCP(t *testing.T) {
-	spec := contract.Default("AI App")
+	spec := &contract.Contract{
+		Version: 1,
+		Project: contract.Project{Name: "Payments API", Slug: "payments-api"},
+		Agents: map[string]contract.AgentTarget{
+			"copilot": {
+				Output:    ".github/copilot-instructions.md",
+				MCPOutput: ".vscode/mcp.json",
+			},
+		},
+		MCP: contract.MCPConfig{
+			Servers: []contract.MCPServer{
+				{
+					Name:    "repo-docs",
+					Command: "node",
+					Args:    []string{"scripts/mcp-docs.js"},
+					Env:     []string{"GITHUB_TOKEN"},
+				},
+			},
+		},
+	}
 	files, err := Generate(spec, "copilot")
 	if err != nil {
 		t.Fatalf("generate: %v", err)
@@ -18,7 +37,7 @@ func TestGenerateIncludesEnvPlaceholdersInMCP(t *testing.T) {
 	}
 
 	mcpContent := string(files[1].Content)
-	if !strings.Contains(mcpContent, "${OPENAI_API_KEY}") {
+	if !strings.Contains(mcpContent, "${GITHUB_TOKEN}") {
 		t.Fatalf("expected env placeholder in MCP config, got %s", mcpContent)
 	}
 	if strings.Contains(mcpContent, "sk-") {

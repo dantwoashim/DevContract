@@ -79,13 +79,13 @@ func renderInstructions(spec *contract.Contract, agentName string, target contra
 	b.WriteString("## Workflow\n\n")
 	b.WriteString("- Run `envsync bootstrap` on a fresh clone.\n")
 	b.WriteString("- Run `envsync doctor` before major edits.\n")
-	b.WriteString("- Run `envsync guard scan` before commits touching agent files or config.\n")
+	b.WriteString("- Run `envsync guard scan` before commits touching generated instruction files or config.\n")
 	if spec.Run.Default != "" {
 		fmt.Fprintf(&b, "- Use `envsync run %s` for the default development workflow.\n", spec.Run.Default)
 	}
 
 	b.WriteString("\n## Secret Safety\n\n")
-	b.WriteString("- Never inline secrets in prompts, markdown instructions, JSON config, or logs.\n")
+	b.WriteString("- Never inline secrets in markdown instructions, JSON config, or logs.\n")
 	b.WriteString("- Use environment variables only when configuring tools or MCP servers.\n")
 	b.WriteString("- If you touch `.env`, `AGENTS.md`, `.github/copilot-instructions.md`, `.cursor/`, `.claude/`, or MCP config, run `envsync guard scan`.\n")
 

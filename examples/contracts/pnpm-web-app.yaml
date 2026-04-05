@@ -1,0 +1,30 @@
+version: 1
+project:
+  slug: pnpm-web-app
+  name: PNPM Web App
+  summary: Example contract for a frontend application managed with pnpm.
+env:
+  required:
+    - name: SESSION_SECRET
+      source: shared
+  optional:
+    - name: GITHUB_TOKEN
+      source: developer-local
+  public:
+    - NEXT_PUBLIC_APP_URL
+runtimes:
+  - node
+  - pnpm
+bootstrap:
+  steps:
+    - pnpm install
+  outputs:
+    - path: .env.local
+      kind: env
+      gitignore: true
+      header: Local environment values for the web application.
+run:
+  default: dev
+  targets:
+    dev:
+      command: pnpm dev

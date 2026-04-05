@@ -47,7 +47,7 @@ var (
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Run health checks for the current repo and EnvSync setup",
-	Long:  "Validates the repo contract, local environment, agent files, secret safety, EnvSync identity, project metadata, backups, and relay state.",
+	Long:  "Validates the repo contract, local environment, generated tool files, secret safety, EnvSync identity, project metadata, backups, and relay state.",
 	RunE:  runDoctor,
 }
 
@@ -210,9 +210,9 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 				continue
 			}
 			if _, err := os.Stat(outputPath); err == nil {
-				addCheck("agent:"+agentName, "pass", fmt.Sprintf("Agent instructions present at %s", filepath.ToSlash(target.Output)), false)
+				addCheck("agent:"+agentName, "pass", fmt.Sprintf("Tool instructions present at %s", filepath.ToSlash(target.Output)), false)
 			} else {
-				addCheck("agent:"+agentName, "warn", fmt.Sprintf("Agent instructions missing at %s; run 'envsync agent install --agent %s'", filepath.ToSlash(target.Output), agentName), false)
+				addCheck("agent:"+agentName, "warn", fmt.Sprintf("Tool instructions missing at %s; run 'envsync agent install --agent %s'", filepath.ToSlash(target.Output), agentName), false)
 			}
 
 			if target.MCPOutput == "" {
@@ -241,7 +241,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			addCheck("guard", "warn", fmt.Sprintf("Guard scan failed: %v", err), false)
 		} else if len(guardReport.Findings) == 0 {
-			addCheck("guard", "pass", "No unsafe secrets found in agent-facing files", false)
+			addCheck("guard", "pass", "No unsafe secrets found in generated instruction files or config", false)
 		} else {
 			highest := "warn"
 			blocking := false
@@ -249,7 +249,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 				highest = "fail"
 				blocking = true
 			}
-			addCheck("guard", highest, fmt.Sprintf("%d issue(s) found in agent-facing files; run 'envsync guard scan' for details", len(guardReport.Findings)), blocking)
+			addCheck("guard", highest, fmt.Sprintf("%d issue(s) found in generated instruction files or config; run 'envsync guard scan' for details", len(guardReport.Findings)), blocking)
 		}
 	}
 

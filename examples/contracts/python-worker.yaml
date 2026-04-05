@@ -1,0 +1,36 @@
+version: 1
+project:
+  slug: python-worker
+  name: Python Worker
+  summary: Example contract for a Python background worker with a local entrypoint.
+env:
+  required:
+    - name: DATABASE_URL
+      source: shared
+  optional:
+    - name: REDIS_URL
+      source: shared
+    - name: GITHUB_TOKEN
+      source: developer-local
+runtimes:
+  - python
+  - uv
+services:
+  - name: worker
+    host: 127.0.0.1
+    port: 8123
+    required: false
+    start: uv run python -m app.main
+bootstrap:
+  steps:
+    - uv sync
+  outputs:
+    - path: .env.local
+      kind: env
+      gitignore: true
+      header: Local environment file for the worker process.
+run:
+  default: dev
+  targets:
+    dev:
+      command: uv run python -m app.main

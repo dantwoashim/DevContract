@@ -34,9 +34,9 @@ export function setStatusBarState(item: vscode.StatusBarItem, state: StatusBarSt
 async function showQuickPick() {
     const items: Array<vscode.QuickPickItem & { command: string }> = [
         { label: '$(play) Bootstrap', description: 'Prepare the repo from .envsync/contract.yaml', command: 'envsync.bootstrap' },
-        { label: '$(pulse) Doctor', description: 'Validate runtimes, services, agent files, and guard state', command: 'envsync.doctor' },
-        { label: '$(tools) Install Agent Files', description: 'Generate AGENTS and MCP templates', command: 'envsync.agentInstall' },
-        { label: '$(shield) Guard Scan', description: 'Scan agent-facing files for leaked secrets', command: 'envsync.guardScan' },
+        { label: '$(pulse) Doctor', description: 'Validate runtimes, services, generated files, and guard state', command: 'envsync.doctor' },
+        { label: '$(tools) Install Tool Files', description: 'Generate instruction files and JSON tool config', command: 'envsync.agentInstall' },
+        { label: '$(shield) Guard Scan', description: 'Scan instruction files and config for leaked secrets', command: 'envsync.guardScan' },
         { label: '$(terminal) Run Default Target', description: 'Execute the repo contract default run target', command: 'envsync.run' },
         { label: '$(info) Status', description: 'Show current project sync status', command: 'envsync.status' },
     ];

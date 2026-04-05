@@ -11,11 +11,11 @@ import (
 
 var (
 	// Global flags
-	verbose  bool
-	quiet    bool
-	noColor  bool
-	cfgFile  string
-	envFile  string
+	verbose bool
+	quiet   bool
+	noColor bool
+	cfgFile string
+	envFile string
 
 	// Build info (set via ldflags)
 	Version   = "dev"
@@ -25,11 +25,11 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "envsync",
-	Short: "P2P environment variable synchronization",
-	Long: `EnvSync — Securely sync .env files between developers.
+	Short: "Secure project environment sync and setup",
+	Long: `EnvSync helps developers share local .env files and standardize repository setup.
 
-Zero accounts. Zero servers. End-to-end encrypted.
-Uses your existing SSH keys for identity and trust.`,
+It uses existing SSH keys for identity, encrypts shared values end to end,
+and keeps local setup instructions in a repo-owned contract.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
@@ -37,7 +37,7 @@ Uses your existing SSH keys for identity and trust.`,
 // Execute runs the root command.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "  ✗ %s\n", err)
+		fmt.Fprintf(os.Stderr, "  x %s\n", err)
 		os.Exit(1)
 	}
 }

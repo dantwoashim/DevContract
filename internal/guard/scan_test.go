@@ -15,7 +15,12 @@ func TestScanContractAwareFindsSecrets(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	spec := contract.Default("AI App")
+	spec := &contract.Contract{
+		Version: 1,
+		Policies: contract.Policies{
+			RedactPaths: []string{"AGENTS.md"},
+		},
+	}
 	report, err := ScanContractAware(dir, spec, nil)
 	if err != nil {
 		t.Fatalf("scan: %v", err)

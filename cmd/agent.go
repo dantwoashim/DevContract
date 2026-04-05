@@ -20,12 +20,12 @@ var (
 
 var agentCmd = &cobra.Command{
 	Use:   "agent",
-	Short: "Generate repo-safe instructions and config for coding agents",
+	Short: "Generate repo-scoped instruction and tool config files",
 }
 
 var agentInstallCmd = &cobra.Command{
 	Use:   "install",
-	Short: "Generate agent instructions and MCP templates from the repo contract",
+	Short: "Generate instruction files and JSON tool config from the repo contract",
 	RunE:  runAgentInstall,
 }
 

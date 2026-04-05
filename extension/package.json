@@ -1,7 +1,7 @@
 {
   "name": "envsync-vscode",
   "displayName": "EnvSync",
-  "description": "Repo onboarding, agent safety, and shared local secrets for AI-heavy development teams",
+  "description": "Repository setup, shared local secrets, and health checks for development teams",
   "version": "1.0.0",
   "publisher": "envsync",
   "engines": {
@@ -12,10 +12,10 @@
   ],
   "keywords": [
     "onboarding",
-    "agents",
-    "mcp",
     "secrets",
-    "bootstrap"
+    "bootstrap",
+    "environment",
+    "developer-tools"
   ],
   "repository": {
     "type": "git",
@@ -46,7 +46,7 @@
       },
       {
         "command": "envsync.agentInstall",
-        "title": "EnvSync: Install Agent Files"
+        "title": "EnvSync: Install Tool Files"
       },
       {
         "command": "envsync.guardScan",

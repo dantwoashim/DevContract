@@ -1,15 +1,17 @@
 version: 1
 project:
-  slug: fastapi-openai-app
-  name: FastAPI OpenAI App
-  summary: Example contract for a Python AI API with local services and prompts.
+  slug: fastapi-service
+  name: FastAPI Service
+  summary: Example contract for a Python API with a local database dependency.
 env:
   required:
-    - name: OPENAI_API_KEY
+    - name: DATABASE_URL
+      source: shared
+    - name: APP_SECRET
       source: shared
   optional:
-    - name: POSTGRES_URL
-      source: shared
+    - name: GITHUB_TOKEN
+      source: developer-local
 runtimes:
   - python
   - uv
@@ -32,17 +34,6 @@ bootstrap:
       kind: env
       gitignore: true
       header: Local FastAPI environment overrides.
-agents:
-  codex:
-    output: AGENTS.md
-  claude:
-    output: .claude/ENVSYNC.md
-    mcp_output: .claude/mcp.json
-policies:
-  redact_paths:
-    - AGENTS.md
-    - .claude
-    - prompts
 run:
   default: dev
   targets:
