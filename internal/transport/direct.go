@@ -53,7 +53,7 @@ func Dial(opts DialOptions) (*crypto.SecureConn, error) {
 
 	// Set read/write deadline for handshake
 	if err := conn.SetDeadline(time.Now().Add(opts.Timeout)); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("setting deadline: %w", err)
 	}
 
@@ -66,13 +66,13 @@ func Dial(opts DialOptions) (*crypto.SecureConn, error) {
 		},
 	})
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("Noise handshake with %s: %w", opts.Address, err)
 	}
 
 	// Clear deadline for normal operation
 	if err := conn.SetDeadline(time.Time{}); err != nil {
-		secureConn.Close()
+		_ = secureConn.Close()
 		return nil, fmt.Errorf("clearing deadline: %w", err)
 	}
 

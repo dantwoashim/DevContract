@@ -94,7 +94,10 @@ func HolePunch(ctx context.Context, opts HolePunchOptions) (*crypto.SecureConn, 
 			return
 		}
 		defer listener.Close()
-		listener.SetDeadline(time.Now().Add(opts.Timeout))
+		if err := listener.SetDeadline(time.Now().Add(opts.Timeout)); err != nil {
+			errCh <- fmt.Errorf("setting listener deadline: %w", err)
+			return
+		}
 		conn, err := listener.Accept()
 		if err != nil {
 			errCh <- err
@@ -131,7 +134,7 @@ connected:
 		VerifyPeer:    opts.VerifyPeer,
 	})
 	if err != nil {
-		rawConn.Close()
+		_ = rawConn.Close()
 		return nil, fmt.Errorf("noise handshake over punched conn: %w", err)
 	}
 

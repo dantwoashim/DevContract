@@ -15,14 +15,14 @@ import (
 
 // Listener accepts incoming encrypted connections.
 type Listener struct {
-	listener    net.Listener
+	listener     net.Listener
 	localKeypair noise.DHKey
-	verifyPeer  func(publicKey []byte) error
-	connections chan *crypto.SecureConn
-	errors      chan error
-	ctx         context.Context
-	cancel      context.CancelFunc
-	wg          sync.WaitGroup
+	verifyPeer   func(publicKey []byte) error
+	connections  chan *crypto.SecureConn
+	errors       chan error
+	ctx          context.Context
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup
 }
 
 // ListenerOptions configures the TCP listener.
@@ -48,13 +48,13 @@ func Listen(opts ListenerOptions) (*Listener, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	l := &Listener{
-		listener:    tcpListener,
+		listener:     tcpListener,
 		localKeypair: opts.LocalKeypair,
-		verifyPeer:  opts.VerifyPeer,
-		connections: make(chan *crypto.SecureConn, 8),
-		errors:      make(chan error, 8),
-		ctx:         ctx,
-		cancel:      cancel,
+		verifyPeer:   opts.VerifyPeer,
+		connections:  make(chan *crypto.SecureConn, 8),
+		errors:       make(chan error, 8),
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 
 	l.wg.Add(1)
@@ -98,7 +98,13 @@ func (l *Listener) acceptLoop() {
 	for {
 		// Set a short accept deadline so we can check for cancellation
 		if tcpL, ok := l.listener.(*net.TCPListener); ok {
-			tcpL.SetDeadline(time.Now().Add(500 * time.Millisecond))
+			if err := tcpL.SetDeadline(time.Now().Add(500 * time.Millisecond)); err != nil {
+				select {
+				case l.errors <- fmt.Errorf("setting accept deadline: %w", err):
+				case <-l.ctx.Done():
+				}
+				return
+			}
 		}
 
 		conn, err := l.listener.Accept()
@@ -130,7 +136,14 @@ func (l *Listener) acceptLoop() {
 
 func (l *Listener) handleConnection(conn net.Conn) {
 	// Set handshake timeout
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		_ = conn.Close()
+		select {
+		case l.errors <- fmt.Errorf("setting handshake deadline: %w", err):
+		case <-l.ctx.Done():
+		}
+		return
+	}
 
 	// Noise_XX handshake (responder)
 	secureConn, err := crypto.PerformHandshake(conn, crypto.NoiseConfig{
@@ -144,17 +157,24 @@ func (l *Listener) handleConnection(conn net.Conn) {
 		},
 	})
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		l.errors <- fmt.Errorf("handshake failed from %s: %w", conn.RemoteAddr(), err)
 		return
 	}
 
 	// Clear deadline
-	conn.SetDeadline(time.Time{})
+	if err := conn.SetDeadline(time.Time{}); err != nil {
+		_ = secureConn.Close()
+		select {
+		case l.errors <- fmt.Errorf("clearing handshake deadline: %w", err):
+		case <-l.ctx.Done():
+		}
+		return
+	}
 
 	select {
 	case l.connections <- secureConn:
 	case <-l.ctx.Done():
-		secureConn.Close()
+		_ = secureConn.Close()
 	}
 }

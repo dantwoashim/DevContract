@@ -63,13 +63,13 @@ func NewAdvertiser(port int, fingerprint, teamID, version string) (*Advertiser, 
 
 	// Create mDNS service entry
 	service, err := mdns.NewMDNSService(
-		hostname,                   // instance name
-		ServiceName,                // service
-		"",                         // domain (default .local)
-		"",                         // host name
-		port,                       // port
-		nil,                        // IPs (auto-detect)
-		txt,                        // TXT records
+		hostname,    // instance name
+		ServiceName, // service
+		"",          // domain (default .local)
+		"",          // host name
+		port,        // port
+		nil,         // IPs (auto-detect)
+		txt,         // TXT records
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating mDNS service: %w", err)
@@ -91,7 +91,7 @@ func (a *Advertiser) Stop() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.server != nil {
-		a.server.Shutdown()
+		_ = a.server.Shutdown()
 		a.server = nil
 	}
 }

@@ -60,14 +60,14 @@ type STUNResult struct {
 
 // STUN message constants (RFC 5389)
 const (
-	stunMagicCookie     = 0x2112A442
-	stunBindRequest     = 0x0001
-	stunBindResponse    = 0x0101
-	stunBindErrorResp   = 0x0111
-	stunAttrXorMapped   = 0x0020
-	stunAttrMapped      = 0x0001
-	stunMaxRetries      = 3
-	stunRetryBaseDelay  = 200 * time.Millisecond
+	stunMagicCookie    = 0x2112A442
+	stunBindRequest    = 0x0001
+	stunBindResponse   = 0x0101
+	stunBindErrorResp  = 0x0111
+	stunAttrXorMapped  = 0x0020
+	stunAttrMapped     = 0x0001
+	stunMaxRetries     = 3
+	stunRetryBaseDelay = 200 * time.Millisecond
 )
 
 // Default STUN servers (free, public)
@@ -158,11 +158,15 @@ func stunBindingRequest(server string) (*STUNResult, error) {
 	}
 	defer conn.Close()
 
-	conn.SetDeadline(time.Now().Add(3 * time.Second))
+	if err := conn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		return nil, fmt.Errorf("setting STUN deadline: %w", err)
+	}
 
 	// Build STUN binding request (RFC 5389)
 	txID := make([]byte, 12)
-	rand.Read(txID)
+	if _, err := rand.Read(txID); err != nil {
+		return nil, fmt.Errorf("generating STUN transaction ID: %w", err)
+	}
 
 	req := make([]byte, 20)
 	binary.BigEndian.PutUint16(req[0:2], stunBindRequest)
