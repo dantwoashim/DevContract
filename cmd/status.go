@@ -17,7 +17,7 @@ import (
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show current sync status",
-	Long:  "Displays team info, last sync time, pending blobs, peer count, and version store summary.",
+	Long:  "Displays project info, relay state, last activity, and backup history.",
 	RunE:  runStatus,
 }
 
@@ -32,38 +32,38 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
+	project, projectErr := loadProjectContext()
+
 	ui.Header("EnvSync Status")
 
-	// Identity
 	short := kp.Fingerprint
 	if len(short) > 30 {
 		short = short[:30] + "..."
 	}
-	ui.Line(fmt.Sprintf("  Identity: %s", short))
-	ui.Blank()
-
-	// Team info
-	pc, pcErr := peer.LoadProjectConfig()
-	if pcErr == nil && pc.TeamID != "" {
-		team, teamErr := peer.LoadTeam(pc.TeamID)
-		if teamErr == nil {
-			ui.Line(fmt.Sprintf("  Team:     %s (%d members)", team.Name, len(team.Members)))
-		} else {
-			ui.Line(fmt.Sprintf("  Team ID:  %s", pc.TeamID))
-		}
-		ui.Line(fmt.Sprintf("  File:     %s", pc.DefaultFile))
-		ui.Line(fmt.Sprintf("  Strategy: %s", pc.SyncStrategy))
-	} else {
-		ui.Line("  Team:     (not configured — run 'envsync init')")
+	ui.Line(fmt.Sprintf("  Identity:   %s", short))
+	ui.Line(fmt.Sprintf("  Transport:  %s", cfg.Identity.TransportFingerprint))
+	if projectErr == nil {
+		ui.Line(fmt.Sprintf("  Project ID: %s", project.ProjectID))
 	}
 	ui.Blank()
 
-	// Relay pending
-	client := relay.NewClient(cfg.Relay.URL, kp)
 	teamID := ""
-	if pc != nil {
-		teamID = pc.TeamID
+	if projectErr == nil && project != nil {
+		teamID = project.ProjectID
+		team, teamErr := peer.LoadTeam(project.ProjectID)
+		if teamErr == nil {
+			ui.Line(fmt.Sprintf("  Project:    %s (%d members)", team.Name, len(team.Members)))
+		} else {
+			ui.Line(fmt.Sprintf("  Project:    %s", project.ProjectID))
+		}
+		ui.Line(fmt.Sprintf("  File:       %s", project.Config.DefaultFile))
+		ui.Line(fmt.Sprintf("  Strategy:   %s", project.Config.SyncStrategy))
+	} else {
+		ui.Line("  Project:    (not configured — run 'envsync init')")
 	}
+	ui.Blank()
+
+	client := relay.NewClient(projectRelayURL(project, cfg), kp)
 	if teamID != "" {
 		pending, err := client.ListPending(teamID)
 		if err == nil {
@@ -73,12 +73,11 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				ui.Success("  No pending blobs on relay")
 			}
 		} else {
-			ui.Line("  Relay:    unavailable")
+			ui.Line("  Relay:      unavailable")
 		}
 	}
 	ui.Blank()
 
-	// Last activity from audit log
 	logger, logErr := audit.NewLogger()
 	if logErr == nil {
 		entries, readErr := logger.Read(1)
@@ -91,12 +90,13 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Version store
-	vStore, storeErr := store.New(cfg.Sync.MaxVersions)
-	if storeErr == nil && teamID != "" {
-		versions, listErr := vStore.List(teamID)
-		if listErr == nil {
-			ui.Line(fmt.Sprintf("  Backups:  %d versions stored", len(versions)))
+	if teamID != "" {
+		vStore, storeErr := store.New(cfg.Sync.MaxVersions)
+		if storeErr == nil {
+			versions, listErr := vStore.List(teamID)
+			if listErr == nil {
+				ui.Line(fmt.Sprintf("  Backups:    %d versions stored", len(versions)))
+			}
 		}
 	}
 

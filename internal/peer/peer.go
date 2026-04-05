@@ -3,8 +3,12 @@
 package peer
 
 import (
+	"bytes"
+	"encoding/base64"
 	"fmt"
 	"time"
+
+	"github.com/envsync/envsync/internal/crypto"
 )
 
 // TrustState represents the trust level of a peer.
@@ -19,14 +23,23 @@ const (
 
 // Peer represents a known peer in the registry.
 type Peer struct {
-	// GitHubUsername of the peer (e.g., "alice").
+	// GitHubUsername of the peer (e.g., "alice"). This is display metadata only.
 	GitHubUsername string `toml:"github_username"`
 
-	// Fingerprint is the SSH key fingerprint (SHA256:...).
+	// Fingerprint is the Ed25519 identity fingerprint (SHA256:...).
 	Fingerprint string `toml:"fingerprint"`
 
-	// X25519Public is the DH public key (base64).
-	X25519Public string `toml:"x25519_public"`
+	// Ed25519Public is the identity public key (base64).
+	Ed25519Public string `toml:"ed25519_public,omitempty"`
+
+	// X25519Public is the transport public key (base64).
+	X25519Public string `toml:"x25519_public,omitempty"`
+
+	// TransportFingerprint is the fingerprint of the X25519 transport key.
+	TransportFingerprint string `toml:"transport_fingerprint,omitempty"`
+
+	// DeviceName is an optional human-readable device label.
+	DeviceName string `toml:"device_name,omitempty"`
 
 	// Trust is the current trust state.
 	Trust TrustState `toml:"trust"`
@@ -46,19 +59,19 @@ type Peer struct {
 
 // Team represents a team of peers sharing .env files.
 type Team struct {
-	// ID is a unique team identifier (derived from creator's fingerprint + project).
+	// ID is a unique team identifier.
 	ID string `toml:"id"`
 
 	// Name is a human-readable team name.
 	Name string `toml:"name"`
 
-	// CreatedBy is the fingerprint of the team creator.
+	// CreatedBy is the identity fingerprint of the team creator.
 	CreatedBy string `toml:"created_by"`
 
 	// CreatedAt is when the team was created.
 	CreatedAt time.Time `toml:"created_at"`
 
-	// Members is the list of peer fingerprints in this team (storage only; Peers loaded separately).
+	// Members is the list of identity fingerprints in this team.
 	Members []string `toml:"members"`
 }
 
@@ -78,7 +91,7 @@ func (p *Peer) CanSync() bool {
 	return p.Trust == TrustTrusted
 }
 
-// IsRevoked returns true if this peer has been revoked.
+// IsRevoked returns true if this peer is revoked.
 func (p *Peer) IsRevoked() bool {
 	return p.Trust == TrustRevoked
 }
@@ -101,6 +114,57 @@ func (p *Peer) Revoke() error {
 	p.Trust = TrustRevoked
 	p.RevokedAt = time.Now()
 	return nil
+}
+
+// EffectiveTransportFingerprint returns the fingerprint used for transport verification.
+func (p *Peer) EffectiveTransportFingerprint() string {
+	if p.TransportFingerprint != "" {
+		return p.TransportFingerprint
+	}
+
+	pub, err := p.TransportPublicKeyBytes()
+	if err != nil {
+		return ""
+	}
+
+	var key [32]byte
+	copy(key[:], pub)
+	return crypto.ComputeFingerprint(key)
+}
+
+// TransportPublicKeyBytes decodes the stored X25519 public key.
+func (p *Peer) TransportPublicKeyBytes() ([]byte, error) {
+	if p.X25519Public == "" {
+		return nil, fmt.Errorf("peer has no X25519 public key")
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(p.X25519Public)
+	if err != nil {
+		return nil, fmt.Errorf("decoding X25519 public key: %w", err)
+	}
+	if len(decoded) != 32 {
+		return nil, fmt.Errorf("invalid X25519 public key length: %d", len(decoded))
+	}
+	return decoded, nil
+}
+
+// MatchesTransportPublicKey returns true if the provided key matches the stored transport identity.
+func (p *Peer) MatchesTransportPublicKey(publicKey []byte) bool {
+	if len(publicKey) != 32 {
+		return false
+	}
+
+	if expected, err := p.TransportPublicKeyBytes(); err == nil {
+		return bytes.Equal(expected, publicKey)
+	}
+
+	if fp := p.EffectiveTransportFingerprint(); fp != "" {
+		var pk [32]byte
+		copy(pk[:], publicKey)
+		return fp == crypto.ComputeFingerprint(pk)
+	}
+
+	return false
 }
 
 // StatusIcon returns a visual indicator for the peer's trust state.

@@ -5,6 +5,7 @@ package peer
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,20 +15,28 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 )
 
-// GenerateTeamID creates a team ID from creator fingerprint + name + random secret.
-// The secret prevents team IDs from being computable from public fingerprints.
-func GenerateTeamID(creatorFingerprint, name string) string {
-	// Generate a random component so team IDs aren't guessable
-	secret := make([]byte, 16)
-	rand.Read(secret) // crypto/rand — if this fails we get zeros (still mixed in)
+const (
+	defaultProjectFile  = ".env"
+	defaultSyncStrategy = "interactive"
+)
 
+// GenerateTeamID creates a deterministic legacy team ID from creator fingerprint + name.
+// New projects should prefer GenerateProjectID and persist it in .envsync.toml.
+func GenerateTeamID(creatorFingerprint, name string) string {
 	h := sha256.New()
 	h.Write([]byte(creatorFingerprint))
 	h.Write([]byte(":"))
 	h.Write([]byte(name))
-	h.Write([]byte(":"))
-	h.Write(secret)
 	return fmt.Sprintf("%x", h.Sum(nil))[:16]
+}
+
+// GenerateProjectID creates a stable random project identifier for a repository.
+func GenerateProjectID() (string, error) {
+	secret := make([]byte, 16)
+	if _, err := rand.Read(secret); err != nil {
+		return "", fmt.Errorf("generating project ID: %w", err)
+	}
+	return hex.EncodeToString(secret), nil
 }
 
 // CreateTeam creates a new team and saves it.
@@ -123,9 +132,66 @@ func (t *Team) HasMember(fingerprint string) bool {
 
 // ProjectConfig represents the per-project .envsync.toml file.
 type ProjectConfig struct {
-	TeamID       string `toml:"team_id"`
-	DefaultFile  string `toml:"default_file"`
-	SyncStrategy string `toml:"sync_strategy"`
+	ConfigVersion int    `toml:"config_version,omitempty"`
+	ProjectID     string `toml:"project_id,omitempty"`
+	TeamID        string `toml:"team_id,omitempty"`
+	Name          string `toml:"name,omitempty"`
+	DefaultFile   string `toml:"default_file,omitempty"`
+	SyncStrategy  string `toml:"sync_strategy,omitempty"`
+	RelayURL      string `toml:"relay_url,omitempty"`
+}
+
+// CanonicalProjectID returns the single project/team ID used throughout the CLI.
+func (pc *ProjectConfig) CanonicalProjectID() string {
+	if pc == nil {
+		return ""
+	}
+	if pc.ProjectID != "" {
+		return pc.ProjectID
+	}
+	return pc.TeamID
+}
+
+// Normalize backfills defaults and keeps project_id and team_id aligned.
+func (pc *ProjectConfig) Normalize() {
+	if pc == nil {
+		return
+	}
+	if pc.ProjectID == "" {
+		pc.ProjectID = pc.TeamID
+	}
+	if pc.TeamID == "" {
+		pc.TeamID = pc.ProjectID
+	}
+	if pc.DefaultFile == "" {
+		pc.DefaultFile = defaultProjectFile
+	}
+	if pc.SyncStrategy == "" {
+		pc.SyncStrategy = defaultSyncStrategy
+	}
+	if pc.ConfigVersion == 0 {
+		pc.ConfigVersion = 1
+	}
+}
+
+// NewProjectConfig creates a fresh per-project config with a stable project ID.
+func NewProjectConfig(name, defaultFile, syncStrategy, relayURL string) (*ProjectConfig, error) {
+	projectID, err := GenerateProjectID()
+	if err != nil {
+		return nil, err
+	}
+
+	pc := &ProjectConfig{
+		ConfigVersion: 1,
+		ProjectID:     projectID,
+		TeamID:        projectID,
+		Name:          name,
+		DefaultFile:   defaultFile,
+		SyncStrategy:  syncStrategy,
+		RelayURL:      relayURL,
+	}
+	pc.Normalize()
+	return pc, nil
 }
 
 // LoadProjectConfig reads the .envsync.toml from the current (or parent) directory.
@@ -144,12 +210,14 @@ func LoadProjectConfig() (*ProjectConfig, error) {
 	if err := toml.Unmarshal(data, &pc); err != nil {
 		return nil, fmt.Errorf("parsing project config: %w", err)
 	}
+	pc.Normalize()
 
 	return &pc, nil
 }
 
 // SaveProjectConfig writes .envsync.toml in the current directory.
 func SaveProjectConfig(pc *ProjectConfig) error {
+	pc.Normalize()
 	data, err := toml.Marshal(pc)
 	if err != nil {
 		return fmt.Errorf("encoding project config: %w", err)
