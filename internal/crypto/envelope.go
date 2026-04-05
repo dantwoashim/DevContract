@@ -5,6 +5,7 @@ package crypto
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 )
 
 // Envelope is a relay-encrypted message for a specific recipient.
@@ -18,13 +19,16 @@ type Envelope struct {
 }
 
 // MarshalEnvelope serializes an envelope for relay transport.
-func MarshalEnvelope(env *Envelope) []byte {
+func MarshalEnvelope(env *Envelope) ([]byte, error) {
 	payloadLen := len(env.Payload)
+	if payloadLen > math.MaxUint32 {
+		return nil, fmt.Errorf("envelope payload too large: %d bytes", payloadLen)
+	}
 	buf := make([]byte, 4+32+payloadLen)
 	binary.BigEndian.PutUint32(buf[0:4], uint32(payloadLen))
 	copy(buf[4:36], env.EphemeralPublicKey[:])
 	copy(buf[36:], env.Payload)
-	return buf
+	return buf, nil
 }
 
 // UnmarshalEnvelope deserializes an envelope from relay transport.
@@ -39,7 +43,7 @@ func UnmarshalEnvelope(data []byte) (*Envelope, error) {
 	}
 
 	env := &Envelope{
-		Payload: make([]byte, payloadLen),
+		Payload: make([]byte, int(payloadLen)),
 	}
 	copy(env.EphemeralPublicKey[:], data[4:36])
 	copy(env.Payload, data[36:])
@@ -57,7 +61,11 @@ func SealEnvelope(plaintext []byte, recipientPublicKey [32]byte) ([]byte, error)
 		EphemeralPublicKey: ephPub,
 		Payload:            encrypted,
 	}
-	return MarshalEnvelope(env), nil
+	payload, err := MarshalEnvelope(env)
+	if err != nil {
+		return nil, err
+	}
+	return payload, nil
 }
 
 // OpenEnvelope decrypts a serialized envelope using the recipient's private key.

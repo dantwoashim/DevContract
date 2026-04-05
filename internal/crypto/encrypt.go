@@ -4,13 +4,15 @@ package crypto
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/hkdf"
-	"crypto/sha256"
 )
 
 const (
@@ -105,7 +107,10 @@ func Decrypt(data []byte, key [32]byte) ([]byte, error) {
 // Plaintext is padded to the nearest 1KB boundary to prevent traffic analysis.
 func EncryptForRecipient(plaintext []byte, recipientPublicKey [32]byte) (ephemeralPub [32]byte, encrypted []byte, err error) {
 	// Pad plaintext to nearest 1KB boundary (2-byte length prefix + data + padding)
-	padded := padTo1KB(plaintext)
+	padded, err := padTo1KB(plaintext)
+	if err != nil {
+		return [32]byte{}, nil, fmt.Errorf("padding plaintext: %w", err)
+	}
 
 	// Generate ephemeral X25519 keypair
 	// Note: curve25519.X25519() clamps internally, no manual clamping needed.
@@ -227,7 +232,11 @@ func curve25519Basepoint() []byte {
 // padTo1KB pads data to the nearest 1KB boundary for traffic analysis prevention.
 // Format: 2-byte big-endian length prefix + original data + zero padding.
 // For payloads > 65535 bytes: 2-byte marker (0xFF, 0xFF) + 4-byte uint32 length + data.
-func padTo1KB(data []byte) []byte {
+func padTo1KB(data []byte) ([]byte, error) {
+	if len(data) > math.MaxUint32 {
+		return nil, fmt.Errorf("payload too large to pad: %d bytes", len(data))
+	}
+
 	if len(data) > 65535 {
 		// Extended format: 2-byte marker + 4-byte uint32 length + data
 		totalNeeded := 6 + len(data)
@@ -235,12 +244,10 @@ func padTo1KB(data []byte) []byte {
 		result := make([]byte, paddedLen)
 		result[0] = 0xFF
 		result[1] = 0xFF
-		result[2] = byte(len(data) >> 24)
-		result[3] = byte(len(data) >> 16)
-		result[4] = byte(len(data) >> 8)
-		result[5] = byte(len(data))
+		// #nosec G115 -- len(data) is bounded by the check above.
+		binary.BigEndian.PutUint32(result[2:6], uint32(len(data)))
 		copy(result[6:], data)
-		return result
+		return result, nil
 	}
 
 	totalNeeded := 2 + len(data) // 2 bytes for length prefix + data
@@ -252,10 +259,10 @@ func padTo1KB(data []byte) []byte {
 
 	result := make([]byte, paddedLen)
 	// Write length as big-endian uint16
-	result[0] = byte(len(data) >> 8)
-	result[1] = byte(len(data))
+	// #nosec G115 -- this branch only accepts payloads that fit in uint16.
+	binary.BigEndian.PutUint16(result[0:2], uint16(len(data)))
 	copy(result[2:], data)
-	return result
+	return result, nil
 }
 
 // unpadFrom1KB removes 1KB boundary padding by reading the length prefix.

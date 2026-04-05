@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"time"
 
@@ -189,6 +190,10 @@ func writeFrame(conn net.Conn, data []byte) error {
 	}
 	// 4-byte big-endian length prefix
 	lenBuf := make([]byte, 4)
+	if len(data) > math.MaxUint32 {
+		return fmt.Errorf("frame length overflows uint32: %d", len(data))
+	}
+	// #nosec G115 -- frame length is bounded by the checks above.
 	binary.BigEndian.PutUint32(lenBuf, uint32(len(data)))
 	if _, err := conn.Write(lenBuf); err != nil {
 		return err
