@@ -4,7 +4,6 @@ package crypto
 
 import (
 	"crypto/sha512"
-	"encoding/binary"
 	"math/big"
 )
 
@@ -73,11 +72,4 @@ func reverseBytes(b []byte) []byte {
 // sha512Sum computes SHA-512 of input.
 func sha512Sum(input []byte) [64]byte {
 	return sha512.Sum512(input)
-}
-
-// uint32ToBytes converts a uint32 to big-endian bytes.
-func uint32ToBytes(v uint32) []byte {
-	b := make([]byte, 4)
-	binary.BigEndian.PutUint32(b, v)
-	return b
 }

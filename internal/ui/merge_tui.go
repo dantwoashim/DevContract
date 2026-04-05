@@ -28,16 +28,15 @@ type MergeTUIResult struct {
 }
 
 type mergeTUIModel struct {
-	conflicts  []ConflictItem
-	cursor     int
-	subCursor  int // 0=accept, 1=reject, 2=edit, 3=skip
-	editing    bool
-	editBuf    string
-	resolved   int
-	quitting   bool
-	aborted    bool
-	viewOffset int
-	height     int
+	conflicts []ConflictItem
+	cursor    int
+	subCursor int // 0=accept, 1=reject, 2=edit, 3=skip
+	editing   bool
+	editBuf   string
+	resolved  int
+	quitting  bool
+	aborted   bool
+	height    int
 }
 
 func (m mergeTUIModel) Init() tea.Cmd { return nil }
@@ -253,7 +252,7 @@ func (m mergeTUIModel) View() string {
 							Foreground(ColorBrand).
 							Bold(true).
 							Underline(true).
-							Render("["+action+"]"))
+							Render("[" + action + "]"))
 					} else {
 						sb.WriteString(StyleDim.Render("[" + action + "]"))
 					}

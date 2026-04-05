@@ -53,9 +53,7 @@ type EnvFile struct {
 // Parse parses a .env file from a string, preserving comments, ordering, and blank lines.
 func Parse(content string) (*EnvFile, error) {
 	// Strip UTF-8 BOM if present
-	if strings.HasPrefix(content, "\xEF\xBB\xBF") {
-		content = content[3:]
-	}
+	content = strings.TrimPrefix(content, "\xEF\xBB\xBF")
 
 	// Normalize CRLF → LF
 	content = strings.ReplaceAll(content, "\r\n", "\n")
@@ -126,11 +124,7 @@ func parseLine(line string, lineNum int) (Entry, error) {
 	}
 
 	// Strip 'export ' prefix
-	cleanLine := trimmed
-	if strings.HasPrefix(cleanLine, "export ") {
-		cleanLine = strings.TrimPrefix(cleanLine, "export ")
-		cleanLine = strings.TrimSpace(cleanLine)
-	}
+	cleanLine := strings.TrimSpace(strings.TrimPrefix(trimmed, "export "))
 
 	// Split on first '='
 	eqIdx := strings.IndexByte(cleanLine, '=')
@@ -433,4 +427,3 @@ func interpolateValue(value string, vars map[string]string) string {
 func isVarNameChar(r rune) bool {
 	return (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_'
 }
-

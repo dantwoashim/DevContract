@@ -89,7 +89,9 @@ func NewSpinner(message string) *Spinner {
 func (s *Spinner) Start() {
 	model := newSpinnerModel(s.message, s.doneCh)
 	s.program = tea.NewProgram(model, tea.WithOutput(nil))
-	go s.program.Run()
+	go func() {
+		_, _ = s.program.Run()
+	}()
 }
 
 // UpdateMessage changes the displayed message.

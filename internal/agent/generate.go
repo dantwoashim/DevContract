@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/envsync/envsync/internal/contract"
 )
@@ -56,7 +57,7 @@ func renderInstructions(spec *contract.Contract, agentName string, target contra
 	var b strings.Builder
 	title := target.Header
 	if title == "" {
-		title = strings.Title(agentName) + " instructions"
+		title = titleCaseASCII(agentName) + " instructions"
 	}
 
 	switch agentName {
@@ -176,4 +177,13 @@ func renderMCP(spec *contract.Contract) ([]byte, error) {
 		return nil, fmt.Errorf("encoding MCP config: %w", err)
 	}
 	return buf.Bytes(), nil
+}
+
+func titleCaseASCII(value string) string {
+	if value == "" {
+		return ""
+	}
+	runes := []rune(strings.ToLower(value))
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
 }
