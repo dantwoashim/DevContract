@@ -77,6 +77,7 @@ func (c *Client) doRequest(method, path string, body []byte) (*http.Response, er
 		req.Header.Set("Authorization", authHeader)
 		req.Header.Set("X-EnvSync-Fingerprint", c.fingerprint)
 
+		// #nosec G704 -- the request target is the configured EnvSync relay endpoint.
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			lastErr = err
@@ -84,7 +85,7 @@ func (c *Client) doRequest(method, path string, body []byte) (*http.Response, er
 		}
 
 		if resp.StatusCode >= 500 {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			lastErr = fmt.Errorf("relay returned HTTP %d", resp.StatusCode)
 			continue
 		}
@@ -126,6 +127,7 @@ func (c *Client) doUploadRequest(method, path string, body []byte, headers map[s
 		req.Header.Set("Authorization", authHeader)
 		req.Header.Set("X-EnvSync-Fingerprint", c.fingerprint)
 
+		// #nosec G704 -- the request target is the configured EnvSync relay endpoint.
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			lastErr = err
@@ -133,7 +135,7 @@ func (c *Client) doUploadRequest(method, path string, body []byte, headers map[s
 		}
 
 		if resp.StatusCode >= 500 {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			lastErr = fmt.Errorf("relay returned HTTP %d", resp.StatusCode)
 			continue
 		}
