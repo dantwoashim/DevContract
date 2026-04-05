@@ -1,0 +1,58 @@
+version: 1
+project:
+  slug: nextjs-openai-app
+  name: Next.js OpenAI App
+  summary: Example contract for a small AI web app with local prompts and MCP tooling.
+env:
+  required:
+    - name: OPENAI_API_KEY
+      source: shared
+      description: Shared OpenAI API key for local dev.
+  optional:
+    - name: LANGSMITH_API_KEY
+      source: developer-local
+      description: Optional tracing key.
+  public:
+    - NEXT_PUBLIC_API_BASE_URL
+runtimes:
+  - node
+  - npm
+services:
+  - name: web
+    host: 127.0.0.1
+    port: 3000
+    required: false
+    start: npm run dev
+bootstrap:
+  steps:
+    - npm install
+  outputs:
+    - path: .env.local
+      kind: env
+      gitignore: true
+      header: Shared and developer-local values for Next.js.
+agents:
+  copilot:
+    output: .github/copilot-instructions.md
+    mcp_output: .vscode/mcp.json
+  codex:
+    output: AGENTS.md
+    mcp_output: mcp.json
+mcp:
+  servers:
+    - name: repo-prompts
+      command: node
+      args:
+        - scripts/mcp-prompts.js
+      env:
+        - OPENAI_API_KEY
+policies:
+  redact_paths:
+    - AGENTS.md
+    - .github/copilot-instructions.md
+    - prompts
+run:
+  default: dev
+  targets:
+    dev:
+      command: npm run dev

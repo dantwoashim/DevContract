@@ -1,0 +1,50 @@
+version: 1
+project:
+  slug: fastapi-openai-app
+  name: FastAPI OpenAI App
+  summary: Example contract for a Python AI API with local services and prompts.
+env:
+  required:
+    - name: OPENAI_API_KEY
+      source: shared
+  optional:
+    - name: POSTGRES_URL
+      source: shared
+runtimes:
+  - python
+  - uv
+services:
+  - name: api
+    host: 127.0.0.1
+    port: 8000
+    required: false
+    start: uv run uvicorn app.main:app --reload
+  - name: postgres
+    host: 127.0.0.1
+    port: 5432
+    required: false
+    start: docker compose up -d db
+bootstrap:
+  steps:
+    - uv sync
+  outputs:
+    - path: .env.local
+      kind: env
+      gitignore: true
+      header: Local FastAPI environment overrides.
+agents:
+  codex:
+    output: AGENTS.md
+  claude:
+    output: .claude/ENVSYNC.md
+    mcp_output: .claude/mcp.json
+policies:
+  redact_paths:
+    - AGENTS.md
+    - .claude
+    - prompts
+run:
+  default: dev
+  targets:
+    dev:
+      command: uv run uvicorn app.main:app --reload
