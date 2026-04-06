@@ -3,12 +3,15 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/envsync/envsync/internal/config"
@@ -265,7 +268,7 @@ func (s *Store) withProjectLock(projectID string, fn func(dir string) error) err
 			defer os.Remove(lockPath)
 			return fn(dir)
 		}
-		if !os.IsExist(err) {
+		if !isProjectLockBusy(err) {
 			return fmt.Errorf("acquiring project lock: %w", err)
 		}
 		if time.Now().After(deadline) {
@@ -273,6 +276,27 @@ func (s *Store) withProjectLock(projectID string, fn func(dir string) error) err
 		}
 		time.Sleep(lockRetryDelay)
 	}
+}
+
+func isProjectLockBusy(err error) bool {
+	if err == nil {
+		return false
+	}
+	if os.IsExist(err) || os.IsPermission(err) {
+		return true
+	}
+
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) {
+		if errno, ok := pathErr.Err.(syscall.Errno); ok && runtime.GOOS == "windows" {
+			switch errno {
+			case 5, 32, 33:
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func atomicWriteFile(path string, data []byte, mode os.FileMode) error {

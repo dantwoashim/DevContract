@@ -33,8 +33,10 @@ inputs:
 outputs:
   env_count:
     description: 'Number of environment variables injected'
+    value: ${{ steps.inject.outputs.env_count }}
   pull_method:
     description: 'Pull method used (relay, lan, relay+lan, or none)'
+    value: ${{ steps.pull.outputs.pull_method }}
 
 runs:
   using: 'composite'
@@ -58,6 +60,7 @@ runs:
         chmod 600 /tmp/envsync-service-key
 
     - name: Pull shared environment
+      id: pull
       shell: bash
       run: |
         PULL_REPORT="$RUNNER_TEMP/envsync-pull.json"
@@ -108,6 +111,7 @@ runs:
         fi
 
     - name: Inject env file into GitHub Actions
+      id: inject
       shell: bash
       run: |
         ENV_FILE="${{ inputs.env_file }}"
