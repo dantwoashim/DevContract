@@ -76,7 +76,7 @@ Run health checks:
 Invite another developer:
 
 ```bash
-./envsync invite teammate
+./envsync invite project-member
 ```
 
 Share updates:
@@ -180,9 +180,9 @@ For the full security policy, see [SECURITY.md](SECURITY.md).
 
 ## Current Notes
 
-- `envsync init` currently requires direct access to an unencrypted Ed25519 private key
-- `envsync upgrade` reports entitlement state only; managed checkout and hosted billing are disabled in this build
-- The optional GitHub Action, relay service, and VS Code extension live in this repository alongside the CLI
+- `envsync init` and other identity-based commands support passphrase-protected Ed25519 keys. In non-interactive environments, provide the passphrase with `ENVSYNC_SSH_KEY_PASSPHRASE`.
+- `envsync upgrade` reports entitlement state only; managed checkout and hosted billing are disabled in this build.
+- The optional GitHub Action, relay service, and VS Code extension live in this repository alongside the CLI.
 
 ## Repository Layout
 
