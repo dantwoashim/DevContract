@@ -1,19 +1,16 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { unstable_dev, type UnstableDevWorker } from 'wrangler';
-import { createIdentity, registerMember, signedFetch, transportFingerprint, transportKey } from './helpers';
+import type { UnstableDevWorker } from 'wrangler';
+import { createIdentity, registerMember, signedFetch, startTestWorker, transportFingerprint, transportKey } from './helpers';
 
 let worker: UnstableDevWorker;
 
 beforeAll(async () => {
-    worker = await unstable_dev('src/index.ts', {
-        experimental: { disableExperimentalWarning: true },
-        vars: {},
-    });
+    worker = await startTestWorker();
 });
 
 afterAll(async () => {
     await worker?.stop();
-});
+}, 30_000);
 
 const TEAM_ID = `test-team-relay-${Date.now()}`;
 const BLOB_ID = `blob-${Date.now()}`;
