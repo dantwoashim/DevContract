@@ -1,6 +1,6 @@
 module github.com/envsync/envsync
 
-go 1.24.2
+go 1.25.8
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0

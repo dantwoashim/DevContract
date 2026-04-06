@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -173,7 +174,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 			if service.Port == 0 {
 				continue
 			}
-			address := fmt.Sprintf("%s:%d", host, service.Port)
+			address := net.JoinHostPort(host, strconv.Itoa(service.Port))
 			conn, err := net.DialTimeout("tcp", address, 500*time.Millisecond)
 			if err == nil {
 				_ = conn.Close()
