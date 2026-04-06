@@ -11,10 +11,10 @@ import (
 
 func TestPeerTrustStateMachine(t *testing.T) {
 	p := &Peer{
-		GitHubUsername: "alice",
-		Fingerprint:   "SHA256:testfingerprint",
-		Trust:         TrustUnknown,
-		FirstSeen:     time.Now(),
+		DisplayName: "alice",
+		Fingerprint: "SHA256:testfingerprint",
+		Trust:       TrustUnknown,
+		FirstSeen:   time.Now(),
 	}
 
 	// Unknown → Trusted
@@ -79,11 +79,11 @@ func TestRegistryPersistence(t *testing.T) {
 
 	// Save a peer
 	alice := &Peer{
-		GitHubUsername: "alice",
-		Fingerprint:   "SHA256:alicefp",
-		Trust:         TrustTrusted,
-		FirstSeen:     time.Now(),
-		LastSeen:      time.Now(),
+		DisplayName: "alice",
+		Fingerprint: "SHA256:alicefp",
+		Trust:       TrustTrusted,
+		FirstSeen:   time.Now(),
+		LastSeen:    time.Now(),
 	}
 	if err := registry.SavePeer("test-team-123", alice); err != nil {
 		t.Fatalf("save peer: %v", err)
@@ -94,8 +94,8 @@ func TestRegistryPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load peer: %v", err)
 	}
-	if loadedPeer.GitHubUsername != "alice" {
-		t.Errorf("username: got %q", loadedPeer.GitHubUsername)
+	if loadedPeer.DisplayName != "alice" {
+		t.Errorf("display name: got %q", loadedPeer.DisplayName)
 	}
 	if loadedPeer.Trust != TrustTrusted {
 		t.Errorf("trust: got %q", loadedPeer.Trust)
