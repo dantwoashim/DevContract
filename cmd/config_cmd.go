@@ -5,6 +5,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/envsync/envsync/internal/config"
@@ -150,10 +151,19 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		}
 		cfg.Network.ListenPort = v
 	case "network.mdns_enabled":
-		cfg.Network.MDNSEnabled = value == "true"
+		v, err := parseStrictBool(value)
+		if err != nil {
+			return err
+		}
+		cfg.Network.MDNSEnabled = v
 	case "sync.default_file":
 		cfg.Sync.DefaultFile = value
 	case "sync.merge_strategy":
+		switch value {
+		case "interactive", "overwrite", "keep-local", "three-way":
+		default:
+			return fmt.Errorf("invalid merge strategy %q (use interactive, overwrite, keep-local, or three-way)", value)
+		}
 		cfg.Sync.MergeStrategy = value
 	case "sync.max_versions":
 		var v int
@@ -162,17 +172,41 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		}
 		cfg.Sync.MaxVersions = v
 	case "sync.auto_backup":
-		cfg.Sync.AutoBackup = value == "true"
+		v, err := parseStrictBool(value)
+		if err != nil {
+			return err
+		}
+		cfg.Sync.AutoBackup = v
 	case "sync.confirm_before_apply":
-		cfg.Sync.ConfirmBeforeApply = value == "true"
+		v, err := parseStrictBool(value)
+		if err != nil {
+			return err
+		}
+		cfg.Sync.ConfirmBeforeApply = v
 	case "ui.color":
-		cfg.UI.Color = value == "true"
+		v, err := parseStrictBool(value)
+		if err != nil {
+			return err
+		}
+		cfg.UI.Color = v
 	case "ui.verbose":
-		cfg.UI.Verbose = value == "true"
+		v, err := parseStrictBool(value)
+		if err != nil {
+			return err
+		}
+		cfg.UI.Verbose = v
 	default:
 		return fmt.Errorf("unknown config key: %q", key)
 	}
-	return nil
+	return cfg.Validate()
+}
+
+func parseStrictBool(value string) (bool, error) {
+	parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+	if err != nil {
+		return false, fmt.Errorf("invalid boolean %q (use true or false)", value)
+	}
+	return parsed, nil
 }
 
 func init() {
