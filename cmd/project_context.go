@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,6 +20,8 @@ type projectContext struct {
 	ProjectID string
 }
 
+var errProjectConfigMissingID = errors.New("project config is missing project_id")
+
 func loadProjectContext() (*projectContext, error) {
 	pc, err := peer.LoadProjectConfig()
 	if err != nil {
@@ -27,7 +30,7 @@ func loadProjectContext() (*projectContext, error) {
 
 	projectID := pc.CanonicalProjectID()
 	if projectID == "" {
-		return nil, fmt.Errorf("project is missing project_id in %s", config.ProjectConfigPath())
+		return nil, fmt.Errorf("%w in %s", errProjectConfigMissingID, config.ProjectConfigPath())
 	}
 
 	return &projectContext{
@@ -45,28 +48,35 @@ func requireProjectContext() (*projectContext, error) {
 }
 
 func ensureProjectContext(cfg *config.Config) (*projectContext, error) {
-	if ctx, err := loadProjectContext(); err == nil {
+	if pc, err := peer.LoadProjectConfig(); err == nil {
 		updated := false
-		if cfg != nil {
-			if ctx.Config.DefaultFile == "" {
-				ctx.Config.DefaultFile = cfg.Sync.DefaultFile
-				updated = true
+		if pc.ProjectID == "" {
+			projectID, idErr := peer.GenerateProjectID()
+			if idErr != nil {
+				return nil, idErr
 			}
-			if ctx.Config.SyncStrategy == "" {
-				ctx.Config.SyncStrategy = cfg.Sync.MergeStrategy
-				updated = true
-			}
-			if ctx.Config.RelayURL == "" {
-				ctx.Config.RelayURL = cfg.Relay.URL
-				updated = true
-			}
+			pc.ProjectID = projectID
+			updated = true
+		}
+		if cfg != nil && pc.RelayURL == "" && cfg.Relay.URL != "" {
+			pc.RelayURL = cfg.Relay.URL
+			updated = true
+		}
+		if pc.Name == "" {
+			pc.Name = filepath.Base(mustGetwd())
+			updated = true
 		}
 		if updated {
-			if err := peer.SaveProjectConfig(ctx.Config); err != nil {
+			if err := peer.SaveProjectConfig(pc); err != nil {
 				return nil, err
 			}
 		}
-		return ctx, nil
+		return &projectContext{
+			Config:    pc,
+			ProjectID: pc.CanonicalProjectID(),
+		}, nil
+	} else if _, findErr := config.FindProjectConfig(); findErr == nil {
+		return nil, err
 	}
 
 	defaultFile := ".env"
