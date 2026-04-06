@@ -8,21 +8,18 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { unstable_dev, type UnstableDevWorker } from 'wrangler';
-import { createIdentity, signedFetch, transportFingerprint, transportKey } from './helpers';
+import type { UnstableDevWorker } from 'wrangler';
+import { createIdentity, signedFetch, startTestWorker, transportFingerprint, transportKey } from './helpers';
 
 let worker: UnstableDevWorker;
 
 beforeAll(async () => {
-    worker = await unstable_dev('src/index.ts', {
-        experimental: { disableExperimentalWarning: true },
-        vars: {},
-    });
+    worker = await startTestWorker();
 });
 
 afterAll(async () => {
     await worker?.stop();
-});
+}, 30_000);
 
 describe('Auth Middleware', () => {
     it('should reject POST /invites without auth header', async () => {
