@@ -139,6 +139,7 @@ func (r *Registry) LoadPeer(teamID, fingerprint string) (*Peer, error) {
 	if err := toml.Unmarshal(data, &p); err != nil {
 		return nil, fmt.Errorf("parsing peer file: %w", err)
 	}
+	p.Normalize()
 
 	return &p, nil
 }
@@ -172,6 +173,7 @@ func (r *Registry) ListPeers(teamID string) ([]Peer, error) {
 		if err := toml.Unmarshal(data, &p); err != nil {
 			continue
 		}
+		p.Normalize()
 		peers = append(peers, p)
 	}
 
@@ -192,8 +194,8 @@ func (r *Registry) DeletePeer(teamID, fingerprint string) error {
 	return nil
 }
 
-// FindPeerByUsername searches all teams for a peer with the given GitHub username.
-func (r *Registry) FindPeerByUsername(username string) (*Peer, string, error) {
+// FindPeerByLabel searches all projects for a peer with the given display label.
+func (r *Registry) FindPeerByLabel(label string) (*Peer, string, error) {
 	teams, err := r.ListTeams()
 	if err != nil {
 		return nil, "", err
@@ -205,13 +207,13 @@ func (r *Registry) FindPeerByUsername(username string) (*Peer, string, error) {
 			continue
 		}
 		for _, p := range peers {
-			if p.GitHubUsername == username {
+			if p.DisplayName == label {
 				return &p, teamID, nil
 			}
 		}
 	}
 
-	return nil, "", fmt.Errorf("peer @%s not found in any team", username)
+	return nil, "", fmt.Errorf("member %q not found in any project", label)
 }
 
 // sanitizeFingerprint makes a fingerprint safe for use as a filename.
