@@ -28,17 +28,17 @@ export async function execEnvSync(
 
         return (stdout || stderr).trim();
     } catch (error) {
-        if (typeof error === 'object' && error && 'stdout' in error) {
-            const stdout = String((error as { stdout?: string }).stdout || '').trim();
-            if (stdout) {
-                return stdout;
-            }
-        }
+        const stdout = typeof error === 'object' && error && 'stdout' in error
+            ? String((error as { stdout?: string }).stdout || '').trim()
+            : '';
         if (typeof error === 'object' && error && 'stderr' in error) {
             const stderr = String((error as { stderr?: string }).stderr || '').trim();
             if (stderr) {
-                throw new Error(stderr);
+                throw new Error(stdout ? `${stderr}\n${stdout}` : stderr);
             }
+        }
+        if (stdout) {
+            throw new Error(stdout);
         }
         throw error instanceof Error ? error : new Error(String(error));
     }

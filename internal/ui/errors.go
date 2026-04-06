@@ -28,22 +28,22 @@ type StructuredError struct {
 
 // RenderError displays a structured error with full context.
 func RenderError(e StructuredError) {
-	fmt.Println()
-	fmt.Printf("  %s %s\n", ErrorIcon(), StyleError.Render(e.Message))
+	printErrln("")
+	printErrf("  %s %s\n", ErrorIcon(), StyleError.Render(e.Message))
 
 	if e.Cause != "" {
-		fmt.Printf("    %s %s\n", StyleDim.Render("cause:"), e.Cause)
+		printErrf("    %s %s\n", StyleDim.Render("cause:"), e.Cause)
 	}
 
 	if e.Suggestion != "" {
-		fmt.Println()
-		fmt.Printf("    %s %s\n", StyleDim.Render("fix:"), e.Suggestion)
+		printErrln("")
+		printErrf("    %s %s\n", StyleDim.Render("fix:"), e.Suggestion)
 	}
 
 	if e.DocsURL != "" {
-		fmt.Printf("    %s %s\n", StyleDim.Render("docs:"), StyleCode.Render(e.DocsURL))
+		printErrf("    %s %s\n", StyleDim.Render("docs:"), StyleCode.Render(e.DocsURL))
 	}
-	fmt.Println()
+	printErrln("")
 }
 
 // Common error constructors

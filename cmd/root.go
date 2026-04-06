@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/envsync/envsync/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -32,6 +33,10 @@ It uses existing SSH keys for identity, encrypts shared values end to end,
 and keeps local setup instructions in a repo-owned contract.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		ui.SetQuiet(quiet)
+		ui.SetNoColor(noColor)
+	},
 }
 
 // Execute runs the root command.

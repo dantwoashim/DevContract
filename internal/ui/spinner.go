@@ -111,7 +111,7 @@ func (s *Spinner) Stop() {
 // StopWithMessage halts the spinner and shows a message.
 func (s *Spinner) StopWithMessage(msg string) {
 	s.Stop()
-	fmt.Println(Indent(msg))
+	printOutln(Indent(msg))
 }
 
 // StopSuccess shows a success message.

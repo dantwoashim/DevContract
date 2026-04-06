@@ -2,10 +2,7 @@
 
 package ui
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
 // Column defines a table column.
 type Column struct {
@@ -136,5 +133,5 @@ func PrintTable(titles []string, rows [][]string) {
 	for _, row := range rows {
 		t.AddRow(row...)
 	}
-	fmt.Print(t.Render())
+	printOutf("%s", t.Render())
 }
