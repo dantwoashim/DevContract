@@ -114,9 +114,9 @@ func projectTargetFile(cmdFile string, cmdFileExplicit bool, project *projectCon
 	return ".env"
 }
 
-func displayIdentityName(cfg *config.Config, kp *crypto.KeyPair) string {
-	if cfg != nil && cfg.Identity.GitHubUsername != "" {
-		return cfg.Identity.GitHubUsername
+func displayMemberLabel(cfg *config.Config, kp *crypto.KeyPair) string {
+	if cfg != nil && cfg.Identity.DisplayName != "" {
+		return cfg.Identity.DisplayName
 	}
 	if hostname, err := os.Hostname(); err == nil && hostname != "" {
 		return hostname

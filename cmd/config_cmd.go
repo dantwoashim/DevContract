@@ -92,8 +92,8 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 	switch key {
 	case "identity.ssh_key_path":
 		return cfg.Identity.SSHKeyPath, nil
-	case "identity.github_username":
-		return cfg.Identity.GitHubUsername, nil
+	case "identity.display_name", "identity.github_username":
+		return cfg.Identity.DisplayName, nil
 	case "identity.fingerprint":
 		return cfg.Identity.Fingerprint, nil
 	case "relay.url":
@@ -121,7 +121,7 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 	case "ui.verbose":
 		return fmt.Sprintf("%t", cfg.UI.Verbose), nil
 	default:
-		return "", fmt.Errorf("unknown config key: %q\n\nAvailable keys: identity.ssh_key_path, relay.url, network.listen_port, sync.merge_strategy, ui.color, ...", key)
+		return "", fmt.Errorf("unknown config key: %q\n\nAvailable keys: identity.ssh_key_path, identity.display_name, relay.url, network.listen_port, sync.merge_strategy, ui.color, ...", key)
 	}
 }
 
@@ -132,8 +132,8 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 			ui.Warning(fmt.Sprintf("File %q does not exist", value))
 		}
 		cfg.Identity.SSHKeyPath = value
-	case "identity.github_username":
-		cfg.Identity.GitHubUsername = value
+	case "identity.display_name", "identity.github_username":
+		cfg.Identity.DisplayName = value
 	case "relay.url":
 		cfg.Relay.URL = value
 	case "relay.timeout_seconds":
