@@ -4,18 +4,17 @@ package cmd
 
 import (
 	"context"
-	"crypto/ed25519"
-	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/envsync/envsync/internal/apply"
 	"github.com/envsync/envsync/internal/audit"
 	"github.com/envsync/envsync/internal/config"
 	"github.com/envsync/envsync/internal/crypto"
 	"github.com/envsync/envsync/internal/envfile"
-	"github.com/envsync/envsync/internal/relay"
 	envsync "github.com/envsync/envsync/internal/sync"
 	"github.com/envsync/envsync/internal/ui"
 	"github.com/spf13/cobra"
@@ -27,17 +26,35 @@ var (
 	pullProjectID      string
 	pullRelayURL       string
 	pullJSON           bool
+	pullNonInteractive bool
+	pullConflictPolicy string
 )
 
 type pullReport struct {
-	ProjectID    string   `json:"project_id"`
-	TargetFile   string   `json:"target_file"`
-	RelayChecked bool     `json:"relay_checked"`
-	RelayApplied int      `json:"relay_applied"`
-	LANApplied   bool     `json:"lan_applied"`
-	Method       string   `json:"method"`
-	Methods      []string `json:"methods,omitempty"`
-	Warnings     []string `json:"warnings,omitempty"`
+	ProjectID                string   `json:"project_id"`
+	TargetFile               string   `json:"target_file"`
+	RelayChecked             bool     `json:"relay_checked"`
+	RelayAttempted           bool     `json:"relay_attempted"`
+	RelayUnavailable         bool     `json:"relay_unavailable"`
+	RelayApplied             int      `json:"relay_applied"`
+	LANAttempted             bool     `json:"lan_attempted"`
+	LANApplied               bool     `json:"lan_applied"`
+	Method                   string   `json:"method"`
+	Methods                  []string `json:"methods,omitempty"`
+	Warnings                 []string `json:"warnings,omitempty"`
+	InteractiveRequired      bool     `json:"interactive_required"`
+	ManualInterventionNeeded bool     `json:"manual_intervention_required"`
+	ConflictPolicyApplied    string   `json:"conflict_policy_applied,omitempty"`
+	BackupCreated            bool     `json:"backup_created"`
+}
+
+type relayPullSummary struct {
+	AppliedCount             int
+	Warnings                 []string
+	InteractiveRequired      bool
+	ManualInterventionNeeded bool
+	ConflictPolicyApplied    string
+	BackupCreated            bool
 }
 
 var pullCmd = &cobra.Command{
@@ -87,13 +104,24 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("project ID is not configured\n\n  Run 'envsync init' or use '--project <project-id>'")
 	}
 
+	policy, interactiveAllowed, err := effectivePullPolicy(cmd, cfg, project)
+	if err != nil {
+		return err
+	}
+
+	backupKey, err := atRestKey(kp)
+	if err != nil {
+		return err
+	}
+
 	noiseKP := crypto.NewNoiseKeypair(kp.X25519Private, kp.X25519Public)
 	targetFile, _ := cmd.Flags().GetString("file")
 	targetFile = projectTargetFile(targetFile, cmd.Flags().Changed("file"), project, cfg)
 
 	report := pullReport{
-		ProjectID:  project.ProjectID,
-		TargetFile: targetFile,
+		ProjectID:             project.ProjectID,
+		TargetFile:            targetFile,
+		ConflictPolicyApplied: string(policy),
 	}
 
 	relayURL := pullRelayURL
@@ -102,96 +130,51 @@ func runPull(cmd *cobra.Command, args []string) error {
 	}
 
 	ui.Header("EnvSync Pull")
+	ui.Line(fmt.Sprintf("  Conflict policy: %s", policy))
 
-	relayClient := relay.NewClient(relayURL, kp)
-	memberKeys, _ := relayClient.ListTeamMembers(project.ProjectID)
-	memberKeyMap := make(map[string]ed25519.PublicKey, len(memberKeys))
-	for _, member := range memberKeys {
-		if member.PublicKey == "" {
-			continue
-		}
-		decoded, decErr := base64.StdEncoding.DecodeString(member.PublicKey)
-		if decErr == nil && len(decoded) == ed25519.PublicKeySize {
-			memberKeyMap[member.Fingerprint] = ed25519.PublicKey(decoded)
-		}
-	}
-
-	ui.Line("  Checking relay for pending blobs...")
 	report.RelayChecked = true
-	pending, relayErr := relayClient.ListPending(project.ProjectID)
-	if relayErr == nil && len(pending) > 0 {
-		ui.Line(fmt.Sprintf("  Found %d pending blob(s) on relay", len(pending)))
-
-		for _, blob := range pending {
-			ui.Line(fmt.Sprintf("  - Downloading %s from %s...", blob.Filename, shortFP(blob.SenderFingerprint)))
-
-			data, ephKeyB64, _, sigB64, err := relayClient.DownloadBlob(project.ProjectID, blob.BlobID)
-			if err != nil {
-				report.Warnings = append(report.Warnings, fmt.Sprintf("relay download failed for %s: %v", blob.BlobID, err))
-				ui.Warning(fmt.Sprintf("  Download failed: %s", err))
-				continue
-			}
-
-			ephKeyBytes, decErr := base64.StdEncoding.DecodeString(ephKeyB64)
-			if decErr != nil {
-				report.Warnings = append(report.Warnings, fmt.Sprintf("invalid relay ephemeral key for %s: %v", blob.BlobID, decErr))
-				ui.Warning(fmt.Sprintf("  Invalid ephemeral key: %s", decErr))
-				continue
-			}
-
-			var ephKey [32]byte
-			copy(ephKey[:], ephKeyBytes)
-
-			if err := verifyRelayBlobSignature(memberKeyMap, blob.SenderFingerprint, data, ephKey, sigB64); err != nil {
-				report.Warnings = append(report.Warnings, err.Error())
-				ui.Warning(fmt.Sprintf("  %s", err))
-				continue
-			}
-
-			plaintext, err := crypto.DecryptFromSender(data, ephKey, kp.X25519Private, kp.X25519Public)
-			if err != nil {
-				report.Warnings = append(report.Warnings, fmt.Sprintf("relay decrypt failed for %s: %v", blob.BlobID, err))
-				ui.Warning(fmt.Sprintf("  Decryption failed: %s", err))
-				continue
-			}
-
-			applied, applyErr := applyReceivedData(project.ProjectID, cfg, kp, targetFile, plaintext, blob.Filename)
-			if applyErr != nil {
-				report.Warnings = append(report.Warnings, fmt.Sprintf("relay apply failed for %s: %v", blob.BlobID, applyErr))
-				ui.Warning(fmt.Sprintf("  Apply failed: %s", applyErr))
-				continue
-			}
-			if !applied {
-				continue
-			}
-
-			report.RelayApplied++
-			if delErr := relayClient.DeleteBlob(project.ProjectID, blob.BlobID); delErr != nil {
-				report.Warnings = append(report.Warnings, fmt.Sprintf("relay cleanup failed for %s: %v", blob.BlobID, delErr))
-				ui.Warning(fmt.Sprintf("  Failed to clean up blob: %s", delErr))
-			}
-
-			logger, _ := audit.NewLogger()
-			if logger != nil {
-				_ = logger.Log(audit.Entry{
-					Event:  audit.EventPull,
-					Peer:   blob.SenderFingerprint,
-					File:   targetFile,
-					Method: "relay",
-				})
-			}
+	report.RelayAttempted = true
+	ui.Line("  Checking relay for pending blobs...")
+	relaySummary, relayErr := pullPendingRelay(project.ProjectID, relayURL, targetFile, cfg, kp, pullApplyOptions{
+		Policy:      policy,
+		Interactive: interactiveAllowed,
+		BackupKey:   backupKey,
+	})
+	if relayErr == nil && relaySummary.AppliedCount > 0 {
+		report.RelayApplied = relaySummary.AppliedCount
+		report.Warnings = append(report.Warnings, relaySummary.Warnings...)
+		report.InteractiveRequired = relaySummary.InteractiveRequired
+		report.ManualInterventionNeeded = relaySummary.ManualInterventionNeeded
+		report.BackupCreated = relaySummary.BackupCreated
+		if relaySummary.ConflictPolicyApplied != "" {
+			report.ConflictPolicyApplied = relaySummary.ConflictPolicyApplied
 		}
-
 		ui.Blank()
 		return renderPullReport(report, nil)
 	}
-
-	if relayErr == nil {
-		ui.Line("  No pending blobs on relay")
-	} else {
+	if relaySummary != nil {
+		report.Warnings = append(report.Warnings, relaySummary.Warnings...)
+		report.InteractiveRequired = relaySummary.InteractiveRequired
+		report.ManualInterventionNeeded = relaySummary.ManualInterventionNeeded
+		report.BackupCreated = report.BackupCreated || relaySummary.BackupCreated
+		if relaySummary.ConflictPolicyApplied != "" {
+			report.ConflictPolicyApplied = relaySummary.ConflictPolicyApplied
+		}
+	}
+	if relayErr != nil {
+		report.RelayUnavailable = true
 		report.Warnings = append(report.Warnings, fmt.Sprintf("relay unavailable: %v", relayErr))
+		ui.Warning(fmt.Sprintf("  Relay unavailable: %v", relayErr))
+	} else {
+		ui.Line("  No pending blobs on relay")
 	}
 
+	if pullServiceKeyPath != "" {
+		ui.Blank()
+		return renderPullReport(report, relayErr)
+	}
+
+	report.LANAttempted = true
 	ui.Line("  Listening for LAN push...")
 	ui.Blank()
 
@@ -208,10 +191,12 @@ func runPull(cmd *cobra.Command, args []string) error {
 		TeamID:             project.ProjectID,
 		KeyPair:            kp,
 		NoiseKeypair:       noiseKP,
-		ConfirmBeforeApply: cfg.Sync.ConfirmBeforeApply,
+		ConfirmBeforeApply: policy == apply.PolicyInteractive,
+		ConflictPolicy:     policy,
+		Interactive:        interactiveAllowed,
 		ProjectID:          project.ProjectID,
 		BackupEnabled:      cfg.Sync.AutoBackup,
-		BackupKey:          mustDeriveAtRestKey(kp),
+		BackupKey:          backupKey,
 		MaxVersions:        cfg.Sync.MaxVersions,
 		Advertise:          cfg.Network.MDNSEnabled,
 		AdvertiseVersion:   Version,
@@ -232,6 +217,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 			}
 			return ui.ConfirmAction(fmt.Sprintf("Apply changes? (%s)", diff.Summary()), true)
 		},
+		OnResolveConflicts: resolvePullConflicts,
 		OnApplied: func(fileName string) {
 			ui.Success(fmt.Sprintf("Applied to %s", fileName))
 		},
@@ -246,11 +232,20 @@ func runPull(cmd *cobra.Command, args []string) error {
 			})
 		}
 		report.Warnings = append(report.Warnings, err.Error())
+		report.InteractiveRequired = report.InteractiveRequired || errors.Is(err, apply.ErrInteractiveRequired)
+		report.ManualInterventionNeeded = true
 		return renderPullReport(report, err)
 	}
 
+	report.LANApplied = result.Applied
+	report.BackupCreated = report.BackupCreated || result.BackupCreated
+	report.InteractiveRequired = report.InteractiveRequired || result.InteractiveRequired
+	report.ManualInterventionNeeded = report.ManualInterventionNeeded || result.ManualInterventionNeeded
+	if result.ConflictPolicyApplied != "" {
+		report.ConflictPolicyApplied = result.ConflictPolicyApplied
+	}
+
 	if result.Applied {
-		report.LANApplied = true
 		logger, _ := audit.NewLogger()
 		if logger != nil {
 			_ = logger.Log(audit.Entry{
@@ -258,6 +253,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 				File:        result.FileName,
 				VarsChanged: result.VarCount,
 				Method:      "lan",
+				Details:     result.DiffSummary,
 			})
 		}
 	}
@@ -271,51 +267,6 @@ func shortFP(fp string) string {
 		return fp[:16] + "..."
 	}
 	return fp
-}
-
-// applyReceivedData shows diff, confirms, backs up the current file, and writes the replacement.
-func applyReceivedData(projectID string, cfg *config.Config, kp *crypto.KeyPair, targetFile string, data []byte, fileName string) (bool, error) {
-	receivedEnv, err := envfile.Parse(string(data))
-	if err != nil {
-		return false, fmt.Errorf("parsing received data: %w", err)
-	}
-
-	currentData, _ := readLocalEnv(targetFile)
-	if currentData != nil {
-		currentEnv, _ := envfile.Parse(string(currentData))
-		if currentEnv != nil {
-			diff := envfile.Diff(currentEnv, receivedEnv)
-			if diff.HasChanges() {
-				fmt.Print(ui.RenderDiff(diff))
-				ui.Blank()
-				if !ui.ConfirmAction("Apply these changes?", true) {
-					ui.Line("  Skipped.")
-					return false, nil
-				}
-			}
-		}
-
-		if cfg.Sync.AutoBackup {
-			if _, err := backupCurrentVersion(projectID, currentData, cfg, kp); err != nil {
-				return false, fmt.Errorf("creating pre-apply backup: %w", err)
-			}
-		}
-	}
-
-	if err := writeEnvFile(targetFile, data); err != nil {
-		return false, err
-	}
-
-	ui.Success(fmt.Sprintf("Applied %s (%d variables)", fileName, receivedEnv.VariableCount()))
-	return true, nil
-}
-
-func mustDeriveAtRestKey(kp *crypto.KeyPair) [32]byte {
-	key, err := crypto.DeriveAtRestKey(kp.X25519Private[:])
-	if err != nil {
-		return [32]byte{}
-	}
-	return key
 }
 
 func renderPullReport(report pullReport, runErr error) error {
@@ -348,6 +299,80 @@ func activePullMethods(report pullReport) []string {
 	return methods
 }
 
+func effectivePullPolicy(cmd *cobra.Command, cfg *config.Config, project *projectContext) (apply.Policy, bool, error) {
+	interactiveAllowed := !pullNonInteractive && pullServiceKeyPath == ""
+	if pullServiceKeyPath != "" && !cmd.Flags().Changed("on-conflict") {
+		return apply.PolicyOverwrite, false, nil
+	}
+
+	if cmd.Flags().Changed("on-conflict") {
+		policy := apply.Policy(strings.TrimSpace(strings.ToLower(pullConflictPolicy)))
+		if err := validatePullPolicy(policy); err != nil {
+			return "", false, err
+		}
+		if policy == apply.PolicyInteractive && !interactiveAllowed {
+			return "", false, fmt.Errorf("--on-conflict=interactive cannot be used with --service-key or --non-interactive")
+		}
+		return policy, interactiveAllowed, nil
+	}
+
+	policy := apply.Policy(cfg.Sync.MergeStrategy)
+	if project != nil && project.Config != nil && project.Config.SyncStrategy != "" {
+		policy = apply.Policy(project.Config.SyncStrategy)
+	}
+	if !interactiveAllowed && policy == apply.PolicyInteractive {
+		return apply.PolicyFail, false, nil
+	}
+	if err := validatePullPolicy(policy); err != nil {
+		return "", false, err
+	}
+	return policy, interactiveAllowed, nil
+}
+
+func validatePullPolicy(policy apply.Policy) error {
+	switch policy {
+	case apply.PolicyInteractive, apply.PolicyOverwrite, apply.PolicyKeepLocal, apply.PolicyThreeWay, apply.PolicyFail:
+		return nil
+	default:
+		return fmt.Errorf("unsupported conflict policy %q (use interactive, overwrite, keep-local, three-way, or fail)", policy)
+	}
+}
+
+func resolvePullConflicts(conflicts []envfile.Conflict) ([]apply.ConflictResolution, bool) {
+	items := make([]ui.ConflictItem, 0, len(conflicts))
+	for _, conflict := range conflicts {
+		items = append(items, ui.ConflictItem{
+			Key:        conflict.Key,
+			BaseValue:  conflict.BaseValue,
+			OurValue:   conflict.OurValue,
+			TheirValue: conflict.TheirValue,
+		})
+	}
+
+	resolved := ui.RunMergeTUI(items)
+	if resolved.Aborted {
+		return nil, false
+	}
+
+	choices := make([]apply.ConflictResolution, 0, len(resolved.Conflicts))
+	for _, item := range resolved.Conflicts {
+		resolution := apply.ConflictResolution{Key: item.Key}
+		switch item.Decision {
+		case ui.MergeAccept:
+			resolution.Action = apply.ConflictUseRemote
+		case ui.MergeReject:
+			resolution.Action = apply.ConflictUseLocal
+		case ui.MergeEdit:
+			resolution.Action = apply.ConflictUseCustom
+			resolution.Value = item.EditValue
+		default:
+			resolution.Action = apply.ConflictUseLocal
+		}
+		choices = append(choices, resolution)
+	}
+	return choices, true
+}
+
 func init() {
 	pullCmd.Flags().IntVar(&pullTimeoutSeconds, "timeout", 0, "Optional timeout in seconds for LAN listen mode")
 	pullCmd.Flags().StringVar(&pullServiceKeyPath, "service-key", "", "Path to an EnvSync service key for relay-only automation")
@@ -356,5 +381,7 @@ func init() {
 	_ = pullCmd.Flags().MarkHidden("team")
 	pullCmd.Flags().StringVar(&pullRelayURL, "relay", "", "Override the relay URL")
 	pullCmd.Flags().BoolVar(&pullJSON, "json", false, "Print pull results as JSON")
+	pullCmd.Flags().BoolVar(&pullNonInteractive, "non-interactive", false, "Disable prompts and fail when interactive conflict resolution would be required")
+	pullCmd.Flags().StringVar(&pullConflictPolicy, "on-conflict", "", "Conflict policy: interactive, overwrite, keep-local, three-way, or fail")
 	rootCmd.AddCommand(pullCmd)
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/envsync/envsync/internal/apply"
 	"github.com/envsync/envsync/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -87,11 +88,20 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		case cfgErr != nil || projectErr != nil || identityErr != nil:
 			report.Warnings = append(report.Warnings, "shared secret pull skipped because EnvSync identity/project setup is incomplete")
 		default:
-			applied, pullErr := pullPendingRelay(project.ProjectID, projectRelayURL(project, cfg), targetFilePath, cfg, kp)
+			backupKey, keyErr := atRestKey(kp)
+			if keyErr != nil {
+				return keyErr
+			}
+			relaySummary, pullErr := pullPendingRelay(project.ProjectID, projectRelayURL(project, cfg), targetFilePath, cfg, kp, pullApplyOptions{
+				Policy:      apply.PolicyOverwrite,
+				Interactive: false,
+				BackupKey:   backupKey,
+			})
 			if pullErr != nil {
 				report.Warnings = append(report.Warnings, fmt.Sprintf("shared secret pull failed: %v", pullErr))
 			} else {
-				report.RelayApplied = applied
+				report.RelayApplied = relaySummary.AppliedCount
+				report.Warnings = append(report.Warnings, relaySummary.Warnings...)
 			}
 		}
 	}
