@@ -1,11 +1,23 @@
 import { createHash, webcrypto } from 'node:crypto';
-import type { UnstableDevWorker } from 'wrangler';
+import { unstable_dev, type UnstableDevWorker } from 'wrangler';
 
 type Identity = {
     fingerprint: string;
     publicKeyB64: string;
     privateKey: CryptoKey;
 };
+
+export async function startTestWorker(): Promise<UnstableDevWorker> {
+    return unstable_dev('src/index.ts', {
+        experimental: {
+            disableExperimentalWarning: true,
+            disableDevRegistry: true,
+            testMode: true,
+            watch: false,
+        },
+        vars: {},
+    });
+}
 
 export async function createIdentity(label: string): Promise<Identity> {
     const keyPair = await webcrypto.subtle.generateKey(
