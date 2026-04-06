@@ -34,7 +34,7 @@ func loadIdentity() (*crypto.KeyPair, error) {
 		keyPath = filepath.Join(home, ".ssh", "id_ed25519")
 	}
 
-	kp, err := crypto.LoadSSHKey(keyPath)
+	kp, err := loadSSHKeyWithPrompt(keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("loading identity: %w\n\n  Run 'envsync init' first", err)
 	}
