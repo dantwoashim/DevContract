@@ -26,7 +26,7 @@ var serviceKeyGenerateCmd = &cobra.Command{
 
 var serviceKeyExportCmd = &cobra.Command{
 	Use:   "export",
-	Short: "Export the public key for team registration",
+	Short: "Export the public key for project registration",
 	RunE:  runServiceKeyExport,
 }
 
@@ -64,7 +64,7 @@ func runServiceKeyGenerate(cmd *cobra.Command, args []string) error {
 	ui.Blank()
 	ui.Code(fmt.Sprintf("  ENVSYNC_SERVICE_KEY=%s", base64.StdEncoding.EncodeToString(sk.ExportPrivateKey())))
 	ui.Blank()
-	ui.Line("Public key (for team registration):")
+	ui.Line("Public key (for project registration):")
 	ui.Code(fmt.Sprintf("  %s", base64.StdEncoding.EncodeToString(sk.PublicKey)))
 	ui.Blank()
 	ui.Warning("Keep the private key secret. Never commit it to git.")
@@ -148,7 +148,7 @@ func runServiceKeyRegister(cmd *cobra.Command, args []string) error {
 	ui.Success(fmt.Sprintf("Registered %s on project %s", memberName, targetProjectID))
 	ui.Blank()
 	ui.Line("This key can now authenticate relay pulls in CI with:")
-	ui.Code(fmt.Sprintf("  envsync pull --service-key %s --team %s", keyPath, targetProjectID))
+	ui.Code(fmt.Sprintf("  envsync pull --service-key %s --project %s", keyPath, targetProjectID))
 	ui.Blank()
 
 	return nil
@@ -158,7 +158,9 @@ func init() {
 	serviceKeyGenerateCmd.Flags().StringVarP(&serviceKeyOutput, "output", "o", "", "Output path for key file")
 	serviceKeyExportCmd.Flags().StringVarP(&serviceKeyOutput, "key", "k", "", "Path to key file")
 	serviceKeyRegisterCmd.Flags().StringVarP(&serviceKeyOutput, "key", "k", "", "Path to key file")
-	serviceKeyRegisterCmd.Flags().StringVar(&serviceKeyRegisterTeam, "team", "", "Override the current project ID")
+	serviceKeyRegisterCmd.Flags().StringVar(&serviceKeyRegisterTeam, "project", "", "Override the current project ID")
+	serviceKeyRegisterCmd.Flags().StringVar(&serviceKeyRegisterTeam, "team", "", "Deprecated alias for --project")
+	_ = serviceKeyRegisterCmd.Flags().MarkHidden("team")
 	serviceKeyRegisterCmd.Flags().StringVar(&serviceKeyRegisterName, "name", "ci", "Member name to register for the service key")
 
 	serviceKeyCmd.AddCommand(serviceKeyGenerateCmd)

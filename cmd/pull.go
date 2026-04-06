@@ -24,7 +24,7 @@ import (
 var (
 	pullTimeoutSeconds int
 	pullServiceKeyPath string
-	pullTeamID         string
+	pullProjectID      string
 	pullRelayURL       string
 	pullJSON           bool
 )
@@ -76,15 +76,15 @@ func runPull(cmd *cobra.Command, args []string) error {
 	}
 
 	project, _ := loadProjectContext()
-	if pullTeamID != "" {
+	if pullProjectID != "" {
 		if project == nil {
-			project = &projectContext{Config: nil, ProjectID: pullTeamID}
+			project = &projectContext{Config: nil, ProjectID: pullProjectID}
 		} else {
-			project.ProjectID = pullTeamID
+			project.ProjectID = pullProjectID
 		}
 	}
 	if project == nil || project.ProjectID == "" {
-		return fmt.Errorf("project ID is not configured\n\n  Run 'envsync init' or use '--team <project-id>'")
+		return fmt.Errorf("project ID is not configured\n\n  Run 'envsync init' or use '--project <project-id>'")
 	}
 
 	noiseKP := crypto.NewNoiseKeypair(kp.X25519Private, kp.X25519Public)
@@ -355,7 +355,9 @@ func activePullMethods(report pullReport) []string {
 func init() {
 	pullCmd.Flags().IntVar(&pullTimeoutSeconds, "timeout", 0, "Optional timeout in seconds for LAN listen mode")
 	pullCmd.Flags().StringVar(&pullServiceKeyPath, "service-key", "", "Path to an EnvSync service key for relay-only automation")
-	pullCmd.Flags().StringVar(&pullTeamID, "team", "", "Override the project ID/team namespace")
+	pullCmd.Flags().StringVar(&pullProjectID, "project", "", "Override the current project ID")
+	pullCmd.Flags().StringVar(&pullProjectID, "team", "", "Deprecated alias for --project")
+	_ = pullCmd.Flags().MarkHidden("team")
 	pullCmd.Flags().StringVar(&pullRelayURL, "relay", "", "Override the relay URL")
 	pullCmd.Flags().BoolVar(&pullJSON, "json", false, "Print pull results as JSON")
 	rootCmd.AddCommand(pullCmd)
