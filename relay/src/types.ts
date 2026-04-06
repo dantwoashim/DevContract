@@ -7,6 +7,7 @@ export interface Env {
     INVITE_TTL_HOURS: string;
     BLOB_TTL_HOURS: string;
     BILLING_ENABLED?: string;
+    CORS_ALLOW_ORIGIN?: string;
 }
 
 export interface Invite {

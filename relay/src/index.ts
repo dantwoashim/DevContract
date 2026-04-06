@@ -7,12 +7,21 @@ import { relayRoutes } from './routes/relay';
 import { teamRoutes } from './routes/teams';
 import { billingRoutes } from './routes/billing';
 import { computeIdentityFingerprint, decodeBase64, parseAuthHeader, verifySignature, hashBody } from './middleware/auth';
+import { allowedOrigin } from './middleware/cors';
+import { logRelayError, requestIdMiddleware } from './middleware/observability';
 import { rateLimitMiddleware } from './middleware/ratelimit';
 
 const app = new Hono<{ Bindings: Env }>();
 
+app.use('*', requestIdMiddleware);
 app.use('*', cors({
-    origin: '*',
+    origin: (origin, c) => {
+        const configured = allowedOrigin(c.env);
+        if (configured === '*') {
+            return origin || '*';
+        }
+        return configured;
+    },
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowHeaders: [
         'Authorization',
@@ -23,6 +32,12 @@ app.use('*', cors({
         'X-EnvSync-EphemeralKey',
         'X-EnvSync-Filename',
         'X-EnvSync-Signature',
+    ],
+    exposeHeaders: [
+        'X-Request-ID',
+        'X-RateLimit-Limit',
+        'X-RateLimit-Remaining',
+        'X-RateLimit-Bypass',
     ],
 }));
 
@@ -97,7 +112,14 @@ async function authMiddleware(c: any, next: any) {
         } else {
             return c.json({ error: 'unauthorized', message: 'Unknown fingerprint. Include public key for first-contact registration.' }, 401);
         }
-    } catch {
+    } catch (error) {
+        logRelayError('auth.verification_failed', {
+            request_id: c.get('requestId' as never),
+            path: c.req.path,
+            method: c.req.method,
+            fingerprint: parsed.fingerprint,
+            message: error instanceof Error ? error.message : String(error),
+        });
         return c.json({ error: 'service_unavailable', message: 'Signature verification failed' }, 503);
     }
 
@@ -108,7 +130,12 @@ async function authMiddleware(c: any, next: any) {
 }
 
 app.onError((err, c) => {
-    console.error('Unhandled error:', err);
+    logRelayError('request.unhandled_error', {
+        request_id: c.get('requestId' as never),
+        path: c.req.path,
+        method: c.req.method,
+        message: err instanceof Error ? err.message : String(err),
+    });
     return c.json({
         error: 'internal_error',
         message: 'An unexpected error occurred',
