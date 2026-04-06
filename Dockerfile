@@ -1,10 +1,11 @@
 # Multi-stage build for minimal image size
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25.8-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
 
 WORKDIR /src
 COPY go.mod go.sum ./
+ENV GOTOOLCHAIN=local
 RUN go mod download
 
 COPY . .

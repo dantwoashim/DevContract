@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-REPO="${ENVSYNC_INSTALL_REPO:-envsync/envsync}"
+REPO="${ENVSYNC_INSTALL_REPO:-dantwoashim/Env_sync}"
 INSTALL_DIR="${ENVSYNC_INSTALL_DIR:-/usr/local/bin}"
 VERSION="${ENVSYNC_VERSION:-latest}"
 
