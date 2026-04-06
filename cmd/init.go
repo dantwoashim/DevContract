@@ -46,23 +46,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("SSH key not found at %s\n\n  Generate one with:\n    ssh-keygen -t ed25519 -f %s", keyPath, keyPath)
 	}
 
-	keyData, err := os.ReadFile(keyPath)
-	if err != nil {
-		return fmt.Errorf("reading SSH key: %w", err)
-	}
-
-	if crypto.IsPassphraseProtected(keyData) {
-		fmt.Println()
-		fmt.Println("  ! SSH key is passphrase-protected.")
-		fmt.Println("    This build of EnvSync still needs direct access to the raw Ed25519 key material.")
-		fmt.Println("    Options:")
-		fmt.Printf("    1. Remove passphrase: ssh-keygen -p -f %s\n", keyPath)
-		fmt.Println("    2. Use a dedicated unencrypted Ed25519 key just for EnvSync")
-		fmt.Println()
-		return fmt.Errorf("passphrase-protected SSH keys are not yet supported in this build")
-	}
-
-	kp, err := crypto.LoadSSHKey(keyPath)
+	kp, err := loadSSHKeyWithPrompt(keyPath)
 	if err != nil {
 		return err
 	}
@@ -109,7 +93,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if createdContract {
 		fmt.Println("  - Created a starter project contract at .envsync/contract.yaml")
 	}
-	fmt.Println("  x Ready. Run 'envsync bootstrap' to prepare local setup, then invite teammates.")
+	fmt.Println("  x Ready. Run 'envsync bootstrap' to prepare local setup, then invite another project member.")
 
 	return nil
 }
