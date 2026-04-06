@@ -33,6 +33,7 @@ func Load() (*Config, error) {
 	if err := toml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
+	cfg.Identity.Normalize()
 	return cfg, nil
 }
 
@@ -42,6 +43,7 @@ func Save(cfg *Config) error {
 	if err != nil {
 		return err
 	}
+	cfg.Identity.Normalize()
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
@@ -71,12 +73,25 @@ type Config struct {
 // IdentityConfig holds the user's cryptographic identity.
 type IdentityConfig struct {
 	SSHKeyPath           string `toml:"ssh_key_path"`
-	GitHubUsername       string `toml:"github_username"`
+	DisplayName          string `toml:"display_name,omitempty"`
+	LegacyGitHubUsername string `toml:"github_username,omitempty"`
 	Fingerprint          string `toml:"fingerprint"`
 	IdentityPublicKey    string `toml:"identity_public_key,omitempty"`
 	TransportPublicKey   string `toml:"transport_public_key,omitempty"`
 	TransportFingerprint string `toml:"transport_fingerprint,omitempty"`
 	DeviceName           string `toml:"device_name,omitempty"`
+}
+
+// Normalize keeps compatibility with older config files while writing the
+// canonical field name for current builds.
+func (c *IdentityConfig) Normalize() {
+	if c == nil {
+		return
+	}
+	if c.DisplayName == "" {
+		c.DisplayName = c.LegacyGitHubUsername
+	}
+	c.LegacyGitHubUsername = ""
 }
 
 // RelayConfig holds relay server settings.
@@ -118,7 +133,7 @@ type TelemetryConfig struct {
 
 // Default returns a Config with sensible defaults.
 func Default() *Config {
-	return &Config{
+	cfg := &Config{
 		Identity: IdentityConfig{
 			SSHKeyPath: defaultSSHKeyPath(),
 		},
@@ -148,6 +163,8 @@ func Default() *Config {
 			Enabled: false,
 		},
 	}
+	cfg.Identity.Normalize()
+	return cfg
 }
 
 func defaultSSHKeyPath() string {
