@@ -300,3 +300,34 @@ func TestMigrateNamespaceCopiesLegacyBackups(t *testing.T) {
 		t.Fatalf("restored migrated content = %q", restored)
 	}
 }
+
+func TestReencryptPreservesStoredVersions(t *testing.T) {
+	s := newTestStore(t, 10)
+	oldKey := testEncryptionKey()
+	var newKey [32]byte
+	copy(newKey[:], []byte("new-key-32-bytes-exactly-padded!!"))
+	project := "reencrypt-project"
+
+	if _, err := s.Append(project, []byte("ONE=1\n"), oldKey); err != nil {
+		t.Fatalf("append first: %v", err)
+	}
+	if _, err := s.Append(project, []byte("TWO=2\n"), oldKey); err != nil {
+		t.Fatalf("append second: %v", err)
+	}
+
+	if err := s.Reencrypt(project, oldKey, newKey); err != nil {
+		t.Fatalf("reencrypt: %v", err)
+	}
+
+	if _, err := s.Restore(project, 2, oldKey); err == nil {
+		t.Fatal("restore with old key unexpectedly succeeded after reencrypt")
+	}
+
+	restored, err := s.Restore(project, 2, newKey)
+	if err != nil {
+		t.Fatalf("restore with new key: %v", err)
+	}
+	if string(restored) != "TWO=2\n" {
+		t.Fatalf("restored content = %q", restored)
+	}
+}
