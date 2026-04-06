@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -83,11 +84,15 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	}
 
 	var project *projectContext
-	project, _ = loadProjectContext()
+	project, projectErr := loadProjectContext()
 	if project != nil {
 		report.ProjectID = project.ProjectID
 		report.RelayURL = projectRelayURL(project, cfg)
 		addCheck("project", "pass", fmt.Sprintf("Project ID %s", project.ProjectID), false)
+	} else if errors.Is(projectErr, errProjectConfigMissingID) {
+		addCheck("project", "warn", "Project config exists but is missing project_id; run 'envsync init' to repair .envsync.toml", false)
+	} else if projectErr != nil {
+		addCheck("project", "warn", fmt.Sprintf("Project config not loaded: %v", projectErr), false)
 	} else {
 		addCheck("project", "warn", "Project config not loaded; run 'envsync init' if this repo has not been initialized yet", false)
 	}
