@@ -1,0 +1,39 @@
+# Codex instructions for EnvSync
+
+Project: `EnvSync`
+
+Agent-safe repo onboarding for the EnvSync CLI, relay, and extension workspace.
+
+## Workflow
+
+- Run `envsync bootstrap` on a fresh clone.
+- Run `envsync doctor` before major edits.
+- Run `envsync guard scan` before commits touching agent files or config.
+- Use `envsync run test` for the default development workflow.
+
+## Secret Safety
+
+- Never inline secrets in prompts, markdown instructions, JSON config, or logs.
+- Use environment variables only when configuring tools or MCP servers.
+- If you touch `.env`, `AGENTS.md`, `.github/copilot-instructions.md`, `.cursor/`, `.claude/`, or MCP config, run `envsync guard scan`.
+
+## Environment Variables
+
+- `ENVSYNC_SERVICE_KEY`
+- `GITHUB_TOKEN`
+- `NODE_ENV`
+
+## MCP Servers
+
+- `repo-docs`: command `node`
+- Use the generated MCP JSON file. Do not replace `${ENV_VAR}` placeholders with literal secrets.
+
+## Repo-Specific Rules
+
+- Treat this repo as a Go CLI with relay and extension support code.
+- Run go test ./... after changing contract, guard, sync, or crypto code.
+- Never inline service keys or tokens in docs, prompts, or generated files.
+
+## Local Services
+
+- `relay-dev` on `127.0.0.1:8787`
