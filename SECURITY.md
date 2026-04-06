@@ -4,49 +4,55 @@
 
 Report security vulnerabilities to: **security@envsync.dev**
 
-We will respond within 48 hours and aim to provide a patch within 7 days for critical issues.
+We aim to acknowledge reports within 48 hours and provide a remediation plan quickly for confirmed issues.
 
-**Do not** open public GitHub issues for security vulnerabilities.
+Do not open public GitHub issues for security vulnerabilities.
 
 ## Cryptographic Design
 
 | Layer | Primitive | Purpose |
-|-------|-----------|---------|
-| Identity | Ed25519 (SSH keys) | User identity, no accounts needed |
-| Key Exchange | X25519 (Curve25519 ECDH) | Derive shared secrets |
-| Channel Encryption | Noise_XX (XChaCha20-Poly1305) | LAN peer-to-peer transport |
+| --- | --- | --- |
+| Identity | Ed25519 (SSH keys) | Member identity and request signing |
+| Key Exchange | X25519 | Transport and relay shared-secret derivation |
+| Channel Encryption | Noise_XX + XChaCha20-Poly1305 | LAN peer-to-peer transport |
 | At-Rest Encryption | XChaCha20-Poly1305 + HKDF-SHA256 | Local encrypted backups |
 | Relay Encryption | Ephemeral X25519 + XChaCha20-Poly1305 | Per-recipient relay blobs |
-| Request Auth | Ed25519 signatures (ES-SIG) | Relay API authentication |
-| Key Derivation | HKDF-SHA256 | Derive encryption keys from shared secrets |
+| Request Auth | Ed25519 signatures (`ES-SIG`) | Relay API authentication |
+| Key Derivation | HKDF-SHA256 | Backup and relay encryption key derivation |
+
+EnvSync relies on audited libraries from `golang.org/x/crypto` and `github.com/flynn/noise`. It does not define custom cryptographic primitives.
 
 ## Trust Model
 
-- **TOFU (Trust On First Use)**: First connection prompts fingerprint verification
-- **Peer Registry**: Trusted peers stored locally in TOML
-- **Trust States**: Unknown → Pending → Trusted → Revoked
-- **Team Scoping**: Peers are scoped to teams, preventing cross-team access
+- Identity comes from an Ed25519 SSH key and a derived X25519 transport key.
+- The relay computes the claimed identity fingerprint from the submitted public key on first contact and rejects mismatches.
+- Local peer state is stored in the registry with explicit trust transitions.
+- Members imported from the relay are not automatically treated as fully trusted peers.
+- Trust states are `unknown`, `pending`, `trusted`, and `revoked`.
+- LAN pulls require a transport key match against the trusted local registry.
+- Relay blobs must include a sender signature that is verified before the payload is applied.
 
 ## Zero-Knowledge Relay
 
-The relay server **never** has access to plaintext secrets:
+The relay never stores plaintext `.env` contents.
 
-1. All blobs are encrypted **client-side** before upload
-2. Each blob uses an **ephemeral ECDH key** unique to the recipient
-3. The relay stores only opaque ciphertext with a 72-hour TTL
-4. Blob metadata (sender, recipient, size) is visible to the relay for routing
+1. Payloads are encrypted client-side before upload.
+2. Each relay blob is encrypted for one intended recipient.
+3. The relay stores only ciphertext plus routing metadata.
+4. Blob retention is controlled by the team's relay tier configuration.
 
-## What We Don't Protect Against
+Visible relay metadata includes sender fingerprint, recipient fingerprint, filename, size, and upload timing.
 
-- **Compromised SSH keys**: If an attacker has your private SSH key, they can impersonate you
-- **Compromised endpoint**: If your machine is compromised, the .env file is readable in memory
-- **Relay metadata**: The relay can see who is syncing with whom (but not what)
-- **Denial of service**: The relay can refuse to relay blobs
+## What Revocation Means
 
-## Dependencies
+Revoking a member stops new relay deliveries and removes them from active membership.
 
-All cryptographic operations use well-audited libraries:
+Revocation does **not** retroactively erase secrets that member already received. If previously shared secrets must be invalidated, rotate them in the application and, when appropriate, rotate the EnvSync identity or project material as well.
 
-- `golang.org/x/crypto` — Official Go crypto extensions (Ed25519, X25519, XChaCha20-Poly1305, HKDF)
-- `github.com/flynn/noise` — Noise Protocol Framework implementation
-- No custom cryptographic primitives are used
+## What EnvSync Does Not Protect Against
+
+- A compromised SSH private key.
+- A compromised local machine where plaintext values are already present.
+- Relay metadata disclosure.
+- Denial of service by an unavailable or malicious relay.
+- Business-logic mistakes in the application that consumes the synced secrets.
