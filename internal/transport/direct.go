@@ -15,7 +15,7 @@ const (
 	// DefaultDialTimeout for LAN connections.
 	DefaultDialTimeout = 2 * time.Second
 
-	// WANDialTimeout for WAN connections (post-hole-punch).
+	// WANDialTimeout for longer-lived direct connections.
 	WANDialTimeout = 5 * time.Second
 )
 
@@ -34,7 +34,7 @@ type DialOptions struct {
 	ExpectedFingerprint string
 
 	// OnUnknownPeer is called when the remote peer's key is not recognized.
-	// Return nil to accept (TOFU), error to reject.
+	// Return nil to accept, error to reject.
 	OnUnknownPeer func(fingerprint string) error
 }
 
@@ -93,7 +93,7 @@ func verifyPeer(publicKey []byte, expectedFingerprint string, onUnknown func(str
 		return nil
 	}
 
-	// TOFU: ask the callback
+	// Delegate unknown-peer handling to the caller.
 	if onUnknown != nil {
 		return onUnknown(fingerprint)
 	}
