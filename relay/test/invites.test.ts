@@ -1,19 +1,16 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { unstable_dev, type UnstableDevWorker } from 'wrangler';
-import { createIdentity, registerMember, signedFetch, transportKey } from './helpers';
+import type { UnstableDevWorker } from 'wrangler';
+import { createIdentity, registerMember, signedFetch, startTestWorker, transportKey } from './helpers';
 
 let worker: UnstableDevWorker;
 
 beforeAll(async () => {
-    worker = await unstable_dev('src/index.ts', {
-        experimental: { disableExperimentalWarning: true },
-        vars: {},
-    });
+    worker = await startTestWorker();
 });
 
 afterAll(async () => {
     await worker?.stop();
-});
+}, 30_000);
 
 describe('Invite Flow', () => {
     const tokenHash = `test-token-hash-${Date.now()}`;
