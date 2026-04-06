@@ -88,6 +88,7 @@ inviteRoutes.delete('/:hash', consumeInvite);
 async function consumeInvite(c: any) {
     const hash = c.req.param('hash');
     const joinerFingerprint = c.get('fingerprint' as never) as string;
+    const joinerLabel = (c.req.query('joiner') || '').trim();
 
     const data = await c.env.ENVSYNC_DATA.get(`invite:${hash}`);
     if (!data) {
@@ -97,6 +98,13 @@ async function consumeInvite(c: any) {
     const invite: Invite = JSON.parse(data);
     if (invite.consumed) {
         return c.json({ error: 'consumed', message: 'This invite has already been used' }, 410);
+    }
+
+    if (invite.invitee && joinerLabel && invite.invitee !== joinerLabel) {
+        return c.json({
+            error: 'invite_mismatch',
+            message: `Invite was issued for ${invite.invitee}, not ${joinerLabel}`,
+        }, 409);
     }
 
     invite.consumed = true;

@@ -72,3 +72,46 @@ describe('Invite Flow', () => {
         expect(res.status).toBe(404);
     });
 });
+
+describe('Invite joiner validation', () => {
+    const tokenHash = `test-token-mismatch-${Date.now()}`;
+    const teamId = `test-team-mismatch-${Date.now()}`;
+
+    let owner: Awaited<ReturnType<typeof createIdentity>>;
+    let joiner: Awaited<ReturnType<typeof createIdentity>>;
+
+    beforeAll(async () => {
+        owner = await createIdentity('invite-owner-mismatch');
+        joiner = await createIdentity('invite-joiner-mismatch');
+
+        const bootstrap = await registerMember(worker, owner, teamId, 'alice', transportKey(3), 'owner');
+        expect(bootstrap.status).toBe(200);
+
+        const create = await signedFetch(worker, owner, '/invites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                token_hash: tokenHash,
+                team_id: teamId,
+                inviter: 'alice',
+                inviter_fingerprint: owner.fingerprint,
+                invitee: 'bob',
+            }),
+        });
+        expect(create.status).toBe(201);
+    });
+
+    it('rejects consume when joiner label does not match invite target', async () => {
+        const res = await signedFetch(worker, joiner, `/invites/${tokenHash}?joiner=${encodeURIComponent('mallory')}`, {
+            method: 'DELETE',
+        });
+        expect(res.status).toBe(409);
+    });
+
+    it('keeps the invite usable after a mismatch', async () => {
+        const res = await signedFetch(worker, joiner, `/invites/${tokenHash}?joiner=${encodeURIComponent('bob')}`, {
+            method: 'DELETE',
+        });
+        expect(res.status).toBe(200);
+    });
+});

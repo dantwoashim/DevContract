@@ -29,6 +29,9 @@ type Peer struct {
 	// LegacyGitHubUsername keeps older peer files readable.
 	LegacyGitHubUsername string `toml:"github_username,omitempty"`
 
+	// RelayUsername is the relay-side member name used for display.
+	RelayUsername string `toml:"relay_username,omitempty"`
+
 	// Fingerprint is the Ed25519 identity fingerprint (SHA256:...).
 	Fingerprint string `toml:"fingerprint"`
 
@@ -68,6 +71,9 @@ func (p *Peer) Normalize() {
 	}
 	if p.DisplayName == "" {
 		p.DisplayName = p.LegacyGitHubUsername
+	}
+	if p.RelayUsername == "" {
+		p.RelayUsername = p.DisplayName
 	}
 	p.LegacyGitHubUsername = ""
 }

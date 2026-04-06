@@ -69,7 +69,10 @@ func runInvite(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("registering project owner on relay: %w", err)
 	}
 
-	token := generateMnemonic()
+	token, err := generateMnemonic()
+	if err != nil {
+		return fmt.Errorf("generating invite code: %w", err)
+	}
 	tokenHash := relay.HashToken(token)
 
 	err = client.CreateInvite(relay.InviteRequest{
@@ -134,7 +137,7 @@ func runJoin(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	client := relay.NewClient(projectRelayURL(project, cfg), kp)
-	inviteResp, err := client.ConsumeInvite(relay.HashToken(token))
+	inviteResp, err := client.ConsumeInvite(relay.HashToken(token), displayMemberLabel(cfg, kp))
 	if err != nil {
 		return fmt.Errorf("could not redeem invite code: %w", err)
 	}
@@ -191,6 +194,7 @@ func runJoin(cmd *cobra.Command, args []string) error {
 
 		p := &peer.Peer{
 			DisplayName:          member.Username,
+			RelayUsername:        member.Username,
 			Fingerprint:          member.Fingerprint,
 			Ed25519Public:        member.PublicKey,
 			X25519Public:         member.TransportPublicKey,
@@ -229,7 +233,7 @@ func runJoin(cmd *cobra.Command, args []string) error {
 }
 
 // generateMnemonic creates an 8-word random mnemonic token with 64 bits of entropy.
-func generateMnemonic() string {
+func generateMnemonic() (string, error) {
 	words := []string{
 		"tiger", "castle", "moon", "river", "flame", "hope", "storm", "eagle",
 		"frost", "blade", "ocean", "crown", "spark", "stone", "cloud", "forest",
@@ -264,13 +268,13 @@ func generateMnemonic() string {
 	for i := 0; i < 8; i++ {
 		b := make([]byte, 2)
 		if _, err := rand.Read(b); err != nil {
-			panic(fmt.Sprintf("crypto/rand failed: %v", err))
+			return "", fmt.Errorf("crypto/rand failed: %w", err)
 		}
 		idx := int(b[0])<<8 | int(b[1])
 		selected[i] = words[idx%len(words)]
 	}
 
-	return strings.Join(selected, "-")
+	return strings.Join(selected, "-"), nil
 }
 
 func projectRelayURL(project *projectContext, cfg *config.Config) string {
