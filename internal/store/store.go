@@ -168,6 +168,39 @@ func (s *Store) Restore(projectID string, sequence int, encryptionKey [32]byte) 
 	return nil, fmt.Errorf("version %d not found", sequence)
 }
 
+// Reencrypt rewrites all stored versions for a project with a new at-rest key.
+func (s *Store) Reencrypt(projectID string, oldKey, newKey [32]byte) error {
+	return s.withProjectLock(projectID, func(dir string) error {
+		versions, err := s.List(projectID)
+		if err != nil {
+			return err
+		}
+
+		for _, v := range versions {
+			data, err := os.ReadFile(v.FilePath)
+			if err != nil {
+				return fmt.Errorf("reading version %d: %w", v.Sequence, err)
+			}
+
+			plaintext, err := crypto.Decrypt(data, oldKey)
+			if err != nil {
+				return fmt.Errorf("decrypting version %d with previous key: %w", v.Sequence, err)
+			}
+
+			reencrypted, err := crypto.Encrypt(plaintext, newKey)
+			if err != nil {
+				return fmt.Errorf("encrypting version %d with new key: %w", v.Sequence, err)
+			}
+
+			if err := fsutil.AtomicWriteFile(v.FilePath, reencrypted, 0600); err != nil {
+				return fmt.Errorf("rewriting version %d: %w", v.Sequence, err)
+			}
+		}
+
+		return nil
+	})
+}
+
 // List returns all stored versions for a project, newest first.
 func (s *Store) List(projectID string) ([]VersionInfo, error) {
 	dir := s.projectDir(projectID)
