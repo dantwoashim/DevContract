@@ -119,10 +119,10 @@ func TestVerifyTrustedPullPeer(t *testing.T) {
 
 func trustedPeer(label string, key [32]byte, trust peer.TrustState) peer.Peer {
 	return peer.Peer{
-		GitHubUsername: label,
-		Fingerprint:    "SHA256:" + label,
-		X25519Public:   base64.StdEncoding.EncodeToString(key[:]),
-		Trust:          trust,
+		DisplayName:  label,
+		Fingerprint:  "SHA256:" + label,
+		X25519Public: base64.StdEncoding.EncodeToString(key[:]),
+		Trust:        trust,
 	}
 }
 
