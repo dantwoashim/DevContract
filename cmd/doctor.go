@@ -260,9 +260,9 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		} else {
 			team, err := registry.LoadTeam(project.ProjectID)
 			if err != nil {
-				addCheck("registry", "warn", fmt.Sprintf("Local team metadata missing for %s", project.ProjectID), false)
+				addCheck("registry", "warn", fmt.Sprintf("Local project membership metadata missing for %s", project.ProjectID), false)
 			} else {
-				addCheck("registry", "pass", fmt.Sprintf("Local team metadata loaded (%d members)", len(team.Members)), false)
+				addCheck("registry", "pass", fmt.Sprintf("Local project membership metadata loaded (%d members)", len(team.Members)), false)
 			}
 		}
 

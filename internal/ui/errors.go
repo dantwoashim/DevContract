@@ -74,7 +74,7 @@ func ErrNoPeers() StructuredError {
 		Category:   ErrNetwork,
 		Message:    "No peers found on LAN",
 		Cause:      "mDNS discovery found no EnvSync instances. The recipient may not be running 'envsync pull'.",
-		Suggestion: "Ask your teammate to run: envsync pull",
+		Suggestion: "Ask another project member to run: envsync pull",
 	}
 }
 
