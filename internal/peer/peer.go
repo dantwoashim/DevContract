@@ -23,8 +23,11 @@ const (
 
 // Peer represents a known peer in the registry.
 type Peer struct {
-	// GitHubUsername of the peer (e.g., "alice"). This is display metadata only.
-	GitHubUsername string `toml:"github_username"`
+	// DisplayName is the human-facing label for the peer.
+	DisplayName string `toml:"display_name,omitempty"`
+
+	// LegacyGitHubUsername keeps older peer files readable.
+	LegacyGitHubUsername string `toml:"github_username,omitempty"`
 
 	// Fingerprint is the Ed25519 identity fingerprint (SHA256:...).
 	Fingerprint string `toml:"fingerprint"`
@@ -57,6 +60,18 @@ type Peer struct {
 	RevokedAt time.Time `toml:"revoked_at,omitempty"`
 }
 
+// Normalize keeps compatibility with older peer files while writing the
+// canonical display_name field for current builds.
+func (p *Peer) Normalize() {
+	if p == nil {
+		return
+	}
+	if p.DisplayName == "" {
+		p.DisplayName = p.LegacyGitHubUsername
+	}
+	p.LegacyGitHubUsername = ""
+}
+
 // Team represents a team of peers sharing .env files.
 type Team struct {
 	// ID is a unique team identifier.
@@ -77,6 +92,7 @@ type Team struct {
 
 // Validate checks if a peer's data is valid.
 func (p *Peer) Validate() error {
+	p.Normalize()
 	if p.Fingerprint == "" {
 		return fmt.Errorf("peer has empty fingerprint")
 	}
