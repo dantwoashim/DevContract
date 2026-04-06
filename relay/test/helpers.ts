@@ -16,7 +16,7 @@ export async function createIdentity(label: string): Promise<Identity> {
 
     const publicKeyRaw = Buffer.from(await webcrypto.subtle.exportKey('raw', keyPair.publicKey));
     return {
-        fingerprint: `SHA256:test-${label}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+        fingerprint: computeIdentityFingerprint(publicKeyRaw),
         publicKeyB64: publicKeyRaw.toString('base64'),
         privateKey: keyPair.privateKey,
     };
@@ -24,6 +24,11 @@ export async function createIdentity(label: string): Promise<Identity> {
 
 export function transportKey(seed: number): string {
     return Buffer.alloc(32, seed).toString('base64');
+}
+
+export function transportFingerprint(publicKeyB64: string): string {
+    const digest = createHash('sha256').update(Buffer.from(publicKeyB64, 'base64')).digest('base64');
+    return `SHA256:${digest.replace(/=+$/g, '')}`;
 }
 
 export async function signedFetch(
@@ -67,9 +72,22 @@ export async function registerMember(
             fingerprint: actor.fingerprint,
             public_key: actor.publicKeyB64,
             transport_public_key: transportPublicKey,
+            transport_fingerprint: transportFingerprint(transportPublicKey),
             role,
         }),
     });
+}
+
+function computeIdentityFingerprint(publicKeyRaw: Buffer): string {
+    const typeName = Buffer.from('ssh-ed25519');
+    const wire = Buffer.alloc(4 + typeName.length + 4 + publicKeyRaw.length);
+    wire.writeUInt32BE(typeName.length, 0);
+    typeName.copy(wire, 4);
+    wire.writeUInt32BE(publicKeyRaw.length, 4 + typeName.length);
+    publicKeyRaw.copy(wire, 8 + typeName.length);
+
+    const digest = createHash('sha256').update(wire).digest('base64');
+    return `SHA256:${digest.replace(/=+$/g, '')}`;
 }
 
 function normalizeBody(body: RequestInit['body'] | undefined): Buffer {

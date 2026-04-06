@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { unstable_dev, type UnstableDevWorker } from 'wrangler';
-import { createIdentity, registerMember, signedFetch, transportKey } from './helpers';
+import { createIdentity, registerMember, signedFetch, transportFingerprint, transportKey } from './helpers';
 
 let worker: UnstableDevWorker;
 
@@ -35,6 +35,7 @@ describe('Relay Blob Operations', () => {
                 fingerprint: recipient.fingerprint,
                 public_key: recipient.publicKeyB64,
                 transport_public_key: transportKey(22),
+                transport_fingerprint: transportFingerprint(transportKey(22)),
                 role: 'member',
             }),
         })).status).toBe(200);

@@ -64,7 +64,7 @@ func runRevoke(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  + %s revoked from project %s\n", memberLabel, projectID)
 	fmt.Printf("  - Status: %s %s\n", p.StatusIcon(), p.Trust)
 	fmt.Println()
-	fmt.Println("  They can no longer sync or decrypt your .env files.")
+	fmt.Println("  New relay deliveries will stop, but this does not revoke secrets they already received.")
 
 	logger, _ := audit.NewLogger()
 	if logger != nil {

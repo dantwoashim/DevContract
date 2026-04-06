@@ -25,21 +25,23 @@ type OrchestratorOptions struct {
 	KeyPair      *crypto.KeyPair
 	NoiseKeypair noise.DHKey
 	RelayClient  *relay.Client
-	RelayURL     string // Signal/relay base URL (from config)
+	RelayURL     string
 	Sequence     int64
 	OnStatus     func(status string)
 }
 
 // OrchestratorResult summarizes the sync.
 type OrchestratorResult struct {
-	Method      string // "lan", "holepunch", "relay"
-	PeerCount   int
-	SyncedCount int
-	Duration    time.Duration
-	Error       error
+	Method         string
+	PeerCount      int
+	DeliveredCount int
+	QueuedCount    int
+	Duration       time.Duration
+	Error          error
 }
 
-// Orchestrate runs the full fallback chain: LAN -> hole-punch -> relay.
+// Orchestrate runs the honest fallback chain: LAN direct delivery first, then
+// encrypted relay queueing for remaining trusted peers.
 func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorResult {
 	start := time.Now()
 	result := &OrchestratorResult{}
@@ -56,26 +58,45 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 		result.Duration = time.Since(start)
 		return result
 	}
+
 	fileName := filepath.Base(opts.EnvFilePath)
 	if opts.EnvFilePath == "" {
 		fileName = ".env"
 	}
 
+	registryPeers := trustedRelayPeers(opts.TeamID, opts.KeyPair)
+	result.PeerCount = len(registryPeers)
+
 	report("Scanning LAN for peers...")
 	lanCtx, lanCancel := context.WithTimeout(ctx, 2*time.Second)
 	defer lanCancel()
 
-	discoveredPeers, err := discovery.Discover(lanCtx, discovery.DefaultMDNSTimeout, opts.KeyPair.Fingerprint)
-	if err == nil && len(discoveredPeers) > 0 {
-		report(fmt.Sprintf("Found %d peer(s) on LAN", len(discoveredPeers)))
+	discoveredPeers, discoverErr := discovery.Discover(lanCtx, discovery.DefaultMDNSTimeout, opts.KeyPair.Fingerprint)
+	deliveredFingerprints := map[string]struct{}{}
+	transportIndex := make(map[string]peer.Peer, len(registryPeers))
+	for _, p := range registryPeers {
+		if fp := p.EffectiveTransportFingerprint(); fp != "" {
+			transportIndex[fp] = p
+		}
+	}
 
+	if discoverErr == nil && len(discoveredPeers) > 0 {
+		filtered := make([]discovery.Peer, 0, len(discoveredPeers))
 		for _, discoveredPeer := range discoveredPeers {
 			if opts.TeamID != "" && discoveredPeer.TeamID != opts.TeamID {
 				continue
 			}
+			filtered = append(filtered, discoveredPeer)
+		}
+		if result.PeerCount == 0 {
+			result.PeerCount = len(filtered)
+		}
 
-			result.PeerCount++
+		if len(filtered) > 0 {
+			report(fmt.Sprintf("Found %d peer(s) on LAN", len(filtered)))
+		}
 
+		for _, discoveredPeer := range filtered {
 			conn, err := transport.Dial(transport.DialOptions{
 				Address:             discoveredPeer.Addr.String(),
 				Timeout:             transport.DefaultDialTimeout,
@@ -83,7 +104,7 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 				ExpectedFingerprint: discoveredPeer.Fingerprint,
 			})
 			if err != nil {
-				report(fmt.Sprintf("LAN connect failed: %s", err))
+				report(fmt.Sprintf("LAN connect failed for %s: %s", discoveredPeer.Fingerprint, err))
 				continue
 			}
 
@@ -94,99 +115,45 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 				report(fmt.Sprintf("LAN payload encode failed: %s", encodeErr))
 				continue
 			}
+
 			err = SendMessage(conn, Message{Type: MsgEnvPush, Payload: encodedPayload})
+			if err == nil {
+				err = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+			}
+			if err == nil {
+				var resp Message
+				resp, err = ReceiveMessage(conn)
+				if err == nil && resp.Type == MsgNack {
+					err = fmt.Errorf("peer rejected push: %s", string(resp.Payload))
+				}
+			}
 			if closeErr := conn.Close(); closeErr != nil && err == nil {
 				err = closeErr
 			}
 
-			if err == nil {
-				result.SyncedCount++
-				report("+ Synced via LAN direct")
+			if err != nil {
+				report(fmt.Sprintf("LAN delivery failed for %s: %s", discoveredPeer.Fingerprint, err))
+				continue
 			}
-		}
 
-		if result.SyncedCount > 0 {
-			result.Method = "lan"
-			result.Duration = time.Since(start)
-			return result
-		}
-	}
-
-	report("Attempting hole-punch...")
-	if opts.RelayClient != nil && opts.TeamID != "" {
-		relayURL := opts.RelayURL
-		if relayURL == "" {
-			relayURL = "https://relay.envsync.dev"
-		}
-		signal := relay.NewSignalClient(relayURL, opts.TeamID, opts.KeyPair)
-
-		hpCtx, hpCancel := context.WithTimeout(ctx, 5*time.Second)
-		defer hpCancel()
-
-		secureConn, err := transport.HolePunch(hpCtx, transport.HolePunchOptions{
-			Signal:       signal,
-			LocalKeypair: opts.NoiseKeypair,
-			KeyPair:      opts.KeyPair,
-			Timeout:      5 * time.Second,
-		})
-		if err == nil {
-			payload := NewEnvPayload(fileName, data, opts.Sequence)
-			encodedPayload, encodeErr := EncodeEnvPayload(payload)
-			if encodeErr != nil {
-				_ = secureConn.Close()
-				report(fmt.Sprintf("Hole-punch payload encode failed: %s", encodeErr))
+			result.DeliveredCount++
+			if matchedPeer, ok := transportIndex[discoveredPeer.Fingerprint]; ok {
+				deliveredFingerprints[matchedPeer.Fingerprint] = struct{}{}
+				report(fmt.Sprintf("+ Delivered to %s via LAN", peerLabel(matchedPeer)))
 			} else {
-				err = SendMessage(secureConn, Message{Type: MsgEnvPush, Payload: encodedPayload})
-			}
-			if closeErr := secureConn.Close(); closeErr != nil && err == nil {
-				err = closeErr
-			}
-
-			if err == nil {
-				result.Method = "holepunch"
-				result.SyncedCount = 1
-				result.PeerCount = 1
-				result.Duration = time.Since(start)
-				report("+ Synced via hole-punch")
-				return result
+				report(fmt.Sprintf("+ Delivered to %s via LAN", discoveredPeer.Fingerprint))
 			}
 		}
-		report(fmt.Sprintf("Hole-punch failed: %s", err))
 	}
 
 	if opts.RelayClient != nil && opts.TeamID != "" {
-		report("Peers offline - uploading to encrypted relay...")
-		result.Method = "relay"
+		report("Hole-punch is disabled; using encrypted relay fallback for offline peers.")
 
-		registry, err := peer.NewRegistry()
-		if err != nil {
-			result.Error = fmt.Errorf("loading peer registry: %w", err)
-			result.Duration = time.Since(start)
-			return result
-		}
-
-		allPeers, err := registry.ListPeers(opts.TeamID)
-		if err != nil {
-			result.Error = fmt.Errorf("loading peer registry: %w", err)
-			result.Duration = time.Since(start)
-			return result
-		}
-
-		if len(allPeers) == 0 {
-			result.Error = fmt.Errorf("no trusted peers in project - invite someone first")
-			result.Duration = time.Since(start)
-			return result
-		}
-
-		var trustedPeers []peer.Peer
-		for _, registryPeer := range allPeers {
-			if registryPeer.CanSync() {
-				trustedPeers = append(trustedPeers, registryPeer)
-			}
-		}
-
-		for _, trustedPeer := range trustedPeers {
+		for _, trustedPeer := range registryPeers {
 			if trustedPeer.Fingerprint == opts.KeyPair.Fingerprint {
+				continue
+			}
+			if _, delivered := deliveredFingerprints[trustedPeer.Fingerprint]; delivered {
 				continue
 			}
 
@@ -207,7 +174,6 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 
 			blobID := fmt.Sprintf("%s-%d-%d", fileName, opts.Sequence, time.Now().UnixMilli())
 			ephPubB64 := base64.StdEncoding.EncodeToString(ephPub[:])
-
 			sig := crypto.SignBlob(opts.KeyPair.Ed25519Private, encrypted, ephPub[:], opts.KeyPair.Fingerprint)
 			sigB64 := base64.StdEncoding.EncodeToString(sig)
 
@@ -226,20 +192,33 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 				continue
 			}
 
-			result.SyncedCount++
-			report(fmt.Sprintf("+ Uploaded for %s via relay", peerLabel(trustedPeer)))
+			result.QueuedCount++
+			report(fmt.Sprintf("+ Queued encrypted relay delivery for %s", peerLabel(trustedPeer)))
 		}
-
-		result.PeerCount = len(trustedPeers) - 1
-		result.Duration = time.Since(start)
-		if result.SyncedCount == 0 {
-			result.Error = fmt.Errorf("relay upload failed for all peers")
-		}
-		return result
 	}
 
-	result.Error = fmt.Errorf("no peers found and no relay configured")
+	switch {
+	case result.DeliveredCount > 0 && result.QueuedCount > 0:
+		result.Method = "lan+relay"
+	case result.DeliveredCount > 0:
+		result.Method = "lan"
+	case result.QueuedCount > 0:
+		result.Method = "relay"
+	default:
+		result.Method = "none"
+	}
+
 	result.Duration = time.Since(start)
+	if result.DeliveredCount == 0 && result.QueuedCount == 0 {
+		if len(registryPeers) == 0 && opts.TeamID != "" {
+			result.Error = fmt.Errorf("no trusted peers in project - invite someone first")
+		} else if discoverErr != nil {
+			result.Error = fmt.Errorf("peer discovery failed: %w", discoverErr)
+		} else {
+			result.Error = fmt.Errorf("no peers accepted the push and nothing was queued for relay")
+		}
+	}
+
 	return result
 }
 
@@ -253,6 +232,34 @@ func readEnvFile(path string) ([]byte, error) {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
 	return data, nil
+}
+
+func trustedRelayPeers(teamID string, kp *crypto.KeyPair) []peer.Peer {
+	if teamID == "" {
+		return nil
+	}
+
+	registry, err := peer.NewRegistry()
+	if err != nil {
+		return nil
+	}
+
+	allPeers, err := registry.ListPeers(teamID)
+	if err != nil {
+		return nil
+	}
+
+	trusted := make([]peer.Peer, 0, len(allPeers))
+	for _, p := range allPeers {
+		if !p.CanSync() {
+			continue
+		}
+		if kp != nil && p.Fingerprint == kp.Fingerprint {
+			continue
+		}
+		trusted = append(trusted, p)
+	}
+	return trusted
 }
 
 func peerLabel(p peer.Peer) string {

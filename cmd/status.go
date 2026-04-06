@@ -50,9 +50,14 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	teamID := ""
 	if projectErr == nil && project != nil {
 		teamID = project.ProjectID
-		team, teamErr := peer.LoadTeam(project.ProjectID)
-		if teamErr == nil {
-			ui.Line(fmt.Sprintf("  Project:    %s (%d members)", team.Name, len(team.Members)))
+		registry, registryErr := peer.NewRegistry()
+		if registryErr == nil {
+			team, teamErr := registry.LoadTeam(project.ProjectID)
+			if teamErr == nil {
+				ui.Line(fmt.Sprintf("  Project:    %s (%d members)", team.Name, len(team.Members)))
+			} else {
+				ui.Line(fmt.Sprintf("  Project:    %s", project.ProjectID))
+			}
 		} else {
 			ui.Line(fmt.Sprintf("  Project:    %s", project.ProjectID))
 		}

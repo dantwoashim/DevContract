@@ -139,6 +139,7 @@ func runServiceKeyRegister(cmd *cobra.Command, args []string) error {
 		serviceKP.Fingerprint,
 		ed25519PublicKeyBase64(serviceKP),
 		x25519PublicKeyBase64(serviceKP),
+		crypto.ComputeFingerprint(serviceKP.X25519Public),
 		"member",
 	); err != nil {
 		return fmt.Errorf("registering service key: %w", err)

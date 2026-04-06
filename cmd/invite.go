@@ -10,6 +10,7 @@ import (
 
 	"github.com/envsync/envsync/internal/audit"
 	"github.com/envsync/envsync/internal/config"
+	"github.com/envsync/envsync/internal/crypto"
 	"github.com/envsync/envsync/internal/peer"
 	"github.com/envsync/envsync/internal/relay"
 	"github.com/spf13/cobra"
@@ -62,6 +63,7 @@ func runInvite(cmd *cobra.Command, args []string) error {
 		kp.Fingerprint,
 		ed25519PublicKeyBase64(kp),
 		x25519PublicKeyBase64(kp),
+		crypto.ComputeFingerprint(kp.X25519Public),
 		"owner",
 	); err != nil {
 		return fmt.Errorf("registering project owner on relay: %w", err)
@@ -164,6 +166,7 @@ func runJoin(cmd *cobra.Command, args []string) error {
 		kp.Fingerprint,
 		ed25519PublicKeyBase64(kp),
 		x25519PublicKeyBase64(kp),
+		crypto.ComputeFingerprint(kp.X25519Public),
 		"member",
 	); err != nil {
 		return fmt.Errorf("registering device on relay: %w", err)
@@ -179,16 +182,23 @@ func runJoin(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
+		trustState := peer.TrustPending
+		trustedAt := time.Time{}
+		if member.Fingerprint == inviteResp.InviterFingerprint {
+			trustState = peer.TrustTrusted
+			trustedAt = time.Now()
+		}
+
 		p := &peer.Peer{
 			DisplayName:          member.Username,
 			Fingerprint:          member.Fingerprint,
 			Ed25519Public:        member.PublicKey,
 			X25519Public:         member.TransportPublicKey,
 			TransportFingerprint: member.TransportFingerprint,
-			Trust:                peer.TrustTrusted,
+			Trust:                trustState,
 			FirstSeen:            time.Now(),
 			LastSeen:             time.Now(),
-			TrustedAt:            time.Now(),
+			TrustedAt:            trustedAt,
 		}
 		if err := registry.SavePeer(inviteResp.TeamID, p); err != nil {
 			return err
@@ -202,6 +212,7 @@ func runJoin(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("  + Joined project %s from %s\n", inviteResp.TeamID, inviteResp.Inviter)
 	fmt.Printf("  - Trusted identity: %s\n", inviteResp.InviterFingerprint)
+	fmt.Println("  - Other relay members were imported as pending until you verify them locally.")
 	fmt.Println()
 	fmt.Println("  Ready. Run 'envsync pull' to receive the latest .env.")
 

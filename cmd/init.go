@@ -65,7 +65,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating EnvSync directories: %w", err)
 	}
 
-	if err := config.SaveConfig(cfg); err != nil {
+	if err := saveConfig(cfg); err != nil {
 		return fmt.Errorf("writing config file: %w", err)
 	}
 
@@ -88,12 +88,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  - Config:      %s\n", configPath)
 	fmt.Printf("  - Project ID:  %s\n", project.ProjectID)
 	fmt.Printf("  - Contract:    %s\n", contractPath)
-	fmt.Printf("  - Store:       %s\\store\\\n", dataDir)
+	fmt.Printf("  - Store:       %s\n", filepath.Join(dataDir, "store"))
 	fmt.Println()
 	if createdContract {
 		fmt.Println("  - Created a starter project contract at .envsync/contract.yaml")
 	}
-	fmt.Println("  x Ready. Run 'envsync bootstrap' to prepare local setup, then invite another project member.")
+	fmt.Println("  - Initialized with a starter contract.")
+	fmt.Println("  - Run 'envsync bootstrap' after reviewing the contract and replacing any placeholder commands.")
 
 	return nil
 }

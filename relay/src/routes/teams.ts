@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Env, Team, TeamMember } from '../types';
+import { computeIdentityFingerprint, computeTransportFingerprint, decodeBase64 } from '../middleware/auth';
 import { canAddMember, limitMessage } from '../middleware/tiers';
 
 export const teamRoutes = new Hono<{ Bindings: Env }>();
@@ -30,11 +31,28 @@ teamRoutes.put('/:team/members/:user', async (c) => {
         fingerprint: string;
         public_key: string;
         transport_public_key: string;
+        transport_fingerprint: string;
         role?: 'owner' | 'member';
     }>();
 
-    if (!body.fingerprint || !body.public_key || !body.transport_public_key) {
-        return c.json({ error: 'missing_fields', message: 'fingerprint, public_key, and transport_public_key are required' }, 400);
+    if (!body.fingerprint || !body.public_key || !body.transport_public_key || !body.transport_fingerprint) {
+        return c.json({ error: 'missing_fields', message: 'fingerprint, public_key, transport_public_key, and transport_fingerprint are required' }, 400);
+    }
+
+    let computedFingerprint: string;
+    let computedTransportFingerprint: string;
+    try {
+        computedFingerprint = await computeIdentityFingerprint(decodeBase64(body.public_key, 'public_key'));
+        computedTransportFingerprint = await computeTransportFingerprint(decodeBase64(body.transport_public_key, 'transport_public_key'));
+    } catch (error) {
+        return c.json({ error: 'invalid_member_keys', message: error instanceof Error ? error.message : String(error) }, 400);
+    }
+
+    if (computedFingerprint !== body.fingerprint) {
+        return c.json({ error: 'invalid_member_keys', message: 'fingerprint does not match public_key' }, 400);
+    }
+    if (computedTransportFingerprint !== body.transport_fingerprint) {
+        return c.json({ error: 'invalid_member_keys', message: 'transport_fingerprint does not match transport_public_key' }, 400);
     }
 
     let team = await loadTeam(c.env, teamId);
@@ -72,7 +90,7 @@ teamRoutes.put('/:team/members/:user', async (c) => {
         fingerprint: body.fingerprint,
         public_key: body.public_key,
         transport_public_key: body.transport_public_key,
-        transport_fingerprint: '',
+        transport_fingerprint: computedTransportFingerprint,
         role: team.members.length === 0 ? 'owner' : (body.role || 'member'),
         added_at: Math.floor(Date.now() / 1000),
     };

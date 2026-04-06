@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/store"
 	"github.com/envsync/envsync/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -20,15 +18,23 @@ var backupCmd = &cobra.Command{
 }
 
 func runBackup(cmd *cobra.Command, args []string) error {
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
 	kp, err := loadIdentity()
 	if err != nil {
 		return err
 	}
 
-	targetFile, _ := cmd.Flags().GetString("file")
-	if targetFile == "" {
-		targetFile = ".env"
+	project, err := requireProjectContext()
+	if err != nil {
+		return err
 	}
+
+	targetFile, _ := cmd.Flags().GetString("file")
+	targetFile = projectTargetFile(targetFile, cmd.Flags().Changed("file"), project, cfg)
 
 	data, err := os.ReadFile(targetFile)
 	if err != nil {
@@ -36,31 +42,23 @@ func runBackup(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("file not found: %s", targetFile)
 	}
 
-	// Derive encryption key
-	key, err := crypto.DeriveAtRestKey(kp.X25519Private[:])
-	if err != nil {
-		return fmt.Errorf("deriving key: %w", err)
-	}
-
-
-	vStore, err := store.New(50)
+	key, err := atRestKey(kp)
 	if err != nil {
 		return err
 	}
 
-	projectHash := fmt.Sprintf("%x", key[:8])
-	latestVer, _ := vStore.Latest(projectHash)
-	seq := 1
-	if latestVer != nil {
-		seq = latestVer.Sequence + 1
+	vStore, err := openProjectStore(cfg, project.ProjectID, key)
+	if err != nil {
+		return err
 	}
 
-	if err := vStore.Save(projectHash, data, seq, key); err != nil {
+	version, err := vStore.Append(project.ProjectID, data, key)
+	if err != nil {
 		return fmt.Errorf("saving backup: %w", err)
 	}
 
 	ui.Header("Backup Created")
-	ui.Success(fmt.Sprintf("Encrypted %s (%d bytes) → version #%d", targetFile, len(data), seq))
+	ui.Success(fmt.Sprintf("Encrypted %s (%d bytes) -> version #%d", targetFile, len(data), version.Sequence))
 	ui.Blank()
 
 	return nil

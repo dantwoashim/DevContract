@@ -52,13 +52,9 @@ func pullPendingRelay(projectID, relayURL, targetFile string, cfg *config.Config
 		var ephKey [32]byte
 		copy(ephKey[:], ephKeyBytes)
 
-		if len(sigB64) > 0 {
-			pubKey := memberKeyMap[blob.SenderFingerprint]
-			sigBytes, sigErr := base64.StdEncoding.DecodeString(sigB64)
-			if pubKey == nil || sigErr != nil || !crypto.VerifyBlobSignature(pubKey, data, ephKey[:], blob.SenderFingerprint, sigBytes) {
-				ui.Warning(fmt.Sprintf("  Signature verification failed for %s", blob.SenderFingerprint))
-				continue
-			}
+		if err := verifyRelayBlobSignature(memberKeyMap, blob.SenderFingerprint, data, ephKey, sigB64); err != nil {
+			ui.Warning(fmt.Sprintf("  %s", err))
+			continue
 		}
 
 		plaintext, err := crypto.DecryptFromSender(data, ephKey, kp.X25519Private, kp.X25519Public)

@@ -25,7 +25,7 @@ var configCmd = &cobra.Command{
 }
 
 func runConfig(cmd *cobra.Command, args []string) error {
-	cfg, err := config.LoadConfig()
+	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,10 @@ func showAllConfig(cfg *config.Config) error {
 	}
 	ui.Blank()
 
-	path, _ := config.ConfigFilePath()
+	path := cfgFile
+	if path == "" {
+		path, _ = config.ConfigFilePath()
+	}
 	ui.Line(fmt.Sprintf("  Config file: %s", path))
 	ui.Blank()
 	return nil
@@ -80,7 +83,7 @@ func setConfigKey(cfg *config.Config, key, value string) error {
 		return err
 	}
 
-	if err := config.SaveConfig(cfg); err != nil {
+	if err := saveConfig(cfg); err != nil {
 		return err
 	}
 
@@ -104,8 +107,6 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 		return fmt.Sprintf("%d", cfg.Network.ListenPort), nil
 	case "network.mdns_enabled":
 		return fmt.Sprintf("%t", cfg.Network.MDNSEnabled), nil
-	case "network.holepunch_enabled":
-		return fmt.Sprintf("%t", cfg.Network.HolePunchEnabled), nil
 	case "sync.default_file":
 		return cfg.Sync.DefaultFile, nil
 	case "sync.merge_strategy":
@@ -150,8 +151,6 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		cfg.Network.ListenPort = v
 	case "network.mdns_enabled":
 		cfg.Network.MDNSEnabled = value == "true"
-	case "network.holepunch_enabled":
-		cfg.Network.HolePunchEnabled = value == "true"
 	case "sync.default_file":
 		cfg.Sync.DefaultFile = value
 	case "sync.merge_strategy":

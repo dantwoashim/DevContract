@@ -331,12 +331,13 @@ func (c *Client) DeleteBlob(teamID, blobID string) error {
 }
 
 // AddTeamMember adds or updates a member on the relay.
-func (c *Client) AddTeamMember(teamID, username, fingerprint, publicKey, transportPublicKey, role string) error {
+func (c *Client) AddTeamMember(teamID, username, fingerprint, publicKey, transportPublicKey, transportFingerprint, role string) error {
 	body, _ := json.Marshal(map[string]string{
-		"fingerprint":          fingerprint,
-		"public_key":           publicKey,
-		"transport_public_key": transportPublicKey,
-		"role":                 role,
+		"fingerprint":           fingerprint,
+		"public_key":            publicKey,
+		"transport_public_key":  transportPublicKey,
+		"transport_fingerprint": transportFingerprint,
+		"role":                  role,
 	})
 
 	path := fmt.Sprintf("/teams/%s/members/%s", teamID, username)

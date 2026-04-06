@@ -153,13 +153,6 @@ jobs:
           set -euo pipefail
           REAL_BIN="${RUNNER_TEMP}/envsync-real"
           case "${1:-}" in
-            version)
-              if [[ "${2:-}" == "--short" ]]; then
-                echo "smoke"
-                exit 0
-              fi
-              exec "$REAL_BIN" "$@"
-              ;;
             pull)
               FILE=".env"
               JSON="false"

@@ -7,6 +7,10 @@ branding:
   color: 'purple'
 
 inputs:
+  version:
+    description: 'EnvSync CLI version to install (default: latest release tag)'
+    required: false
+    default: 'latest'
   service_key:
     description: 'Base64-encoded service key (from ENVSYNC_SERVICE_KEY secret)'
     required: true
@@ -47,7 +51,10 @@ runs:
         if command -v envsync >/dev/null 2>&1; then
           echo "Using existing EnvSync from PATH"
         else
-          curl -fsSL https://envsync.dev/install.sh | bash
+          bash "${{ github.action_path }}/../scripts/install.sh" \
+            --version "${{ inputs.version }}" \
+            --install-dir "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
         fi
         echo "EnvSync installed: $(envsync version --short 2>/dev/null || echo 'unknown')"
 
@@ -134,6 +141,11 @@ runs:
           --write "$GITHUB_ENV" \
           --github-output "$GITHUB_OUTPUT" \
           $MASK_FLAG
+
+        if ! grep -q '^env_count=' "$GITHUB_OUTPUT"; then
+          COUNT="$(grep -Ec '^[A-Za-z_][A-Za-z0-9_]*=' "$ENV_FILE" || true)"
+          echo "env_count=${COUNT}" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Cleanup
       shell: bash

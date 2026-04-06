@@ -7,54 +7,16 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-
-	"github.com/pelletier/go-toml/v2"
 )
 
-// Load reads the config file from the config directory.
-// If the file does not exist, it returns Default() config.
-// Returns error on non-ENOENT failures (permissions, corrupt TOML).
+// Load reads and migrates the config from the standard path.
 func Load() (*Config, error) {
-	configDir, err := ConfigDir()
-	if err != nil {
-		return nil, fmt.Errorf("finding config directory: %w", err)
-	}
-
-	path := filepath.Join(configDir, "config.toml")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return Default(), nil
-		}
-		return nil, fmt.Errorf("reading config: %w", err)
-	}
-
-	cfg := Default()
-	if err := toml.Unmarshal(data, cfg); err != nil {
-		return nil, fmt.Errorf("parsing config: %w", err)
-	}
-	cfg.Identity.Normalize()
-	return cfg, nil
+	return LoadConfig()
 }
 
-// Save writes the config to the config directory.
+// Save writes the config to the standard path.
 func Save(cfg *Config) error {
-	configDir, err := ConfigDir()
-	if err != nil {
-		return err
-	}
-	cfg.Identity.Normalize()
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return fmt.Errorf("creating config directory: %w", err)
-	}
-
-	data, err := toml.Marshal(cfg)
-	if err != nil {
-		return fmt.Errorf("marshaling config: %w", err)
-	}
-
-	path := filepath.Join(configDir, "config.toml")
-	return os.WriteFile(path, data, 0600)
+	return SaveConfig(cfg)
 }
 
 // DefaultPort is the default TCP port for EnvSync connections.

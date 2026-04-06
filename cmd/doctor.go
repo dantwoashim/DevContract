@@ -270,7 +270,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		vStore, storeErr := store.New(cfg.Sync.MaxVersions)
 		if storeErr != nil {
 			addCheck("backups", "fail", storeErr.Error(), true)
-		} else if _, err := vStore.NextSequence(project.ProjectID); err != nil {
+		} else if err := vStore.CheckWritable(project.ProjectID); err != nil {
 			addCheck("backups", "fail", err.Error(), true)
 		} else {
 			addCheck("backups", "pass", "Backup store is writable for this project namespace", false)

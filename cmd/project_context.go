@@ -12,7 +12,6 @@ import (
 	"github.com/envsync/envsync/internal/config"
 	"github.com/envsync/envsync/internal/crypto"
 	"github.com/envsync/envsync/internal/peer"
-	"github.com/envsync/envsync/internal/store"
 )
 
 type projectContext struct {
@@ -143,29 +142,21 @@ func backupCurrentVersion(projectID string, data []byte, cfg *config.Config, kp 
 		return 0, nil
 	}
 
-	key, err := crypto.DeriveAtRestKey(kp.X25519Private[:])
-	if err != nil {
-		return 0, fmt.Errorf("deriving backup key: %w", err)
-	}
-
-	maxVersions := 10
-	if cfg != nil && cfg.Sync.MaxVersions > 0 {
-		maxVersions = cfg.Sync.MaxVersions
-	}
-
-	vStore, err := store.New(maxVersions)
+	key, err := atRestKey(kp)
 	if err != nil {
 		return 0, err
 	}
 
-	seq, err := vStore.NextSequence(projectID)
+	vStore, err := openProjectStore(cfg, projectID, key)
 	if err != nil {
 		return 0, err
 	}
-	if err := vStore.Save(projectID, data, seq, key); err != nil {
+
+	version, err := vStore.Append(projectID, data, key)
+	if err != nil {
 		return 0, err
 	}
-	return seq, nil
+	return version.Sequence, nil
 }
 
 func defaultTeam(name, projectID, creatorFingerprint string) *peer.Team {

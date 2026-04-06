@@ -9,6 +9,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { unstable_dev, type UnstableDevWorker } from 'wrangler';
+import { createIdentity, signedFetch, transportFingerprint, transportKey } from './helpers';
 
 let worker: UnstableDevWorker;
 
@@ -68,5 +69,21 @@ describe('Auth Middleware', () => {
         const res = await worker.fetch(`/invites/some-hash`);
         // 404 is expected (invite doesn't exist), but NOT 401
         expect(res.status).not.toBe(401);
+    });
+
+    it('should reject first-contact registration when the claimed fingerprint does not match the provided public key', async () => {
+        const actor = await createIdentity('mismatch');
+        const res = await signedFetch(worker, actor, '/teams/test-auth-fingerprint/members/alice', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                fingerprint: 'SHA256:not-the-real-fingerprint',
+                public_key: actor.publicKeyB64,
+                transport_public_key: transportKey(9),
+                transport_fingerprint: transportFingerprint(transportKey(9)),
+                role: 'owner',
+            }),
+        });
+        expect(res.status).toBe(400);
     });
 });

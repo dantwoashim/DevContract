@@ -18,6 +18,7 @@ import (
 	"github.com/envsync/envsync/internal/crypto"
 	"github.com/envsync/envsync/internal/discovery"
 	"github.com/envsync/envsync/internal/envfile"
+	"github.com/envsync/envsync/internal/fsutil"
 	"github.com/envsync/envsync/internal/peer"
 	"github.com/envsync/envsync/internal/store"
 	"github.com/envsync/envsync/internal/transport"
@@ -211,19 +212,13 @@ func Pull(ctx context.Context, opts PullOptions) (*PullResult, error) {
 			return nil, fmt.Errorf("creating backup store: %w", err)
 		}
 
-		seq, err := vStore.NextSequence(opts.ProjectID)
-		if err != nil {
-			_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("failed to compute backup sequence")})
-			return nil, fmt.Errorf("computing backup sequence: %w", err)
-		}
-
-		if err := vStore.Save(opts.ProjectID, localData, seq, opts.BackupKey); err != nil {
+		if _, err := vStore.Append(opts.ProjectID, localData, opts.BackupKey); err != nil {
 			_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("failed to create backup")})
 			return nil, fmt.Errorf("creating pre-apply backup: %w", err)
 		}
 	}
 
-	if err := os.WriteFile(envPath, payload.Data, 0600); err != nil {
+	if err := fsutil.AtomicWriteFile(envPath, payload.Data, 0600); err != nil {
 		_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("failed to write file")})
 		return nil, fmt.Errorf("writing %s: %w", envPath, err)
 	}
@@ -282,13 +277,13 @@ func saveLastSequence(peerPK []byte, seq int64) {
 	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		// Fallback: write without lock
-		_ = os.WriteFile(path, []byte(strconv.FormatInt(seq, 10)), 0600)
+		_ = fsutil.AtomicWriteFile(path, []byte(strconv.FormatInt(seq, 10)), 0600)
 		return
 	}
 	defer lock.Close()
 	defer os.Remove(lockPath)
 
-	_ = os.WriteFile(path, []byte(strconv.FormatInt(seq, 10)), 0600)
+	_ = fsutil.AtomicWriteFile(path, []byte(strconv.FormatInt(seq, 10)), 0600)
 }
 
 // readSequenceFile reads a sequence number from a file path.

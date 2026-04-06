@@ -14,6 +14,7 @@ import (
 	"github.com/envsync/envsync/internal/contract"
 	"github.com/envsync/envsync/internal/crypto"
 	"github.com/envsync/envsync/internal/envfile"
+	"github.com/envsync/envsync/internal/fsutil"
 )
 
 type contractContext struct {
@@ -116,7 +117,7 @@ func ensureBootstrapOutput(root string, spec contract.BootstrapOutput, envNames 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		created = true
 		content := renderBootstrapOutput(spec, envNames)
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		if err := fsutil.AtomicWriteFile(path, []byte(content), bootstrapOutputMode(spec)); err != nil {
 			return false, err
 		}
 	}
@@ -128,6 +129,13 @@ func ensureBootstrapOutput(root string, spec contract.BootstrapOutput, envNames 
 	}
 
 	return created, nil
+}
+
+func bootstrapOutputMode(spec contract.BootstrapOutput) os.FileMode {
+	if spec.Kind == "env" || strings.HasPrefix(filepath.Base(spec.Path), ".env") {
+		return 0600
+	}
+	return 0644
 }
 
 func renderBootstrapOutput(spec contract.BootstrapOutput, envNames []string) string {

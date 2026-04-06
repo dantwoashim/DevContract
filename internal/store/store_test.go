@@ -239,3 +239,64 @@ func TestSaveLeavesNoTempFiles(t *testing.T) {
 		}
 	}
 }
+
+func TestAppendAllocatesSequentialVersions(t *testing.T) {
+	s := newTestStore(t, 10)
+	key := testEncryptionKey()
+	project := "append-project"
+
+	v1, err := s.Append(project, []byte("ONE=1\n"), key)
+	if err != nil {
+		t.Fatalf("append first: %v", err)
+	}
+	v2, err := s.Append(project, []byte("TWO=2\n"), key)
+	if err != nil {
+		t.Fatalf("append second: %v", err)
+	}
+
+	if v1.Sequence != 1 || v2.Sequence != 2 {
+		t.Fatalf("append sequences = %d,%d, want 1,2", v1.Sequence, v2.Sequence)
+	}
+
+	restored, err := s.Restore(project, 2, key)
+	if err != nil {
+		t.Fatalf("restore second: %v", err)
+	}
+	if string(restored) != "TWO=2\n" {
+		t.Fatalf("restored content = %q", restored)
+	}
+}
+
+func TestMigrateNamespaceCopiesLegacyBackups(t *testing.T) {
+	s := newTestStore(t, 10)
+	key := testEncryptionKey()
+	legacy := "legacy-project"
+	canonical := "canonical-project"
+
+	if err := s.Save(legacy, []byte("LEGACY=1\n"), 1, key); err != nil {
+		t.Fatalf("save legacy: %v", err)
+	}
+	if err := s.Save(legacy, []byte("LEGACY=2\n"), 2, key); err != nil {
+		t.Fatalf("save legacy second: %v", err)
+	}
+
+	if err := s.MigrateNamespace(legacy, canonical); err != nil {
+		t.Fatalf("migrate namespace: %v", err)
+	}
+
+	versions, err := s.List(canonical)
+	if err != nil {
+		t.Fatalf("list canonical: %v", err)
+	}
+	if len(versions) != 2 {
+		t.Fatalf("got %d migrated versions, want 2", len(versions))
+	}
+
+	restored, err := s.Restore(canonical, 2, key)
+	if err != nil {
+		t.Fatalf("restore migrated version: %v", err)
+	}
+	if string(restored) != "LEGACY=2\n" {
+		t.Fatalf("restored migrated content = %q", restored)
+	}
+}

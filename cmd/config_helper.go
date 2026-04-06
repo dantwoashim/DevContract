@@ -10,11 +10,22 @@ import (
 
 	"github.com/envsync/envsync/internal/config"
 	"github.com/envsync/envsync/internal/crypto"
+	"github.com/envsync/envsync/internal/fsutil"
 )
 
 // loadConfig reads the config file from the standard location and applies migrations.
 func loadConfig() (*config.Config, error) {
+	if cfgFile != "" {
+		return config.LoadConfigFromPath(cfgFile)
+	}
 	return config.LoadConfig()
+}
+
+func saveConfig(cfg *config.Config) error {
+	if cfgFile != "" {
+		return config.SaveConfigToPath(cfg, cfgFile)
+	}
+	return config.SaveConfig(cfg)
 }
 
 // loadIdentity reads the configured SSH key and derives the crypto identity.
@@ -73,5 +84,5 @@ func readLocalEnv(path string) ([]byte, error) {
 
 // writeEnvFile writes data to the .env file with restricted permissions.
 func writeEnvFile(path string, data []byte) error {
-	return os.WriteFile(path, data, 0600)
+	return fsutil.AtomicWriteFile(path, data, 0600)
 }

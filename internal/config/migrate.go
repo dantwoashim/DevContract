@@ -5,6 +5,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	toml "github.com/pelletier/go-toml/v2"
 )
@@ -24,7 +25,11 @@ func LoadConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	return LoadConfigFromPath(path)
+}
 
+// LoadConfigFromPath reads and migrates a config from an explicit path.
+func LoadConfigFromPath(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -45,7 +50,7 @@ func LoadConfig() (*Config, error) {
 		if err := migrate(cfg, vc.ConfigVersion); err != nil {
 			return nil, fmt.Errorf("migrating config: %w", err)
 		}
-		if err := SaveConfig(cfg); err != nil {
+		if err := SaveConfigToPath(cfg, path); err != nil {
 			return nil, fmt.Errorf("saving migrated config: %w", err)
 		}
 	}
@@ -59,6 +64,11 @@ func SaveConfig(cfg *Config) error {
 	if err != nil {
 		return err
 	}
+	return SaveConfigToPath(cfg, path)
+}
+
+// SaveConfigToPath writes the config to an explicit path.
+func SaveConfigToPath(cfg *Config, path string) error {
 	cfg.Identity.Normalize()
 
 	vc := VersionedConfig{
@@ -71,10 +81,7 @@ func SaveConfig(cfg *Config) error {
 		return fmt.Errorf("encoding config: %w", err)
 	}
 
-	dir, err := ConfigDir()
-	if err != nil {
-		return err
-	}
+	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
@@ -90,7 +97,7 @@ func migrate(cfg *Config, fromVersion int) error {
 		if cfg.Network.HolePunchTimeoutMs == 0 {
 			cfg.Network.HolePunchTimeoutMs = 5000
 		}
-		cfg.Network.HolePunchEnabled = true
+		cfg.Network.HolePunchEnabled = false
 		if cfg.Sync.MergeStrategy == "" {
 			cfg.Sync.MergeStrategy = "interactive"
 		}

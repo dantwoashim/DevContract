@@ -16,6 +16,7 @@ import (
 
 	"github.com/envsync/envsync/internal/config"
 	"github.com/envsync/envsync/internal/crypto"
+	"github.com/envsync/envsync/internal/fsutil"
 )
 
 const (
@@ -84,7 +85,7 @@ func (s *Store) Save(projectID string, content []byte, sequence int, encryptionK
 			return fmt.Errorf("version %d already exists", sequence)
 		}
 
-		if err := atomicWriteFile(filePath, encrypted, 0600); err != nil {
+		if err := fsutil.AtomicWriteFile(filePath, encrypted, 0600); err != nil {
 			return fmt.Errorf("writing version file: %w", err)
 		}
 		if err := s.writeManifestLocked(projectID, sequence); err != nil {
@@ -92,6 +93,53 @@ func (s *Store) Save(projectID string, content []byte, sequence int, encryptionK
 		}
 		return s.rotateLocked(projectID)
 	})
+}
+
+// Append encrypts and saves a .env file as the next version in one atomic,
+// locked operation.
+func (s *Store) Append(projectID string, content []byte, encryptionKey [32]byte) (*VersionInfo, error) {
+	var version *VersionInfo
+
+	err := s.withProjectLock(projectID, func(dir string) error {
+		current, err := s.readManifestLocked(projectID)
+		if err != nil {
+			return err
+		}
+
+		sequence := current + 1
+		encrypted, err := crypto.Encrypt(content, encryptionKey)
+		if err != nil {
+			return fmt.Errorf("encrypting version: %w", err)
+		}
+
+		now := time.Now().UTC()
+		timestamp := now.Format("20060102T150405Z")
+		filename := fmt.Sprintf("%06d_%s.enc", sequence, timestamp)
+		filePath := filepath.Join(dir, filename)
+
+		if err := fsutil.AtomicWriteFile(filePath, encrypted, 0600); err != nil {
+			return fmt.Errorf("writing version file: %w", err)
+		}
+		if err := s.writeManifestLocked(projectID, sequence); err != nil {
+			return err
+		}
+		if err := s.rotateLocked(projectID); err != nil {
+			return err
+		}
+
+		version = &VersionInfo{
+			Sequence:  sequence,
+			Timestamp: now,
+			FilePath:  filePath,
+			SizeBytes: int64(len(encrypted)),
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return version, nil
 }
 
 // Restore decrypts and returns a specific version.
@@ -188,6 +236,74 @@ func (s *Store) NextSequence(projectID string) (int, error) {
 	return next, nil
 }
 
+// CheckWritable verifies that the project namespace can be locked and created
+// without mutating version history.
+func (s *Store) CheckWritable(projectID string) error {
+	return s.withProjectLock(projectID, func(string) error {
+		return nil
+	})
+}
+
+// MigrateNamespace copies legacy encrypted backup files into the canonical
+// project namespace without deleting the source namespace.
+func (s *Store) MigrateNamespace(fromProjectID, toProjectID string) error {
+	if fromProjectID == "" || toProjectID == "" || fromProjectID == toProjectID {
+		return nil
+	}
+
+	fromVersions, err := s.List(fromProjectID)
+	if err != nil {
+		return err
+	}
+	if len(fromVersions) == 0 {
+		return nil
+	}
+
+	toVersions, err := s.List(toProjectID)
+	if err != nil {
+		return err
+	}
+	if len(toVersions) > 0 {
+		return nil
+	}
+
+	return s.withProjectLock(toProjectID, func(toDir string) error {
+		fromDir := s.projectDir(fromProjectID)
+		entries, err := os.ReadDir(fromDir)
+		if err != nil {
+			return fmt.Errorf("reading legacy namespace: %w", err)
+		}
+
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+
+			srcPath := filepath.Join(fromDir, entry.Name())
+			dstPath := filepath.Join(toDir, entry.Name())
+			data, err := os.ReadFile(srcPath)
+			if err != nil {
+				return fmt.Errorf("reading legacy backup %s: %w", srcPath, err)
+			}
+			if err := fsutil.AtomicWriteFile(dstPath, data, 0600); err != nil {
+				return fmt.Errorf("copying legacy backup %s: %w", srcPath, err)
+			}
+		}
+
+		current, err := s.readManifestLocked(fromProjectID)
+		if err != nil {
+			return err
+		}
+		if current > 0 {
+			if err := s.writeManifestLocked(toProjectID, current); err != nil {
+				return err
+			}
+		}
+
+		return s.rotateLocked(toProjectID)
+	})
+}
+
 func (s *Store) rotateLocked(projectID string) error {
 	versions, err := s.List(projectID)
 	if err != nil {
@@ -235,7 +351,7 @@ func (s *Store) writeManifestLocked(projectID string, sequence int) error {
 	if current > sequence {
 		sequence = current
 	}
-	return os.WriteFile(s.manifestPath(projectID), []byte(strconv.Itoa(sequence)), 0600)
+	return fsutil.AtomicWriteFile(s.manifestPath(projectID), []byte(strconv.Itoa(sequence)), 0600)
 }
 
 func (s *Store) readManifestWithoutFallback(projectID string) (int, error) {
@@ -297,29 +413,6 @@ func isProjectLockBusy(err error) bool {
 	}
 
 	return false
-}
-
-func atomicWriteFile(path string, data []byte, mode os.FileMode) error {
-	dir := filepath.Dir(path)
-	tempFile, err := os.CreateTemp(dir, ".envsync-*")
-	if err != nil {
-		return err
-	}
-	tempPath := tempFile.Name()
-	defer os.Remove(tempPath)
-
-	if _, err := tempFile.Write(data); err != nil {
-		_ = tempFile.Close()
-		return err
-	}
-	if err := tempFile.Chmod(mode); err != nil {
-		_ = tempFile.Close()
-		return err
-	}
-	if err := tempFile.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tempPath, path)
 }
 
 // parseVersionFilename parses a filename like "000042_20260228T134500Z.enc".

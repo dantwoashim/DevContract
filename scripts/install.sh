@@ -1,65 +1,106 @@
 #!/usr/bin/env bash
-# EnvSync installer for macOS and Linux
-# Usage: curl -fsSL https://envsync.dev/install.sh | bash
+# EnvSync installer for macOS and Linux.
+# Usage:
+#   ./scripts/install.sh --version v1.2.3 --install-dir /tmp/bin
+#   ENVSYNC_VERSION=v1.2.3 ./scripts/install.sh
 
 set -euo pipefail
 
-REPO="envsync/envsync"
-INSTALL_DIR="/usr/local/bin"
+REPO="${ENVSYNC_INSTALL_REPO:-envsync/envsync}"
+INSTALL_DIR="${ENVSYNC_INSTALL_DIR:-/usr/local/bin}"
+VERSION="${ENVSYNC_VERSION:-latest}"
 
-# Detect OS and arch
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --version)
+      VERSION="$2"
+      shift 2
+      ;;
+    --install-dir)
+      INSTALL_DIR="$2"
+      shift 2
+      ;;
+    --repo)
+      REPO="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 
 case "$ARCH" in
   x86_64) ARCH="amd64" ;;
   aarch64|arm64) ARCH="arm64" ;;
-  *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+  *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
 esac
 
 case "$OS" in
   linux|darwin) ;;
-  *) echo "Unsupported OS: $OS (use install.ps1 for Windows)"; exit 1 ;;
+  *) echo "Unsupported OS: $OS (use install.ps1 for Windows)" >&2; exit 1 ;;
 esac
 
-echo "  ✦ Installing EnvSync for ${OS}/${ARCH}"
+echo "Installing EnvSync for ${OS}/${ARCH}"
 
-# Get latest version
-VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')
+api_url="https://api.github.com/repos/${REPO}/releases"
+if [[ "$VERSION" == "latest" ]]; then
+  release_json="$(curl -fsSL "${api_url}/latest")"
+  VERSION="v$(printf '%s' "$release_json" | python -c "import json,sys; print(json.load(sys.stdin)['tag_name'].lstrip('v'))")"
+else
+  VERSION="v${VERSION#v}"
+fi
 
-if [ -z "$VERSION" ]; then
-  echo "  ✗ Failed to get latest version"
+echo "Version: ${VERSION}"
+
+archive="envsync_${VERSION#v}_${OS}_${ARCH}.tar.gz"
+archive_url="https://github.com/${REPO}/releases/download/${VERSION}/${archive}"
+checksums_url="https://github.com/${REPO}/releases/download/${VERSION}/checksums.txt"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+echo "Downloading ${archive}"
+curl -fsSL "$archive_url" -o "${tmp}/${archive}"
+curl -fsSL "$checksums_url" -o "${tmp}/checksums.txt"
+
+expected="$(grep " ${archive}\$" "${tmp}/checksums.txt" | awk '{print $1}')"
+if [[ -z "$expected" ]]; then
+  echo "Checksum for ${archive} not found in checksums.txt" >&2
   exit 1
 fi
 
-echo "  ▸ Version: v${VERSION}"
+actual="$(python - "${tmp}/${archive}" <<'PY'
+import hashlib
+import pathlib
+import sys
+path = pathlib.Path(sys.argv[1])
+print(hashlib.sha256(path.read_bytes()).hexdigest())
+PY
+)"
 
-# Download
-FILENAME="envsync_${VERSION}_${OS}_${ARCH}.tar.gz"
-URL="https://github.com/${REPO}/releases/download/v${VERSION}/${FILENAME}"
-
-echo "  ▸ Downloading ${FILENAME}..."
-TMP=$(mktemp -d)
-curl -fsSL "$URL" -o "${TMP}/${FILENAME}"
-
-# Extract
-tar -xzf "${TMP}/${FILENAME}" -C "$TMP"
-
-# Install
-if [ -w "$INSTALL_DIR" ]; then
-  mv "${TMP}/envsync" "${INSTALL_DIR}/envsync"
-else
-  echo "  ▸ Requires sudo to install to ${INSTALL_DIR}"
-  sudo mv "${TMP}/envsync" "${INSTALL_DIR}/envsync"
+if [[ "$actual" != "$expected" ]]; then
+  echo "Checksum verification failed for ${archive}" >&2
+  echo "Expected: ${expected}" >&2
+  echo "Actual:   ${actual}" >&2
+  exit 1
 fi
 
-chmod +x "${INSTALL_DIR}/envsync"
+echo "Checksum verified"
+tar -xzf "${tmp}/${archive}" -C "$tmp"
 
-# Cleanup
-rm -rf "$TMP"
+mkdir -p "$INSTALL_DIR"
+target="${INSTALL_DIR}/envsync"
+if [[ -w "$INSTALL_DIR" ]]; then
+  mv "${tmp}/envsync" "$target"
+else
+  echo "Installing to ${INSTALL_DIR} requires sudo"
+  sudo mv "${tmp}/envsync" "$target"
+fi
+chmod +x "$target"
 
-echo "  ✓ Installed envsync v${VERSION} to ${INSTALL_DIR}/envsync"
-echo ""
-echo "  Get started:"
-echo "    envsync init"
-echo ""
+echo "Installed envsync ${VERSION} to ${target}"

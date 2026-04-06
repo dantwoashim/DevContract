@@ -6,7 +6,7 @@ import { inviteRoutes } from './routes/invites';
 import { relayRoutes } from './routes/relay';
 import { teamRoutes } from './routes/teams';
 import { billingRoutes } from './routes/billing';
-import { parseAuthHeader, verifySignature, hashBody } from './middleware/auth';
+import { computeIdentityFingerprint, decodeBase64, parseAuthHeader, verifySignature, hashBody } from './middleware/auth';
 import { rateLimitMiddleware } from './middleware/ratelimit';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -61,8 +61,8 @@ async function authMiddleware(c: any, next: any) {
         const pubKeyB64 = await kv.get(`pubkey:${parsed.fingerprint}`);
 
         if (pubKeyB64) {
-            const pubKeyBytes = Uint8Array.from(atob(pubKeyB64), (ch: string) => ch.charCodeAt(0));
-            const sigBytes = Uint8Array.from(atob(parsed.signature), (ch: string) => ch.charCodeAt(0));
+            const pubKeyBytes = decodeBase64(pubKeyB64, 'stored public key');
+            const sigBytes = decodeBase64(parsed.signature, 'signature');
             const valid = await verifySignature(
                 c.req.method,
                 new URL(c.req.url).pathname,
@@ -75,8 +75,13 @@ async function authMiddleware(c: any, next: any) {
                 return c.json({ error: 'unauthorized', message: 'Invalid signature' }, 401);
             }
         } else if (parsed.publicKey) {
-            const pubKeyBytes = Uint8Array.from(atob(parsed.publicKey), (ch: string) => ch.charCodeAt(0));
-            const sigBytes = Uint8Array.from(atob(parsed.signature), (ch: string) => ch.charCodeAt(0));
+            const pubKeyBytes = decodeBase64(parsed.publicKey, 'public key');
+            const computedFingerprint = await computeIdentityFingerprint(pubKeyBytes);
+            if (computedFingerprint !== parsed.fingerprint) {
+                return c.json({ error: 'unauthorized', message: 'Claimed fingerprint does not match the provided public key' }, 401);
+            }
+
+            const sigBytes = decodeBase64(parsed.signature, 'signature');
             const valid = await verifySignature(
                 c.req.method,
                 new URL(c.req.url).pathname,
@@ -88,7 +93,7 @@ async function authMiddleware(c: any, next: any) {
             if (!valid) {
                 return c.json({ error: 'unauthorized', message: 'Invalid signature on first contact' }, 401);
             }
-            await kv.put(`pubkey:${parsed.fingerprint}`, parsed.publicKey);
+            await kv.put(`pubkey:${computedFingerprint}`, parsed.publicKey);
         } else {
             return c.json({ error: 'unauthorized', message: 'Unknown fingerprint. Include public key for first-contact registration.' }, 401);
         }

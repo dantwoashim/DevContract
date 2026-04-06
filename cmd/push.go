@@ -5,11 +5,11 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/envsync/envsync/internal/audit"
 	"github.com/envsync/envsync/internal/crypto"
 	"github.com/envsync/envsync/internal/relay"
-	"github.com/envsync/envsync/internal/store"
 	envsync "github.com/envsync/envsync/internal/sync"
 	"github.com/envsync/envsync/internal/ui"
 	"github.com/spf13/cobra"
@@ -64,14 +64,6 @@ func runPush(cmd *cobra.Command, args []string) error {
 
 	ui.Header("EnvSync Push")
 
-	seq := int64(1)
-	if vs, storeErr := store.New(cfg.Sync.MaxVersions); storeErr == nil {
-		next, nextErr := vs.NextSequence(project.ProjectID)
-		if nextErr == nil {
-			seq = int64(next)
-		}
-	}
-
 	result := envsync.Orchestrate(context.Background(), envsync.OrchestratorOptions{
 		EnvFilePath:  targetFile,
 		TeamID:       project.ProjectID,
@@ -79,7 +71,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 		NoiseKeypair: noiseKP,
 		RelayClient:  relayClient,
 		RelayURL:     projectRelayURL(project, cfg),
-		Sequence:     seq,
+		Sequence:     time.Now().UnixMilli(),
 		OnStatus: func(status string) {
 			ui.Line(fmt.Sprintf("  %s", status))
 		},
@@ -97,17 +89,26 @@ func runPush(cmd *cobra.Command, args []string) error {
 		return result.Error
 	}
 
-	ui.Success(fmt.Sprintf("Pushed to %d/%d peers via %s (%s)",
-		result.SyncedCount, result.PeerCount, result.Method, result.Duration.Truncate(1e6)))
+	switch {
+	case result.DeliveredCount > 0 && result.QueuedCount > 0:
+		ui.Success(fmt.Sprintf("Delivered to %d peer(s) and queued %d relay fallback delivery(ies) via %s (%s)",
+			result.DeliveredCount, result.QueuedCount, result.Method, result.Duration.Truncate(time.Millisecond)))
+	case result.DeliveredCount > 0:
+		ui.Success(fmt.Sprintf("Delivered to %d/%d peer(s) via %s (%s)",
+			result.DeliveredCount, result.PeerCount, result.Method, result.Duration.Truncate(time.Millisecond)))
+	case result.QueuedCount > 0:
+		ui.Success(fmt.Sprintf("Queued encrypted relay delivery for %d/%d peer(s) (%s)",
+			result.QueuedCount, result.PeerCount, result.Duration.Truncate(time.Millisecond)))
+	}
 
 	logger, logErr := audit.NewLogger()
 	if logErr == nil {
 		_ = logger.Log(audit.Entry{
 			Event:       audit.EventPush,
 			File:        targetFile,
-			VarsChanged: result.SyncedCount,
+			VarsChanged: result.DeliveredCount + result.QueuedCount,
 			Method:      result.Method,
-			Details:     fmt.Sprintf("%d peers, %s", result.PeerCount, result.Duration.Truncate(1e6)),
+			Details:     fmt.Sprintf("%d peers (%d delivered, %d queued), %s", result.PeerCount, result.DeliveredCount, result.QueuedCount, result.Duration.Truncate(time.Millisecond)),
 		})
 	}
 

@@ -4,10 +4,7 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/store"
 	"github.com/envsync/envsync/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -22,30 +19,35 @@ var restoreCmd = &cobra.Command{
 var restoreVersion int
 
 func runRestore(cmd *cobra.Command, args []string) error {
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
 	kp, err := loadIdentity()
 	if err != nil {
 		return err
 	}
 
-	targetFile, _ := cmd.Flags().GetString("file")
-	if targetFile == "" {
-		targetFile = ".env"
-	}
-
-	key, err := crypto.DeriveAtRestKey(kp.X25519Private[:])
-	if err != nil {
-		return fmt.Errorf("deriving key: %w", err)
-	}
-
-	vStore, err := store.New(50)
+	project, err := requireProjectContext()
 	if err != nil {
 		return err
 	}
 
-	projectHash := fmt.Sprintf("%x", key[:8])
+	targetFile, _ := cmd.Flags().GetString("file")
+	targetFile = projectTargetFile(targetFile, cmd.Flags().Changed("file"), project, cfg)
 
-	// List versions
-	versions, err := vStore.List(projectHash)
+	key, err := atRestKey(kp)
+	if err != nil {
+		return err
+	}
+
+	vStore, err := openProjectStore(cfg, project.ProjectID, key)
+	if err != nil {
+		return err
+	}
+
+	versions, err := vStore.List(project.ProjectID)
 	if err != nil || len(versions) == 0 {
 		ui.Header("Restore")
 		ui.Line("No backups found. Run 'envsync backup' first.")
@@ -67,31 +69,26 @@ func runRestore(cmd *cobra.Command, args []string) error {
 	fmt.Print(table.Render())
 	ui.Blank()
 
-	// Select version
-	var target int
+	target := versions[0].Sequence
 	if restoreVersion > 0 {
 		target = restoreVersion
-	} else if len(versions) > 0 {
-		target = versions[0].Sequence
 	}
 
-	// Restore
-	data, err := vStore.Restore(projectHash, target, key)
+	data, err := vStore.Restore(project.ProjectID, target, key)
 	if err != nil {
 		return fmt.Errorf("loading version #%d: %w", target, err)
 	}
 
-	// Confirm
 	if !ui.ConfirmAction(fmt.Sprintf("Restore version #%d to %s?", target, targetFile), true) {
 		ui.Line("Cancelled.")
 		return nil
 	}
 
-	if err := os.WriteFile(targetFile, data, 0600); err != nil {
+	if err := writeEnvFile(targetFile, data); err != nil {
 		return fmt.Errorf("writing %s: %w", targetFile, err)
 	}
 
-	ui.Success(fmt.Sprintf("Restored version #%d → %s (%d bytes)", target, targetFile, len(data)))
+	ui.Success(fmt.Sprintf("Restored version #%d -> %s (%d bytes)", target, targetFile, len(data)))
 	ui.Blank()
 
 	return nil

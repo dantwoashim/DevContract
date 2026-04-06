@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/envsync/envsync/internal/crypto"
 	"github.com/envsync/envsync/internal/envfile"
-	"github.com/envsync/envsync/internal/store"
 	"github.com/envsync/envsync/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -26,12 +24,12 @@ var diffCmd = &cobra.Command{
 var diffAgainst string
 
 func runDiff(cmd *cobra.Command, args []string) error {
-	targetFile, _ := cmd.Flags().GetString("file")
-	if targetFile == "" {
-		targetFile = ".env"
-	}
+	cfg, _ := loadConfig()
+	project, _ := loadProjectContext()
 
-	// Read current file
+	targetFile, _ := cmd.Flags().GetString("file")
+	targetFile = projectTargetFile(targetFile, cmd.Flags().Changed("file"), project, cfg)
+
 	currentData, err := os.ReadFile(targetFile)
 	if err != nil {
 		ui.RenderError(ui.ErrEnvFileNotFound(targetFile))
@@ -43,12 +41,10 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("parsing %s: %w", targetFile, err)
 	}
 
-	// Determine what to compare against
 	var compareEnv *envfile.EnvFile
 	var compareLabel string
 
 	if diffAgainst != "" || len(args) > 0 {
-		// Compare against a specific file
 		compareFile := diffAgainst
 		if len(args) > 0 {
 			compareFile = args[0]
@@ -70,18 +66,16 @@ func runDiff(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("parsing %s: %w", compareFile, err)
 		}
 		compareLabel = compareFile
-	} else {
-		// Try version store for last backup
+	} else if project != nil {
 		kp, kpErr := loadIdentity()
 		if kpErr == nil {
-			key, keyErr := crypto.DeriveAtRestKey(kp.X25519Private[:])
+			key, keyErr := atRestKey(kp)
 			if keyErr == nil {
-				vStore, storeErr := store.New(50)
+				vStore, storeErr := openProjectStore(cfg, project.ProjectID, key)
 				if storeErr == nil {
-					projectHash := fmt.Sprintf("%x", key[:8])
-					latest, latestErr := vStore.Latest(projectHash)
+					latest, latestErr := vStore.Latest(project.ProjectID)
 					if latestErr == nil && latest != nil {
-						restoredData, restoreErr := vStore.Restore(projectHash, latest.Sequence, key)
+						restoredData, restoreErr := vStore.Restore(project.ProjectID, latest.Sequence, key)
 						if restoreErr == nil {
 							compareEnv, _ = envfile.Parse(string(restoredData))
 							compareLabel = fmt.Sprintf("backup v%d (%s)", latest.Sequence, latest.Timestamp.Format("2006-01-02 15:04"))
@@ -107,7 +101,6 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	ui.Blank()
 
 	diff := envfile.Diff(compareEnv, currentEnv)
-
 	if !diff.HasChanges() {
 		ui.Success("Files are identical")
 	} else {
