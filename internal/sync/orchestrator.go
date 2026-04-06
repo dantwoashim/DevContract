@@ -97,6 +97,11 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 		}
 
 		for _, discoveredPeer := range filtered {
+			if _, trusted := transportIndex[discoveredPeer.Fingerprint]; !trusted {
+				report(fmt.Sprintf("Skipping untrusted LAN peer %s", discoveredPeer.Fingerprint))
+				continue
+			}
+
 			conn, err := transport.Dial(transport.DialOptions{
 				Address:             discoveredPeer.Addr.String(),
 				Timeout:             transport.DefaultDialTimeout,
