@@ -11,8 +11,8 @@ import (
 
 var peersCmd = &cobra.Command{
 	Use:   "peers",
-	Short: "List team peers",
-	Long:  "Shows all known peers in your teams with their trust status.",
+	Short: "List project members",
+	Long:  "Shows all known members in your project registry with their trust status.",
 	RunE:  runPeers,
 }
 
@@ -22,52 +22,52 @@ func runPeers(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	teams, err := registry.ListTeams()
+	projects, err := registry.ListTeams()
 	if err != nil {
 		return err
 	}
 
-	if len(teams) == 0 {
+	if len(projects) == 0 {
 		fmt.Println()
-		fmt.Println("  No teams found. Start one with:")
-		fmt.Println("    envsync invite @teammate")
+		fmt.Println("  No project members found. Start one with:")
+		fmt.Println("    envsync invite project-member")
 		fmt.Println()
 		return nil
 	}
 
 	fmt.Println()
-	for _, teamID := range teams {
-		team, err := registry.LoadTeam(teamID)
+	for _, projectID := range projects {
+		project, err := registry.LoadTeam(projectID)
 		if err != nil {
 			continue
 		}
 
-		fmt.Printf("  ✦ Team: %s\n", team.Name)
+		fmt.Printf("  * Project: %s\n", project.Name)
 		fmt.Println()
 
-		peers, err := registry.ListPeers(teamID)
+		peers, err := registry.ListPeers(projectID)
 		if err != nil {
 			continue
 		}
 
 		if len(peers) == 0 {
-			fmt.Println("    No peers yet.")
+			fmt.Println("    No members yet.")
 		} else {
 			fmt.Print("    ")
-			fmt.Printf("%-2s %-20s %-44s %s\n", "", "User", "Fingerprint", "Status")
+			fmt.Printf("%-2s %-20s %-44s %s\n", "", "Member", "Fingerprint", "Status")
 			fmt.Print("    ")
-			fmt.Println("── ──────────────────── ──────────────────────────────────────────── ────────")
+			fmt.Println("-- -------------------- -------------------------------------------- --------")
 			for _, p := range peers {
-				username := p.GitHubUsername
-				if username == "" {
-					username = "(unknown)"
+				label := p.DisplayName
+				if label == "" {
+					label = "(unnamed)"
 				}
 				fingerprint := p.Fingerprint
 				if len(fingerprint) > 44 {
 					fingerprint = fingerprint[:44]
 				}
 				fmt.Print("    ")
-				fmt.Printf("%s  %-20s %-44s %s\n", p.StatusIcon(), "@"+username, fingerprint, p.Trust)
+				fmt.Printf("%s  %-20s %-44s %s\n", p.StatusIcon(), label, fingerprint, p.Trust)
 			}
 		}
 		fmt.Println()

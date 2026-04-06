@@ -21,7 +21,7 @@ var revokeCmd = &cobra.Command{
 }
 
 func runRevoke(cmd *cobra.Command, args []string) error {
-	username := strings.TrimPrefix(args[0], "@")
+	memberLabel := strings.TrimPrefix(args[0], "@")
 
 	kp, err := loadIdentity()
 	if err != nil {
@@ -40,42 +40,38 @@ func runRevoke(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Find the peer
-	p, teamID, err := registry.FindPeerByUsername(username)
+	p, projectID, err := registry.FindPeerByLabel(memberLabel)
 	if err != nil {
-		return fmt.Errorf("peer @%s not found in any team", username)
+		return err
 	}
 
 	fmt.Println()
-	fmt.Printf("  ✦ Revoking @%s from team\n", username)
+	fmt.Printf("  * Revoking %s from project access\n", memberLabel)
 	fmt.Println()
 
-	// Revoke locally
 	if err := p.Revoke(); err != nil {
 		return err
 	}
-	if err := registry.SavePeer(teamID, p); err != nil {
+	if err := registry.SavePeer(projectID, p); err != nil {
 		return err
 	}
 
-	// Remove from relay
 	client := relay.NewClient(projectRelayURL(project, cfg), kp)
-	if err := client.RemoveTeamMember(teamID, username); err != nil {
-		fmt.Printf("  ⚠ Relay: %s\n", err)
+	if err := client.RemoveTeamMember(projectID, memberLabel); err != nil {
+		fmt.Printf("  ! Relay: %s\n", err)
 	}
 
-	fmt.Printf("  ✓ @%s revoked from team %s\n", username, teamID)
-	fmt.Printf("  ▸ Status: %s %s\n", p.StatusIcon(), p.Trust)
+	fmt.Printf("  + %s revoked from project %s\n", memberLabel, projectID)
+	fmt.Printf("  - Status: %s %s\n", p.StatusIcon(), p.Trust)
 	fmt.Println()
 	fmt.Println("  They can no longer sync or decrypt your .env files.")
 
-	// Audit
 	logger, _ := audit.NewLogger()
 	if logger != nil {
 		_ = logger.Log(audit.Entry{
 			Event:   audit.EventRevoke,
-			Peer:    username,
-			Details: fmt.Sprintf("team %s", teamID),
+			Peer:    memberLabel,
+			Details: fmt.Sprintf("project %s", projectID),
 		})
 	}
 
