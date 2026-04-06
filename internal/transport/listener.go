@@ -40,7 +40,10 @@ type ListenerOptions struct {
 // Listen starts accepting TCP connections on the given port.
 func Listen(opts ListenerOptions) (*Listener, error) {
 	addr := fmt.Sprintf(":%d", opts.Port)
-	tcpListener, err := net.Listen("tcp", addr)
+	listenConfig := net.ListenConfig{
+		Control: reuseControl,
+	}
+	tcpListener, err := listenConfig.Listen(context.Background(), "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("binding to %s: %w", addr, err)
 	}
