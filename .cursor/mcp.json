@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "repo-docs": {
+      "command": "node",
+      "args": [
+        "scripts/mcp-docs.js"
+      ],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      }
+    }
+  }
+}
