@@ -203,6 +203,36 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 			runContractDoctorCheck(repoRoot, contractCheck, addCheck)
 		}
 
+		for _, output := range spec.Bootstrap.Outputs {
+			if bootstrapOutputRefreshMode(output) != "refresh-managed" {
+				continue
+			}
+			path, err := safeRepoPath(repoRoot, output.Path)
+			if err != nil {
+				addCheck("output:"+output.Path, "fail", err.Error(), true)
+				continue
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				if os.IsNotExist(err) {
+					addCheck("output:"+output.Path, "warn", fmt.Sprintf("Managed output %s does not exist yet", filepath.ToSlash(output.Path)), false)
+				} else {
+					addCheck("output:"+output.Path, "fail", fmt.Sprintf("Could not read managed output %s: %v", filepath.ToSlash(output.Path), err), true)
+				}
+				continue
+			}
+			if !isManagedBootstrapOutput(string(data)) {
+				addCheck("output:"+output.Path, "warn", fmt.Sprintf("Managed output %s was edited manually and will not be auto-refreshed", filepath.ToSlash(output.Path)), false)
+				continue
+			}
+			expected := renderBootstrapOutput(output, spec.AllEnvNames())
+			if string(data) != expected {
+				addCheck("output:"+output.Path, "warn", fmt.Sprintf("Managed output %s drifted from the current contract; rerun bootstrap", filepath.ToSlash(output.Path)), false)
+			} else {
+				addCheck("output:"+output.Path, "pass", fmt.Sprintf("Managed output %s matches the current contract", filepath.ToSlash(output.Path)), false)
+			}
+		}
+
 		agentNames := make([]string, 0, len(spec.Agents))
 		for agentName := range spec.Agents {
 			agentNames = append(agentNames, agentName)
@@ -264,6 +294,18 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		if registryErr != nil {
 			addCheck("registry", "fail", registryErr.Error(), true)
 		} else {
+			if issues, integrityErr := registry.ScanIntegrity(project.ProjectID); integrityErr != nil {
+				addCheck("registry:integrity", "fail", integrityErr.Error(), true)
+			} else if len(issues) > 0 {
+				details := make([]string, 0, len(issues))
+				for _, issue := range issues {
+					details = append(details, fmt.Sprintf("%s (%s)", filepath.Base(issue.Path), issue.Detail))
+				}
+				addCheck("registry:integrity", "warn", fmt.Sprintf("Registry has %d issue(s): %s", len(issues), strings.Join(details, "; ")), false)
+			} else {
+				addCheck("registry:integrity", "pass", "Peer registry files parsed cleanly", false)
+			}
+
 			team, err := registry.LoadTeam(project.ProjectID)
 			if err != nil {
 				addCheck("registry", "warn", fmt.Sprintf("Local project membership metadata missing for %s", project.ProjectID), false)

@@ -83,6 +83,7 @@ type BootstrapOutput struct {
 	Kind      string `yaml:"kind,omitempty"`
 	Gitignore bool   `yaml:"gitignore,omitempty"`
 	Header    string `yaml:"header,omitempty"`
+	Mode      string `yaml:"mode,omitempty"`
 }
 
 type Doctor struct {
@@ -407,6 +408,11 @@ func (c *Contract) Validate() *ValidationReport {
 		}
 		if filepath.IsAbs(output.Path) {
 			report.AddError("bootstrap output %q must be relative to the repo root", output.Path)
+		}
+		switch output.Mode {
+		case "", "create-if-missing", "refresh-managed", "manual":
+		default:
+			report.AddError("bootstrap output %q uses unsupported mode %q", output.Path, output.Mode)
 		}
 	}
 	validAgents := map[string]struct{}{"copilot": {}, "codex": {}, "cursor": {}, "claude": {}}
