@@ -134,7 +134,7 @@ func (t *Team) HasMember(fingerprint string) bool {
 type ProjectConfig struct {
 	ConfigVersion int    `toml:"config_version,omitempty"`
 	ProjectID     string `toml:"project_id,omitempty"`
-	TeamID        string `toml:"team_id,omitempty"`
+	LegacyTeamID  string `toml:"team_id,omitempty"`
 	Name          string `toml:"name,omitempty"`
 	DefaultFile   string `toml:"default_file,omitempty"`
 	SyncStrategy  string `toml:"sync_strategy,omitempty"`
@@ -149,20 +149,18 @@ func (pc *ProjectConfig) CanonicalProjectID() string {
 	if pc.ProjectID != "" {
 		return pc.ProjectID
 	}
-	return pc.TeamID
+	return pc.LegacyTeamID
 }
 
-// Normalize backfills defaults and keeps project_id and team_id aligned.
+// Normalize backfills defaults and migrates legacy team_id data into project_id.
 func (pc *ProjectConfig) Normalize() {
 	if pc == nil {
 		return
 	}
 	if pc.ProjectID == "" {
-		pc.ProjectID = pc.TeamID
+		pc.ProjectID = pc.LegacyTeamID
 	}
-	if pc.TeamID == "" {
-		pc.TeamID = pc.ProjectID
-	}
+	pc.LegacyTeamID = ""
 	if pc.DefaultFile == "" {
 		pc.DefaultFile = defaultProjectFile
 	}
@@ -184,7 +182,6 @@ func NewProjectConfig(name, defaultFile, syncStrategy, relayURL string) (*Projec
 	pc := &ProjectConfig{
 		ConfigVersion: 1,
 		ProjectID:     projectID,
-		TeamID:        projectID,
 		Name:          name,
 		DefaultFile:   defaultFile,
 		SyncStrategy:  syncStrategy,
