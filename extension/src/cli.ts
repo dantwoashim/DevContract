@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { renderCommand } from './shell';
 
 const execFileAsync = promisify(execFile);
 
@@ -48,15 +49,4 @@ export function createEnvSyncTerminal(name: string, args: string[], cwd: string)
     const terminal = vscode.window.createTerminal({ name, cwd });
     terminal.show();
     terminal.sendText(renderCommand(args));
-}
-
-function renderCommand(args: string[]): string {
-    return ['envsync', ...args.map(quoteArg)].join(' ');
-}
-
-function quoteArg(value: string): string {
-    if (!/[^\w./:-]/.test(value)) {
-        return value;
-    }
-    return `"${value.replace(/"/g, '\\"')}"`;
 }

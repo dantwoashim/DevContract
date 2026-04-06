@@ -1,15 +1,6 @@
 import * as vscode from 'vscode';
 import { execEnvSync, getWorkspaceFolder } from './cli';
-
-type DoctorReport = {
-    blocking: number;
-    warnings: number;
-    checks: Array<{
-        name: string;
-        status: string;
-        detail: string;
-    }>;
-};
+import { buildHealthRows, type DoctorReport } from './doctorView';
 
 export function registerSidebar(context: vscode.ExtensionContext) {
     const actionsProvider = new ActionsProvider();
@@ -65,15 +56,7 @@ class HealthProvider implements vscode.TreeDataProvider<EnvSyncItem> {
                 timeout: 15000,
             });
             const report = JSON.parse(output) as DoctorReport;
-            const items: EnvSyncItem[] = [];
-            items.push(new EnvSyncItem('Blocking Issues', String(report.blocking)));
-            items.push(new EnvSyncItem('Warnings', String(report.warnings)));
-
-            for (const check of report.checks.slice(0, 6)) {
-                items.push(new EnvSyncItem(`${iconForStatus(check.status)} ${check.name}`, check.detail));
-            }
-
-            return items;
+            return buildHealthRows(report).map((row) => new EnvSyncItem(row.label, row.description));
         } catch (error) {
             return [
                 new EnvSyncItem(
@@ -95,16 +78,5 @@ class EnvSyncItem extends vscode.TreeItem {
                 title: label,
             };
         }
-    }
-}
-
-function iconForStatus(status: string): string {
-    switch (status) {
-        case 'pass':
-            return '$(check)';
-        case 'warn':
-            return '$(warning)';
-        default:
-            return '$(error)';
     }
 }
