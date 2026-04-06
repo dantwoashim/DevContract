@@ -130,6 +130,31 @@ teamRoutes.delete('/:team/members/:user', async (c) => {
     return c.json({ status: 'removed', member_count: team.members.length });
 });
 
+teamRoutes.delete('/:team/members/by-fingerprint/:fingerprint', async (c) => {
+    const teamId = c.req.param('team');
+    const targetFingerprint = c.req.param('fingerprint');
+    const actorFingerprint = c.get('fingerprint' as never) as string;
+
+    const team = await loadTeam(c.env, teamId);
+    if (!team) {
+        return c.json({ error: 'not_found', message: 'Team not found' }, 404);
+    }
+
+    const actor = team.members.find((member) => member.fingerprint === actorFingerprint);
+    const target = team.members.find((member) => member.fingerprint === targetFingerprint);
+    if (!actor || !target) {
+        return c.json({ error: 'not_found', message: 'Member fingerprint not found in team' }, 404);
+    }
+    if (actor.role !== 'owner' && actor.fingerprint !== target.fingerprint) {
+        return c.json({ error: 'forbidden', message: 'Only owners can remove other members' }, 403);
+    }
+
+    team.members = team.members.filter((member) => member.fingerprint !== targetFingerprint);
+    await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
+
+    return c.json({ status: 'removed', member_count: team.members.length });
+});
+
 async function loadTeam(env: Env, teamId: string): Promise<Team | null> {
     const data = await env.ENVSYNC_DATA.get(`team:${teamId}`);
     if (!data) {

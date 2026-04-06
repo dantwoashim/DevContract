@@ -109,7 +109,7 @@ func runKeyRotate(cmd *cobra.Command, args []string) error {
 	rotatedBackups := 0
 	updatedTeams := 0
 	relayUpdates := 0
-	client := relay.NewClient(projectRelayURL(nil, cfg), newKP)
+	oldClient := relay.NewClient(projectRelayURL(nil, cfg), oldKP)
 	memberLabel := displayMemberLabel(cfg, newKP)
 
 	for _, projectID := range projectIDs {
@@ -126,6 +126,10 @@ func runKeyRotate(cmd *cobra.Command, args []string) error {
 
 		team, err := registry.LoadTeam(projectID)
 		if err == nil {
+			role := "member"
+			if team.CreatedBy == oldKP.Fingerprint {
+				role = "owner"
+			}
 			if team.CreatedBy == oldKP.Fingerprint {
 				team.CreatedBy = newKP.Fingerprint
 			}
@@ -143,24 +147,22 @@ func runKeyRotate(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("saving updated team metadata for %s: %w", projectID, err)
 			}
 			updatedTeams++
-		}
 
-		role := "member"
-		if team != nil && team.CreatedBy == newKP.Fingerprint {
-			role = "owner"
-		}
-		if err := client.AddTeamMember(
-			projectID,
-			memberLabel,
-			newKP.Fingerprint,
-			base64.StdEncoding.EncodeToString(newKP.Ed25519Public),
-			base64.StdEncoding.EncodeToString(newKP.X25519Public[:]),
-			crypto.ComputeFingerprint(newKP.X25519Public),
-			role,
-		); err == nil {
+			if err := oldClient.AddTeamMember(
+				projectID,
+				memberLabel,
+				newKP.Fingerprint,
+				base64.StdEncoding.EncodeToString(newKP.Ed25519Public),
+				base64.StdEncoding.EncodeToString(newKP.X25519Public[:]),
+				crypto.ComputeFingerprint(newKP.X25519Public),
+				role,
+			); err != nil {
+				return fmt.Errorf("registering new identity on relay for %s: %w", projectID, err)
+			}
+			if err := oldClient.RemoveTeamMemberByFingerprint(projectID, oldKP.Fingerprint); err != nil {
+				return fmt.Errorf("removing previous identity from relay for %s: %w", projectID, err)
+			}
 			relayUpdates++
-		} else {
-			ui.Warning(fmt.Sprintf("  Relay update skipped for %s: %s", projectID, err))
 		}
 	}
 

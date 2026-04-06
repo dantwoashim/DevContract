@@ -4,12 +4,15 @@ package relay
 
 import (
 	"bytes"
+	crand "crypto/rand"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/envsync/envsync/internal/crypto"
@@ -51,7 +54,7 @@ func (c *Client) doRequest(method, path string, body []byte) (*http.Response, er
 
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
-			time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
+			time.Sleep(retryDelay(attempt))
 		}
 
 		url := c.baseURL + path
@@ -73,7 +76,7 @@ func (c *Client) doRequest(method, path string, body []byte) (*http.Response, er
 		if bodyHash == nil {
 			bodyHash = []byte{}
 		}
-		authHeader := crypto.SignRequest(c.privateKey, c.fingerprint, method, path, bodyHash)
+		authHeader := crypto.SignRequest(c.privateKey, c.fingerprint, method, signingPath(path), bodyHash)
 		req.Header.Set("Authorization", authHeader)
 		req.Header.Set("X-EnvSync-Fingerprint", c.fingerprint)
 
@@ -101,7 +104,7 @@ func (c *Client) doUploadRequest(method, path string, body []byte, headers map[s
 
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
-			time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
+			time.Sleep(retryDelay(attempt))
 		}
 
 		url := c.baseURL + path
@@ -123,7 +126,7 @@ func (c *Client) doUploadRequest(method, path string, body []byte, headers map[s
 		if bodyHash == nil {
 			bodyHash = []byte{}
 		}
-		authHeader := crypto.SignRequest(c.privateKey, c.fingerprint, method, path, bodyHash)
+		authHeader := crypto.SignRequest(c.privateKey, c.fingerprint, method, signingPath(path), bodyHash)
 		req.Header.Set("Authorization", authHeader)
 		req.Header.Set("X-EnvSync-Fingerprint", c.fingerprint)
 
@@ -217,8 +220,12 @@ func (c *Client) GetInvite(tokenHash string) (*InviteResponse, error) {
 }
 
 // ConsumeInvite consumes (redeems) an invite.
-func (c *Client) ConsumeInvite(tokenHash string) (*InviteResponse, error) {
-	resp, err := c.doRequest("DELETE", "/invites/"+tokenHash, nil)
+func (c *Client) ConsumeInvite(tokenHash, joinerLabel string) (*InviteResponse, error) {
+	path := "/invites/" + tokenHash
+	if joinerLabel != "" {
+		path = fmt.Sprintf("%s?joiner=%s", path, url.QueryEscape(joinerLabel))
+	}
+	resp, err := c.doRequest("DELETE", path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +277,7 @@ type BlobInfo struct {
 
 // ListPending lists pending blobs for the current identity.
 func (c *Client) ListPending(teamID string) ([]BlobInfo, error) {
-	path := fmt.Sprintf("/relay/%s/pending?for=%s", teamID, c.fingerprint)
+	path := fmt.Sprintf("/relay/%s/pending", teamID)
 	resp, err := c.doRequest("GET", path, nil)
 	if err != nil {
 		return nil, err
@@ -368,6 +375,21 @@ func (c *Client) RemoveTeamMember(teamID, username string) error {
 	return nil
 }
 
+// RemoveTeamMemberByFingerprint removes a member from a team using the stable identity fingerprint.
+func (c *Client) RemoveTeamMemberByFingerprint(teamID, fingerprint string) error {
+	path := fmt.Sprintf("/teams/%s/members/by-fingerprint/%s", teamID, url.PathEscape(fingerprint))
+	resp, err := c.doRequest("DELETE", path, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return readError(resp)
+	}
+	return nil
+}
+
 // ListTeamMembers returns the current relay-side project member list.
 func (c *Client) ListTeamMembers(teamID string) ([]TeamMember, error) {
 	path := fmt.Sprintf("/teams/%s/members", teamID)
@@ -400,6 +422,23 @@ func readError(resp *http.Response) error {
 		return fmt.Errorf("relay error: %s — %s", errResp.Error, errResp.Message)
 	}
 	return fmt.Errorf("relay returned HTTP %d: %s", resp.StatusCode, string(body))
+}
+
+func retryDelay(attempt int) time.Duration {
+	base := time.Duration(attempt) * 300 * time.Millisecond
+	jitter := time.Duration(0)
+	if n, err := crand.Int(crand.Reader, big.NewInt(150)); err == nil {
+		jitter = time.Duration(n.Int64()) * time.Millisecond
+	}
+	return base + jitter
+}
+
+func signingPath(path string) string {
+	parsed, err := url.Parse(path)
+	if err != nil || parsed.Path == "" {
+		return path
+	}
+	return parsed.Path
 }
 
 // HashToken computes the SHA-256 hash of a mnemonic token for relay storage.
