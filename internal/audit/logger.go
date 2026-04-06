@@ -26,6 +26,7 @@ const (
 	EventInvite           EventType = "invite"
 	EventJoin             EventType = "join"
 	EventRevoke           EventType = "revoke"
+	EventKeyRotate        EventType = "key_rotate"
 	EventConflictResolved EventType = "conflict_resolved"
 	EventBackup           EventType = "backup"
 	EventRestore          EventType = "restore"
