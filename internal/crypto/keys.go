@@ -16,6 +16,13 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+var (
+	// ErrPassphraseRequired indicates that a private key is encrypted and needs a passphrase.
+	ErrPassphraseRequired = errors.New("ssh key passphrase required")
+	// ErrInvalidPassphrase indicates that the supplied passphrase did not unlock the key.
+	ErrInvalidPassphrase = errors.New("ssh key passphrase was not accepted")
+)
+
 // KeyPair holds the cryptographic identity derived from an SSH Ed25519 key.
 type KeyPair struct {
 	// Ed25519 keys (signing)
@@ -36,6 +43,12 @@ type KeyPair struct {
 // LoadSSHKey reads an Ed25519 SSH private key and derives the X25519 DH key pair.
 // It handles OpenSSH format, PEM format, and detects passphrase-protected keys.
 func LoadSSHKey(path string) (*KeyPair, error) {
+	return LoadSSHKeyWithPassphrase(path, nil)
+}
+
+// LoadSSHKeyWithPassphrase reads an Ed25519 SSH private key and derives the
+// X25519 DH key pair, using the provided passphrase when the key is encrypted.
+func LoadSSHKeyWithPassphrase(path string, passphrase []byte) (*KeyPair, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -44,30 +57,56 @@ func LoadSSHKey(path string) (*KeyPair, error) {
 		return nil, fmt.Errorf("reading SSH key: %w", err)
 	}
 
-	return ParseSSHKey(data, path)
+	return ParseSSHKeyWithPassphrase(data, passphrase, path)
 }
 
 // ParseSSHKey parses raw SSH key bytes into a KeyPair.
 func ParseSSHKey(data []byte, keyPath string) (*KeyPair, error) {
+	return ParseSSHKeyWithPassphrase(data, nil, keyPath)
+}
+
+// ParseSSHKeyWithPassphrase parses raw SSH key bytes into a KeyPair, using the
+// provided passphrase when the key is encrypted.
+func ParseSSHKeyWithPassphrase(data, passphrase []byte, keyPath string) (*KeyPair, error) {
 	// Try parsing as OpenSSH format first (most common)
 	rawKey, err := ssh.ParseRawPrivateKey(data)
 	if err != nil {
 		// Check if it's passphrase-protected
 		if isPassphraseError(err) {
-			return nil, fmt.Errorf("SSH key is passphrase-protected. EnvSync needs the raw key.\n"+
-				"  Decrypt it temporarily: ssh-keygen -p -f %s\n"+
-				"  Or use a dedicated unencrypted Ed25519 key for EnvSync: ssh-keygen -t ed25519 -f %s.envsync", keyPath, keyPath)
-		}
-
-		// Try PEM format
-		block, _ := pem.Decode(data)
-		if block != nil {
-			rawKey, err = ssh.ParseRawPrivateKey(pem.EncodeToMemory(block))
+			if len(passphrase) == 0 {
+				return nil, fmt.Errorf("%w for %s", ErrPassphraseRequired, keyPath)
+			}
+			rawKey, err = ssh.ParseRawPrivateKeyWithPassphrase(data, passphrase)
 			if err != nil {
-				return nil, fmt.Errorf("parsing PEM SSH key: %w", err)
+				if isPassphraseError(err) {
+					return nil, fmt.Errorf("%w for %s", ErrInvalidPassphrase, keyPath)
+				}
+				return nil, fmt.Errorf("parsing passphrase-protected SSH key: %w", err)
 			}
 		} else {
-			return nil, fmt.Errorf("unrecognized SSH key format: %w", err)
+			// Try PEM format
+			block, _ := pem.Decode(data)
+			if block != nil {
+				rawKey, err = ssh.ParseRawPrivateKey(pem.EncodeToMemory(block))
+				if err != nil {
+					if isPassphraseError(err) {
+						if len(passphrase) == 0 {
+							return nil, fmt.Errorf("%w for %s", ErrPassphraseRequired, keyPath)
+						}
+						rawKey, err = ssh.ParseRawPrivateKeyWithPassphrase(pem.EncodeToMemory(block), passphrase)
+						if err != nil {
+							if isPassphraseError(err) {
+								return nil, fmt.Errorf("%w for %s", ErrInvalidPassphrase, keyPath)
+							}
+							return nil, fmt.Errorf("parsing passphrase-protected PEM SSH key: %w", err)
+						}
+					} else {
+						return nil, fmt.Errorf("parsing PEM SSH key: %w", err)
+					}
+				}
+			} else {
+				return nil, fmt.Errorf("unrecognized SSH key format: %w", err)
+			}
 		}
 	}
 
@@ -180,7 +219,9 @@ func isPassphraseError(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "passphrase") ||
 		strings.Contains(msg, "encrypted") ||
-		strings.Contains(msg, "bcrypt_pbkdf")
+		strings.Contains(msg, "bcrypt_pbkdf") ||
+		strings.Contains(msg, "incorrect password") ||
+		strings.Contains(msg, "decryption password incorrect")
 }
 
 // sha512First32 computes SHA-512 of input and returns the first 32 bytes.
