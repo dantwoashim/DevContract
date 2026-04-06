@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/envsync/envsync/internal/config"
+	"github.com/envsync/envsync/internal/fsutil"
 	toml "github.com/pelletier/go-toml/v2"
 )
 
@@ -191,13 +192,7 @@ func NewProjectConfig(name, defaultFile, syncStrategy, relayURL string) (*Projec
 	return pc, nil
 }
 
-// LoadProjectConfig reads the .envsync.toml from the current (or parent) directory.
-func LoadProjectConfig() (*ProjectConfig, error) {
-	path, err := config.FindProjectConfig()
-	if err != nil {
-		return nil, err
-	}
-
+func loadProjectConfigFromPath(path string) (*ProjectConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading project config: %w", err)
@@ -208,8 +203,23 @@ func LoadProjectConfig() (*ProjectConfig, error) {
 		return nil, fmt.Errorf("parsing project config: %w", err)
 	}
 	pc.Normalize()
-
 	return &pc, nil
+}
+
+// LoadProjectConfig reads the .envsync.toml from the current (or parent) directory.
+func LoadProjectConfig() (*ProjectConfig, error) {
+	path, err := config.FindProjectConfig()
+	if err != nil {
+		return nil, err
+	}
+	return loadProjectConfigFromPath(path)
+}
+
+func projectConfigWritePath() string {
+	if path, err := config.FindProjectConfig(); err == nil {
+		return path
+	}
+	return config.ProjectConfigPath()
 }
 
 // SaveProjectConfig writes .envsync.toml in the current directory.
@@ -219,5 +229,5 @@ func SaveProjectConfig(pc *ProjectConfig) error {
 	if err != nil {
 		return fmt.Errorf("encoding project config: %w", err)
 	}
-	return os.WriteFile(config.ProjectConfigPath(), data, 0600)
+	return fsutil.AtomicWriteFile(projectConfigWritePath(), data, 0600)
 }
