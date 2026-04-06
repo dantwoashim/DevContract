@@ -74,9 +74,11 @@ runs:
         set +e
         envsync pull \
           --service-key /tmp/envsync-service-key \
-          --team "${{ inputs.team_id }}" \
+          --project "${{ inputs.team_id }}" \
           --file "${{ inputs.env_file }}" \
           --relay "${{ inputs.relay_url }}" \
+          --non-interactive \
+          --on-conflict overwrite \
           --timeout 10 \
           --quiet \
           --json > "$PULL_REPORT"

@@ -141,63 +141,67 @@ jobs:
         with:
           go-version: '1.25.8'
 
-      - name: Build local EnvSync
-        run: go build -o "$RUNNER_TEMP/envsync-real" ./
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
-      - name: Install action test shim
+      - name: Build local EnvSync
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
-          cat > "$RUNNER_TEMP/bin/envsync" <<'EOF'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          REAL_BIN="${RUNNER_TEMP}/envsync-real"
-          case "${1:-}" in
-            pull)
-              FILE=".env"
-              JSON="false"
-              shift
-              while [[ $# -gt 0 ]]; do
-                case "$1" in
-                  --file)
-                    FILE="$2"
-                    shift 2
-                    ;;
-                  --json)
-                    JSON="true"
-                    shift
-                    ;;
-                  *)
-                    shift
-                    ;;
-                esac
-              done
-              cat > "$FILE" <<'ENVEOF'
-          API_KEY=abc123
-          MULTILINE="line1\nline2"
-          ENVEOF
-              if [[ "$JSON" == "true" ]]; then
-                printf '{"project_id":"smoke","target_file":"%s","relay_checked":true,"relay_applied":1,"lan_applied":false,"method":"relay","methods":["relay"]}\n' "$FILE"
-              fi
-              ;;
-            env)
-              exec "$REAL_BIN" "$@"
-              ;;
-            *)
-              exec "$REAL_BIN" "$@"
-              ;;
-          esac
-          EOF
-          chmod +x "$RUNNER_TEMP/bin/envsync"
+          go build -o "$RUNNER_TEMP/bin/envsync" ./
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Install relay dependencies
+        working-directory: relay
+        run: npm ci
+
+      - name: Start relay
+        shell: bash
+        run: |
+          cd relay
+          npx wrangler dev --port 8787 --local --test-scheduled > "$RUNNER_TEMP/relay.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/relay.pid"
+
+      - name: Wait for relay health
+        shell: bash
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:8787/health" >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "relay did not become healthy in time"
+          cat "$RUNNER_TEMP/relay.log" || true
+          exit 1
+
+      - name: Generate service key
+        shell: bash
+        run: envsync service-key generate --output "$RUNNER_TEMP/action-smoke-service-key"
+
+      - name: Seed relay data
+        shell: bash
+        run: |
+          go run ./scripts/action_smoke_seed.go \
+            --relay-url "http://127.0.0.1:8787" \
+            --service-key "$RUNNER_TEMP/action-smoke-service-key" \
+            --project "smoke-team" \
+            --file ".env.test"
+
+      - name: Encode service key for action input
+        shell: bash
+        run: |
+          echo "SMOKE_SERVICE_KEY_B64=$(base64 -w0 "$RUNNER_TEMP/action-smoke-service-key")" >> "$GITHUB_ENV"
 
       - name: Run local action
         id: action
         uses: ./action
         with:
-          service_key: ZmFrZQ==
+          service_key: ${{ env.SMOKE_SERVICE_KEY_B64 }}
           team_id: smoke-team
           env_file: .env.test
+          relay_url: http://127.0.0.1:8787
           mask_values: false
 
       - name: Verify action outputs
@@ -207,3 +211,14 @@ jobs:
           test "${{ steps.action.outputs.env_count }}" = "2"
           test "${API_KEY}" = "abc123"
           test "${MULTILINE}" = $'line1\nline2'
+
+      - name: Stop relay
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/relay.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/relay.pid")" || true
+          fi
+          if [ -f "$RUNNER_TEMP/relay.log" ]; then
+            cat "$RUNNER_TEMP/relay.log"
+          fi
