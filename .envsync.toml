@@ -1,3 +1,5 @@
-project_id = ""
+config_version = 1
+project_id = "5ec76c46b38c41969388a5442e2d745e"
+name = "EnvSync"
 default_file = ".env"
 sync_strategy = "three-way"
