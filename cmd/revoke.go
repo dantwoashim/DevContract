@@ -13,7 +13,7 @@ import (
 )
 
 var revokeCmd = &cobra.Command{
-	Use:   "revoke <label>",
+	Use:   "revoke <label-or-fingerprint>",
 	Short: "Remove a member from your project",
 	Long:  "Revokes a member's access and removes them from the relay.",
 	Args:  cobra.ExactArgs(1),
@@ -21,7 +21,7 @@ var revokeCmd = &cobra.Command{
 }
 
 func runRevoke(cmd *cobra.Command, args []string) error {
-	memberLabel := strings.TrimPrefix(args[0], "@")
+	selector := strings.TrimPrefix(args[0], "@")
 
 	kp, err := loadIdentity()
 	if err != nil {
@@ -33,16 +33,27 @@ func runRevoke(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	project, _ := loadProjectContext()
+	project, err := requireProjectContext()
+	if err != nil {
+		return err
+	}
 
 	registry, err := peer.NewRegistry()
 	if err != nil {
 		return err
 	}
 
-	p, projectID, err := registry.FindPeerByLabel(memberLabel)
+	p, err := registry.FindPeerInTeam(project.ProjectID, selector)
 	if err != nil {
 		return err
+	}
+	projectID := project.ProjectID
+	memberLabel := p.DisplayName
+	if memberLabel == "" {
+		memberLabel = p.RelayUsername
+	}
+	if memberLabel == "" {
+		memberLabel = p.Fingerprint
 	}
 
 	fmt.Println()
@@ -55,9 +66,15 @@ func runRevoke(cmd *cobra.Command, args []string) error {
 	if err := registry.SavePeer(projectID, p); err != nil {
 		return err
 	}
+	if team, teamErr := registry.LoadTeam(projectID); teamErr == nil {
+		team.RemoveMember(p.Fingerprint)
+		if err := registry.SaveTeam(team); err != nil {
+			return err
+		}
+	}
 
 	client := relay.NewClient(projectRelayURL(project, cfg), kp)
-	if err := client.RemoveTeamMember(projectID, memberLabel); err != nil {
+	if err := client.RemoveTeamMemberByFingerprint(projectID, p.Fingerprint); err != nil {
 		fmt.Printf("  ! Relay: %s\n", err)
 	}
 
@@ -70,7 +87,7 @@ func runRevoke(cmd *cobra.Command, args []string) error {
 	if logger != nil {
 		_ = logger.Log(audit.Entry{
 			Event:   audit.EventRevoke,
-			Peer:    memberLabel,
+			Peer:    p.Fingerprint,
 			Details: fmt.Sprintf("project %s", projectID),
 		})
 	}

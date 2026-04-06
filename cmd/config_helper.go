@@ -70,18 +70,6 @@ func loadIdentityFromEd25519(privateKey ed25519.PrivateKey) (*crypto.KeyPair, er
 	return kp, nil
 }
 
-// readLocalEnv reads the local .env file, returning nil if it doesn't exist.
-func readLocalEnv(path string) ([]byte, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return data, nil
-}
-
 // writeEnvFile writes data to the .env file with restricted permissions.
 func writeEnvFile(path string, data []byte) error {
 	return fsutil.AtomicWriteFile(path, data, 0600)

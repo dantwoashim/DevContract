@@ -147,28 +147,6 @@ func x25519PublicKeyBase64(kp *crypto.KeyPair) string {
 	return base64.StdEncoding.EncodeToString(kp.X25519Public[:])
 }
 
-func backupCurrentVersion(projectID string, data []byte, cfg *config.Config, kp *crypto.KeyPair) (int, error) {
-	if len(data) == 0 || projectID == "" {
-		return 0, nil
-	}
-
-	key, err := atRestKey(kp)
-	if err != nil {
-		return 0, err
-	}
-
-	vStore, err := openProjectStore(cfg, projectID, key)
-	if err != nil {
-		return 0, err
-	}
-
-	version, err := vStore.Append(projectID, data, key)
-	if err != nil {
-		return 0, err
-	}
-	return version.Sequence, nil
-}
-
 func defaultTeam(name, projectID, creatorFingerprint string) *peer.Team {
 	return &peer.Team{
 		ID:        projectID,
