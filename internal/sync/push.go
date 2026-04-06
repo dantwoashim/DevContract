@@ -88,7 +88,7 @@ func Push(ctx context.Context, opts PushOptions) (*PushResult, error) {
 	}
 
 	// Discover peers via mDNS
-	peers, err := discovery.Discover(ctx, discovery.DefaultMDNSTimeout, opts.KeyPair.Fingerprint)
+	peers, err := discovery.Discover(ctx, discovery.DefaultMDNSTimeout, crypto.ComputeFingerprint(opts.KeyPair.X25519Public))
 	if err != nil {
 		return result, fmt.Errorf("peer discovery: %w", err)
 	}
