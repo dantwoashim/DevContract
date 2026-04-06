@@ -11,16 +11,18 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
+	"syscall"
 	"time"
 
+	"github.com/envsync/envsync/internal/apply"
 	"github.com/envsync/envsync/internal/config"
 	"github.com/envsync/envsync/internal/crypto"
 	"github.com/envsync/envsync/internal/discovery"
 	"github.com/envsync/envsync/internal/envfile"
 	"github.com/envsync/envsync/internal/fsutil"
 	"github.com/envsync/envsync/internal/peer"
-	"github.com/envsync/envsync/internal/store"
 	"github.com/envsync/envsync/internal/transport"
 	"github.com/flynn/noise"
 )
@@ -44,6 +46,8 @@ type PullOptions struct {
 	NoiseKeypair noise.DHKey
 
 	ConfirmBeforeApply bool
+	ConflictPolicy     apply.Policy
+	Interactive        bool
 	ProjectID          string
 	BackupEnabled      bool
 	BackupKey          [32]byte
@@ -54,6 +58,7 @@ type PullOptions struct {
 	OnListening func(port int)
 	OnReceived  func(payload EnvPayload, diff *envfile.DiffResult)
 	OnConfirm   func(diff *envfile.DiffResult) bool
+	OnResolveConflicts func(conflicts []envfile.Conflict) ([]apply.ConflictResolution, bool)
 	OnApplied   func(fileName string)
 }
 
@@ -64,6 +69,10 @@ type PullResult struct {
 	VarCount    int
 	Applied     bool
 	DiffSummary string
+	ConflictPolicyApplied string
+	BackupCreated         bool
+	InteractiveRequired   bool
+	ManualInterventionNeeded bool
 }
 
 // Pull listens for an incoming push and applies the received .env file.
@@ -193,42 +202,37 @@ func Pull(ctx context.Context, opts PullOptions) (*PullResult, error) {
 		result.DiffSummary = diff.Summary()
 	}
 
-	if opts.ConfirmBeforeApply && diff != nil && diff.HasChanges() && opts.OnConfirm != nil {
-		if !opts.OnConfirm(diff) {
-			_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("user rejected changes")})
-			result.Applied = false
-			return result, nil
-		}
+	applyResult, err := apply.Apply(apply.Options{
+		ProjectID:        opts.ProjectID,
+		TargetFile:       envPath,
+		IncomingFile:     payload.FileName,
+		IncomingData:     payload.Data,
+		Policy:           normalizePullPolicy(opts),
+		Interactive:      opts.Interactive,
+		BackupEnabled:    opts.BackupEnabled,
+		BackupKey:        opts.BackupKey,
+		MaxVersions:      opts.MaxVersions,
+		ConfirmApply:     opts.OnConfirm,
+		ResolveConflicts: opts.OnResolveConflicts,
+	})
+	if err != nil {
+		_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte(err.Error())})
+		return nil, err
 	}
 
-	if opts.BackupEnabled && len(localData) > 0 && opts.ProjectID != "" {
-		maxVersions := opts.MaxVersions
-		if maxVersions <= 0 {
-			maxVersions = 10
-		}
-		vStore, err := store.New(maxVersions)
-		if err != nil {
-			_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("failed to create backup store")})
-			return nil, fmt.Errorf("creating backup store: %w", err)
-		}
-
-		if _, err := vStore.Append(opts.ProjectID, localData, opts.BackupKey); err != nil {
-			_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("failed to create backup")})
-			return nil, fmt.Errorf("creating pre-apply backup: %w", err)
-		}
+	result.Applied = applyResult.Applied
+	result.ConflictPolicyApplied = applyResult.ConflictPolicyApplied
+	result.BackupCreated = applyResult.BackupCreated
+	result.InteractiveRequired = applyResult.InteractiveRequired
+	result.ManualInterventionNeeded = applyResult.ManualInterventionNeeded
+	if result.Applied || (applyResult.Diff != nil && !applyResult.Diff.HasChanges()) {
+		_ = SendMessage(conn, Message{Type: MsgAck})
+	} else {
+		_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("incoming data was not applied")})
 	}
-
-	if err := fsutil.AtomicWriteFile(envPath, payload.Data, 0600); err != nil {
-		_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte("failed to write file")})
-		return nil, fmt.Errorf("writing %s: %w", envPath, err)
-	}
-
-	_ = SendMessage(conn, Message{Type: MsgAck})
-
-	result.Applied = true
 	saveLastSequence([]byte(peerID), payload.Sequence)
 
-	if opts.OnApplied != nil {
+	if result.Applied && opts.OnApplied != nil {
 		opts.OnApplied(envPath)
 	}
 
@@ -247,17 +251,9 @@ func loadLastSequence(peerPK []byte) int64 {
 
 	path := filepath.Join(dir, hex.EncodeToString(peerPK)+".seq")
 	lockPath := path + ".lock"
-
-	// Acquire lock
-	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		// Fallback: read without lock
+	return withSequenceLock(lockPath, func() int64 {
 		return readSequenceFile(path)
-	}
-	defer lock.Close()
-	defer os.Remove(lockPath)
-
-	return readSequenceFile(path)
+	})
 }
 
 // saveLastSequence persists the last-seen sequence number for a peer to disk.
@@ -272,18 +268,20 @@ func saveLastSequence(peerPK []byte, seq int64) {
 
 	path := filepath.Join(dir, hex.EncodeToString(peerPK)+".seq")
 	lockPath := path + ".lock"
-
-	// Acquire lock
-	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		// Fallback: write without lock
+	withSequenceLock(lockPath, func() int64 {
 		_ = fsutil.AtomicWriteFile(path, []byte(strconv.FormatInt(seq, 10)), 0600)
-		return
-	}
-	defer lock.Close()
-	defer os.Remove(lockPath)
+		return 0
+	})
+}
 
-	_ = fsutil.AtomicWriteFile(path, []byte(strconv.FormatInt(seq, 10)), 0600)
+func normalizePullPolicy(opts PullOptions) apply.Policy {
+	if opts.ConflictPolicy != "" {
+		return opts.ConflictPolicy
+	}
+	if opts.ConfirmBeforeApply {
+		return apply.PolicyInteractive
+	}
+	return apply.PolicyOverwrite
 }
 
 // readSequenceFile reads a sequence number from a file path.
@@ -297,6 +295,45 @@ func readSequenceFile(path string) int64 {
 		return 0
 	}
 	return seq
+}
+
+func withSequenceLock(lockPath string, fn func() int64) int64 {
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err == nil {
+			_ = lockFile.Close()
+			defer os.Remove(lockPath)
+			return fn()
+		}
+		if !isSequenceLockBusy(err) {
+			return fn()
+		}
+		if time.Now().After(deadline) {
+			return fn()
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+}
+
+func isSequenceLockBusy(err error) bool {
+	if err == nil {
+		return false
+	}
+	if os.IsExist(err) || os.IsPermission(err) {
+		return true
+	}
+
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) {
+		if errno, ok := pathErr.Err.(syscall.Errno); ok && runtime.GOOS == "windows" {
+			switch errno {
+			case 5, 32, 33:
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func verifyTrustedPullPeer(publicKey []byte, teamID string) error {
