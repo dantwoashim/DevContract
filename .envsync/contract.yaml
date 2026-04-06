@@ -1,0 +1,95 @@
+version: 1
+project:
+  slug: envsync
+  name: EnvSync
+  summary: Repository-safe onboarding for the EnvSync CLI, relay, and extension workspace.
+env:
+  optional:
+    - name: GITHUB_TOKEN
+      source: developer-local
+      description: Optional token for GitHub automation and local tooling.
+    - name: ENVSYNC_SERVICE_KEY
+      source: ci-only
+      description: Optional CI service key used by the GitHub Action and relay automation.
+  public:
+    - NODE_ENV
+runtimes:
+  - go
+  - node
+  - npm
+services:
+  - name: relay-dev
+    host: 127.0.0.1
+    port: 8787
+    required: false
+    start: cd relay && npm run dev
+    description: Local Cloudflare Worker development server.
+bootstrap:
+  steps:
+    - name: install-relay-dependencies
+      run: cd relay && npm install
+    - name: install-extension-dependencies
+      run: cd extension && npm install
+  outputs:
+    - path: .env.local
+      kind: env
+      gitignore: true
+      header: Developer-local overrides for this repo.
+    - path: .env.agent
+      kind: env
+      gitignore: true
+      header: Agent/session-local overrides for this repo.
+agents:
+  codex:
+    output: AGENTS.md
+    mcp_output: mcp.json
+    header: Codex instructions for EnvSync
+    instructions:
+      - Treat this repo as a Go CLI with relay and extension support code.
+      - Run go test ./... after changing contract, guard, sync, or crypto code.
+      - Never inline service keys or tokens in docs, prompts, or generated files.
+  copilot:
+    output: .github/copilot-instructions.md
+    mcp_output: .vscode/mcp.json
+    header: GitHub Copilot instructions for EnvSync
+  cursor:
+    output: .cursor/rules/envsync.mdc
+    mcp_output: .cursor/mcp.json
+    header: Cursor rules for EnvSync
+  claude:
+    output: .claude/ENVSYNC.md
+    mcp_output: .claude/mcp.json
+    header: Claude instructions for EnvSync
+mcp:
+  servers:
+    - name: repo-docs
+      command: node
+      args:
+        - scripts/mcp-docs.js
+      env:
+        - GITHUB_TOKEN
+      description: Placeholder MCP docs server definition for local agent tooling.
+policies:
+  redact_paths:
+    - AGENTS.md
+    - .github/copilot-instructions.md
+    - .cursor
+    - .claude
+    - .env.local
+    - .env.agent
+    - .vscode/mcp.json
+    - mcp.json
+  block_patterns:
+    - ENVSYNC_SERVICE_KEY=[A-Za-z0-9+/=]{32,}
+run:
+  default: test
+  targets:
+    test:
+      command: go test ./...
+      description: Run the primary Go verification suite.
+    relay:
+      command: cd relay && npm run dev
+      description: Start the local relay development server.
+    extension:
+      command: cd extension && npm run compile
+      description: Compile the VS Code extension.
