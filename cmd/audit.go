@@ -30,7 +30,6 @@ func runAudit(cmd *cobra.Command, args []string) error {
 	}
 
 	var entries []audit.Entry
-
 	switch {
 	case auditPeer != "":
 		entries, err = logger.FilterByPeer(auditPeer, auditLast)
@@ -39,7 +38,6 @@ func runAudit(cmd *cobra.Command, args []string) error {
 	default:
 		entries, err = logger.Read(auditLast)
 	}
-
 	if err != nil {
 		return err
 	}
@@ -52,34 +50,43 @@ func runAudit(cmd *cobra.Command, args []string) error {
 	}
 
 	ui.Header("Audit Log")
-
 	table := ui.NewTable("Time", "Event", "Peer", "File", "Method", "Details")
-	for _, e := range entries {
-		ts := e.Timestamp.Format("01-02 15:04")
-		peer := e.Peer
+	for _, entry := range entries {
+		peer := entry.Peer
 		if peer == "" {
-			peer = "—"
+			peer = "-"
 		}
-		file := e.File
+		file := entry.File
 		if file == "" {
-			file = "—"
+			file = "-"
 		}
-		method := e.Method
+		method := entry.Method
 		if method == "" {
-			method = "—"
+			method = "-"
 		}
-		details := e.Details
-		if details == "" && e.VarsChanged > 0 {
-			details = fmt.Sprintf("%d vars", e.VarsChanged)
+
+		details := entry.Details
+		if details == "" && entry.VarsChanged > 0 {
+			details = fmt.Sprintf("%d vars", entry.VarsChanged)
+		}
+		if details == "" && entry.DeliveryCount > 0 {
+			details = fmt.Sprintf("%d deliveries", entry.DeliveryCount)
 		}
 		if details == "" {
-			details = "—"
+			details = "-"
 		}
-		table.AddRow(ts, string(e.Event), peer, file, method, details)
+
+		table.AddRow(
+			entry.Timestamp.Format("01-02 15:04"),
+			string(entry.Event),
+			peer,
+			file,
+			method,
+			details,
+		)
 	}
 	fmt.Print(table.Render())
 	ui.Blank()
-
 	return nil
 }
 

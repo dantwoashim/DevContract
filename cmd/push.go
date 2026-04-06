@@ -104,11 +104,11 @@ func runPush(cmd *cobra.Command, args []string) error {
 	logger, logErr := audit.NewLogger()
 	if logErr == nil {
 		_ = logger.Log(audit.Entry{
-			Event:       audit.EventPush,
-			File:        targetFile,
-			VarsChanged: result.DeliveredCount + result.QueuedCount,
-			Method:      result.Method,
-			Details:     fmt.Sprintf("%d peers (%d delivered, %d queued), %s", result.PeerCount, result.DeliveredCount, result.QueuedCount, result.Duration.Truncate(time.Millisecond)),
+			Event:         audit.EventPush,
+			File:          targetFile,
+			DeliveryCount: result.DeliveredCount + result.QueuedCount,
+			Method:        result.Method,
+			Details:       fmt.Sprintf("%d peers (%d delivered, %d queued), %s", result.PeerCount, result.DeliveredCount, result.QueuedCount, result.Duration.Truncate(time.Millisecond)),
 		})
 	}
 

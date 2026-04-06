@@ -8,6 +8,7 @@ import (
 	cryptosha256 "crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/envsync/envsync/internal/config"
+	"github.com/envsync/envsync/internal/fsutil"
 )
 
 // EventType identifies an audit event.
@@ -34,57 +36,52 @@ const (
 
 // Entry is a single audit log entry with tamper-evident chaining.
 type Entry struct {
-	Timestamp   time.Time `json:"timestamp"`
-	Event       EventType `json:"event"`
-	Peer        string    `json:"peer,omitempty"`
-	File        string    `json:"file,omitempty"`
-	VarsChanged int       `json:"vars_changed,omitempty"`
-	Method      string    `json:"method,omitempty"`
-	Details     string    `json:"details,omitempty"`
-	PrevHash    string    `json:"prev_hash,omitempty"`
-	HMAC        string    `json:"hmac,omitempty"`
+	Timestamp     time.Time `json:"timestamp"`
+	Event         EventType `json:"event"`
+	Peer          string    `json:"peer,omitempty"`
+	File          string    `json:"file,omitempty"`
+	VarsChanged   int       `json:"vars_changed,omitempty"`
+	DeliveryCount int       `json:"delivery_count,omitempty"`
+	Method        string    `json:"method,omitempty"`
+	Details       string    `json:"details,omitempty"`
+	PrevHash      string    `json:"prev_hash,omitempty"`
+	HMAC          string    `json:"hmac,omitempty"`
 }
 
 // Logger is an append-only, tamper-evident audit log.
 type Logger struct {
 	mu       sync.Mutex
 	path     string
-	lastHash string // SHA-256 of the previous entry for chaining
+	lastHash string
 }
 
-// NewLogger creates a new audit logger.
-// It loads the hash of the last entry to maintain chain continuity.
+// NewLogger creates a new audit logger and loads the previous chain hash.
 func NewLogger() (*Logger, error) {
 	dataDir, err := config.DataDir()
 	if err != nil {
 		return nil, err
 	}
-
 	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		return nil, err
 	}
 
 	logPath := filepath.Join(dataDir, "audit.jsonl")
+	logger := &Logger{path: logPath}
 
-	l := &Logger{
-		path: logPath,
-	}
-
-	// Load last hash from existing audit log for chain continuity
 	data, err := os.ReadFile(logPath)
 	if err == nil && len(data) > 0 {
-		// Find the last newline-terminated entry
 		lines := splitLines(data)
 		for i := len(lines) - 1; i >= 0; i-- {
-			if len(lines[i]) > 0 {
-				h := cryptosha256.Sum256(lines[i])
-				l.lastHash = hex.EncodeToString(h[:])
-				break
+			if len(lines[i]) == 0 {
+				continue
 			}
+			h := cryptosha256.Sum256(lines[i])
+			logger.lastHash = hex.EncodeToString(h[:])
+			break
 		}
 	}
 
-	return l, nil
+	return logger, nil
 }
 
 // Log appends a tamper-evident event to the audit log.
@@ -95,32 +92,26 @@ func (l *Logger) Log(entry Entry) error {
 	if entry.Timestamp.IsZero() {
 		entry.Timestamp = time.Now()
 	}
-
-	// Chain: include hash of previous entry
 	entry.PrevHash = l.lastHash
 
-	// Compute HMAC over entry content (minus HMAC field itself)
-	entry.HMAC = "" // Clear before computing
+	entry.HMAC = ""
 	entryBytes, err := json.Marshal(entry)
 	if err != nil {
 		return fmt.Errorf("marshaling audit entry: %w", err)
 	}
 
-	// Derive HMAC key from a persistent secret stored alongside the audit log
-	hmacKey := loadOrCreateAuditKey(l.path)
+	hmacKey, err := loadOrCreateAuditKey(l.path)
+	if err != nil {
+		return fmt.Errorf("loading audit integrity key: %w", err)
+	}
 	mac := hmac.New(cryptosha256.New, hmacKey)
 	mac.Write(entryBytes)
 	entry.HMAC = hex.EncodeToString(mac.Sum(nil))
 
-	// Serialize final entry with HMAC
 	data, err := json.Marshal(entry)
 	if err != nil {
 		return fmt.Errorf("marshaling audit entry: %w", err)
 	}
-
-	// Update chain hash
-	h := cryptosha256.Sum256(data)
-	l.lastHash = hex.EncodeToString(h[:])
 
 	f, err := os.OpenFile(l.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
@@ -128,11 +119,16 @@ func (l *Logger) Log(entry Entry) error {
 	}
 	defer f.Close()
 
-	_, err = f.Write(append(data, '\n'))
-	return err
+	if _, err := f.Write(append(data, '\n')); err != nil {
+		return err
+	}
+
+	h := cryptosha256.Sum256(data)
+	l.lastHash = hex.EncodeToString(h[:])
+	return nil
 }
 
-// Read returns all audit entries, newest first.
+// Read returns all audit entries, newest first, after verifying integrity.
 func (l *Logger) Read(limit int) ([]Entry, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -144,6 +140,9 @@ func (l *Logger) Read(limit int) ([]Entry, error) {
 		}
 		return nil, err
 	}
+	if err := verifyEntries(data, l.path); err != nil {
+		return nil, err
+	}
 
 	var all []Entry
 	for _, line := range splitLines(data) {
@@ -152,20 +151,17 @@ func (l *Logger) Read(limit int) ([]Entry, error) {
 		}
 		var entry Entry
 		if err := json.Unmarshal(line, &entry); err != nil {
-			continue
+			return nil, fmt.Errorf("parsing audit entry: %w", err)
 		}
 		all = append(all, entry)
 	}
 
-	// Reverse (newest first)
 	for i, j := 0, len(all)-1; i < j; i, j = i+1, j-1 {
 		all[i], all[j] = all[j], all[i]
 	}
-
 	if limit > 0 && len(all) > limit {
 		all = all[:limit]
 	}
-
 	return all, nil
 }
 
@@ -175,17 +171,15 @@ func (l *Logger) FilterByPeer(peer string, limit int) ([]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	var filtered []Entry
-	for _, e := range all {
-		if e.Peer == peer {
-			filtered = append(filtered, e)
+	for _, entry := range all {
+		if entry.Peer == peer {
+			filtered = append(filtered, entry)
 			if limit > 0 && len(filtered) >= limit {
 				break
 			}
 		}
 	}
-
 	return filtered, nil
 }
 
@@ -195,18 +189,31 @@ func (l *Logger) FilterByEvent(event EventType, limit int) ([]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	var filtered []Entry
-	for _, e := range all {
-		if e.Event == event {
-			filtered = append(filtered, e)
+	for _, entry := range all {
+		if entry.Event == event {
+			filtered = append(filtered, entry)
 			if limit > 0 && len(filtered) >= limit {
 				break
 			}
 		}
 	}
-
 	return filtered, nil
+}
+
+// Verify checks the on-disk audit log without returning entries.
+func (l *Logger) Verify() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	data, err := os.ReadFile(l.path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	return verifyEntries(data, l.path)
 }
 
 func splitLines(data []byte) [][]byte {
@@ -224,24 +231,65 @@ func splitLines(data []byte) [][]byte {
 	return lines
 }
 
-// loadOrCreateAuditKey returns a persistent 32-byte HMAC key.
-// If the key file doesn't exist, it creates one with crypto/rand.
-func loadOrCreateAuditKey(auditPath string) []byte {
+func loadOrCreateAuditKey(auditPath string) ([]byte, error) {
 	keyPath := auditPath + ".key"
 	data, err := os.ReadFile(keyPath)
 	if err == nil && len(data) == 32 {
-		return data
+		return data, nil
+	}
+	if err == nil && len(data) != 32 {
+		return nil, fmt.Errorf("invalid audit key length %d", len(data))
+	}
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("reading audit key: %w", err)
 	}
 
-	// Generate new key
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
-		// crypto/rand failure is catastrophic — log and use zeroed key
-		// (HMAC with zero key is still a MAC, just not secret)
-		fmt.Fprintf(os.Stderr, "envsync: WARNING: crypto/rand failed, audit HMAC integrity degraded\n")
-		return make([]byte, 32)
+		return nil, fmt.Errorf("generating audit key: %w", err)
+	}
+	if err := fsutil.AtomicWriteFile(keyPath, key, 0600); err != nil {
+		return nil, fmt.Errorf("persisting audit key: %w", err)
+	}
+	return key, nil
+}
+
+func verifyEntries(data []byte, auditPath string) error {
+	key, err := loadOrCreateAuditKey(auditPath)
+	if err != nil {
+		return err
 	}
 
-	_ = os.WriteFile(keyPath, key, 0600)
-	return key
+	prevHash := ""
+	for idx, line := range splitLines(data) {
+		if len(line) == 0 {
+			continue
+		}
+
+		var entry Entry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			return fmt.Errorf("parsing audit entry %d: %w", idx+1, err)
+		}
+		if entry.PrevHash != prevHash {
+			return fmt.Errorf("audit chain mismatch at entry %d", idx+1)
+		}
+
+		expectedHMAC := entry.HMAC
+		entry.HMAC = ""
+		entryBytes, err := json.Marshal(entry)
+		if err != nil {
+			return fmt.Errorf("re-encoding audit entry %d: %w", idx+1, err)
+		}
+
+		mac := hmac.New(cryptosha256.New, key)
+		mac.Write(entryBytes)
+		actualHMAC := hex.EncodeToString(mac.Sum(nil))
+		if !hmac.Equal([]byte(expectedHMAC), []byte(actualHMAC)) {
+			return fmt.Errorf("audit HMAC mismatch at entry %d", idx+1)
+		}
+
+		h := cryptosha256.Sum256(line)
+		prevHash = hex.EncodeToString(h[:])
+	}
+	return nil
 }
