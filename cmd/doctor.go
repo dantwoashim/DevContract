@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/contract"
-	"github.com/envsync/envsync/internal/guard"
-	"github.com/envsync/envsync/internal/peer"
-	"github.com/envsync/envsync/internal/relay"
-	"github.com/envsync/envsync/internal/store"
-	"github.com/envsync/envsync/internal/ui"
+	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/contract"
+	"github.com/dantwoashim/Env_sync/internal/guard"
+	"github.com/dantwoashim/Env_sync/internal/peer"
+	"github.com/dantwoashim/Env_sync/internal/relay"
+	"github.com/dantwoashim/Env_sync/internal/store"
+	"github.com/dantwoashim/Env_sync/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -281,7 +281,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 			}
 			if !json.Valid(data) {
 				addCheck("mcp:"+agentName, "fail", fmt.Sprintf("MCP config at %s is not valid JSON", filepath.ToSlash(target.MCPOutput)), true)
-			} else if err := validateMCPConfig(data); err != nil {
+			} else if err := validateMCPConfig(repoRoot, data); err != nil {
 				addCheck("mcp:"+agentName, "fail", fmt.Sprintf("MCP config at %s is invalid: %v", filepath.ToSlash(target.MCPOutput), err), true)
 			} else {
 				addCheck("mcp:"+agentName, "pass", fmt.Sprintf("MCP config valid at %s", filepath.ToSlash(target.MCPOutput)), false)
@@ -509,7 +509,7 @@ func runContractDoctorCheck(repoRoot string, check contract.DoctorCheck, addChec
 	}
 }
 
-func validateMCPConfig(data []byte) error {
+func validateMCPConfig(repoRoot string, data []byte) error {
 	var payload struct {
 		Servers map[string]struct {
 			Command string            `json:"command"`
@@ -530,6 +530,79 @@ func validateMCPConfig(data []byte) error {
 		if strings.TrimSpace(server.Command) == "" {
 			return fmt.Errorf("server %q is missing a command", name)
 		}
+		if !commandExists(server.Command) {
+			return fmt.Errorf("server %q command %q is not available on PATH", name, server.Command)
+		}
+		if err := validateMCPServerTarget(repoRoot, server.Command, server.Args); err != nil {
+			return fmt.Errorf("server %q %w", name, err)
+		}
 	}
 	return nil
+}
+
+func validateMCPServerTarget(repoRoot, command string, args []string) error {
+	command = strings.ToLower(strings.TrimSpace(filepath.Base(command)))
+	if !commandExecutesLocalScript(command) {
+		return nil
+	}
+
+	expectInlineProgram := false
+	for _, arg := range args {
+		trimmed := strings.TrimSpace(arg)
+		if trimmed == "" {
+			continue
+		}
+		if expectInlineProgram {
+			return nil
+		}
+		if strings.HasPrefix(trimmed, "-") {
+			expectInlineProgram = looksLikeInlineProgramFlag(command, trimmed)
+			continue
+		}
+		if looksLikeInlineProgramFlag(command, trimmed) {
+			return nil
+		}
+
+		scriptPath, err := safeRepoPath(repoRoot, trimmed)
+		if err != nil {
+			return fmt.Errorf("references invalid local target %q: %w", trimmed, err)
+		}
+		if _, err := os.Stat(scriptPath); err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("references missing local target %q", filepath.ToSlash(trimmed))
+			}
+			return fmt.Errorf("cannot access local target %q: %w", filepath.ToSlash(trimmed), err)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("is missing a local script target in args")
+}
+
+func commandExecutesLocalScript(command string) bool {
+	switch command {
+	case "node", "node.exe", "bun", "bun.exe", "deno", "deno.exe", "python", "python.exe", "python3", "python3.exe":
+		return true
+	default:
+		return false
+	}
+}
+
+func looksLikeInlineProgramFlag(command, arg string) bool {
+	if strings.HasPrefix(arg, "${") {
+		return true
+	}
+
+	switch command {
+	case "python", "python.exe", "python3", "python3.exe":
+		return arg == "-c" || arg == "-m"
+	case "node", "node.exe":
+		return arg == "-e" || arg == "-p"
+	case "bun", "bun.exe":
+		return arg == "-e"
+	case "deno", "deno.exe":
+		return arg == "eval"
+	default:
+		return false
+	}
 }
