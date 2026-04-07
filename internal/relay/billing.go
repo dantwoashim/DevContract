@@ -48,16 +48,3 @@ func (c *Client) GetTierStatus(teamID string) (*TierStatus, error) {
 	}
 	return &status, nil
 }
-
-// IsUnlimited returns true if the limit value means unlimited.
-func IsUnlimited(limit int) bool {
-	return limit < 0
-}
-
-// FormatLimit formats a limit for display.
-func FormatLimit(limit int) string {
-	if limit < 0 {
-		return "unlimited"
-	}
-	return fmt.Sprintf("%d", limit)
-}

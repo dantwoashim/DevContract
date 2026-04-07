@@ -382,6 +382,12 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 					}
 				}
 			}
+
+			if metrics, err := client.GetTeamMetrics(project.ProjectID); err != nil {
+				addCheck("relay:metrics", "warn", fmt.Sprintf("Could not read relay metrics: %v", err), false)
+			} else {
+				addCheck("relay:metrics", "pass", fmt.Sprintf("Relay metrics available (%d pending, %d member records)", metrics.PendingCount, metrics.MemberCount), false)
+			}
 		}
 	}
 

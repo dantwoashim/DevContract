@@ -37,6 +37,17 @@ type TeamMember struct {
 	AddedAt              int64  `json:"added_at"`
 }
 
+type TeamMetrics struct {
+	TeamID             string         `json:"team_id"`
+	MemberCount        int            `json:"member_count"`
+	PendingCount       int            `json:"pending_count"`
+	PendingByRecipient map[string]int `json:"pending_by_recipient"`
+	UploadsToday       int            `json:"uploads_today"`
+	EventTotals        map[string]int `json:"event_totals"`
+	EventsToday        map[string]int `json:"events_today"`
+	RecordedAt         string         `json:"recorded_at"`
+}
+
 // NewClient creates a new relay client.
 func NewClient(baseURL string, kp *crypto.KeyPair) *Client {
 	return &Client{
@@ -400,21 +411,6 @@ func (c *Client) AddTeamMember(teamID, username, fingerprint, publicKey, transpo
 	return nil
 }
 
-// RemoveTeamMember removes a member from a team on the relay.
-func (c *Client) RemoveTeamMember(teamID, username string) error {
-	path := fmt.Sprintf("/teams/%s/members/%s", teamID, username)
-	resp, err := c.doRequest("DELETE", path, nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return readError(resp)
-	}
-	return nil
-}
-
 // RemoveTeamMemberByFingerprint removes a member from a team using the stable identity fingerprint.
 func (c *Client) RemoveTeamMemberByFingerprint(teamID, fingerprint string) error {
 	path := fmt.Sprintf("/teams/%s/members/by-fingerprint/%s", teamID, url.PathEscape(fingerprint))
@@ -479,6 +475,26 @@ func (c *Client) ListTeamMembers(teamID string) ([]TeamMember, error) {
 		return nil, err
 	}
 	return result.Members, nil
+}
+
+// GetTeamMetrics returns operator-facing relay metrics for a project team.
+func (c *Client) GetTeamMetrics(teamID string) (*TeamMetrics, error) {
+	path := fmt.Sprintf("/teams/%s/metrics", teamID)
+	resp, err := c.doRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, readError(resp)
+	}
+
+	var result TeamMetrics
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 func readError(resp *http.Response) error {
