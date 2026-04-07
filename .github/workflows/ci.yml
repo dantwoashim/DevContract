@@ -90,6 +90,12 @@ jobs:
       - name: Go build
         run: go build ./...
 
+      - name: Check repo identity consistency
+        run: go run ./scripts/check_repo_identity
+
+      - name: Verify MCP docs server
+        run: node ./scripts/mcp-docs.js --self-check
+
       - name: Install relay dependencies
         working-directory: relay
         run: npm ci

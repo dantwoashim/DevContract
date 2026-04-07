@@ -10,11 +10,11 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/contract"
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/envfile"
-	"github.com/envsync/envsync/internal/fsutil"
+	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/contract"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/envfile"
+	"github.com/dantwoashim/Env_sync/internal/fsutil"
 )
 
 type contractContext struct {

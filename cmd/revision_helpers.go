@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/envsync/envsync/internal/revision"
+	"github.com/dantwoashim/Env_sync/internal/revision"
 )
 
 func resolveCurrentRevision(projectID, targetFile string, backupKey [32]byte) (string, string, error) {

@@ -10,12 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/envsync/envsync/internal/audit"
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/peer"
-	"github.com/envsync/envsync/internal/relay"
-	"github.com/envsync/envsync/internal/store"
-	"github.com/envsync/envsync/internal/ui"
+	"github.com/dantwoashim/Env_sync/internal/audit"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/peer"
+	"github.com/dantwoashim/Env_sync/internal/relay"
+	"github.com/dantwoashim/Env_sync/internal/store"
+	"github.com/dantwoashim/Env_sync/internal/ui"
 	"github.com/spf13/cobra"
 )
 

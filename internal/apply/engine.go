@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/envsync/envsync/internal/envfile"
-	"github.com/envsync/envsync/internal/fsutil"
-	"github.com/envsync/envsync/internal/revision"
-	"github.com/envsync/envsync/internal/store"
+	"github.com/dantwoashim/Env_sync/internal/envfile"
+	"github.com/dantwoashim/Env_sync/internal/fsutil"
+	"github.com/dantwoashim/Env_sync/internal/revision"
+	"github.com/dantwoashim/Env_sync/internal/store"
 )
 
 type Policy string

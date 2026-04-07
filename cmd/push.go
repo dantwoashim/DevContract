@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/envsync/envsync/internal/audit"
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/relay"
-	envsync "github.com/envsync/envsync/internal/sync"
-	"github.com/envsync/envsync/internal/ui"
+	"github.com/dantwoashim/Env_sync/internal/audit"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/relay"
+	envsync "github.com/dantwoashim/Env_sync/internal/sync"
+	"github.com/dantwoashim/Env_sync/internal/ui"
 	"github.com/spf13/cobra"
 )
 

@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/envsync/envsync/internal/envfile"
+	"github.com/dantwoashim/Env_sync/internal/envfile"
 	"github.com/spf13/cobra"
 )
 

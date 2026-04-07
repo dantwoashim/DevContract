@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/discovery"
-	"github.com/envsync/envsync/internal/peer"
-	"github.com/envsync/envsync/internal/relay"
-	"github.com/envsync/envsync/internal/transport"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/discovery"
+	"github.com/dantwoashim/Env_sync/internal/peer"
+	"github.com/dantwoashim/Env_sync/internal/relay"
+	"github.com/dantwoashim/Env_sync/internal/transport"
 	"github.com/flynn/noise"
 )
 

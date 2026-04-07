@@ -6,7 +6,7 @@ import (
 	"crypto/sha256"
 	"testing"
 
-	"github.com/envsync/envsync/internal/sync"
+	"github.com/dantwoashim/Env_sync/internal/sync"
 )
 
 // TestProtocolRoundTripIntegration tests the wire protocol encode/decode with realistic data.

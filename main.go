@@ -2,7 +2,7 @@
 
 package main
 
-import "github.com/envsync/envsync/cmd"
+import "github.com/dantwoashim/Env_sync/cmd"
 
 func main() {
 	cmd.Execute()

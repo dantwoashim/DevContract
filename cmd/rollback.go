@@ -5,8 +5,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/envsync/envsync/internal/audit"
-	"github.com/envsync/envsync/internal/ui"
+	"github.com/dantwoashim/Env_sync/internal/audit"
+	"github.com/dantwoashim/Env_sync/internal/ui"
 	"github.com/spf13/cobra"
 )
 

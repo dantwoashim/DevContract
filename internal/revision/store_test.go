@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/envsync/envsync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
 )
 
 func newTestStore(t *testing.T) *Store {

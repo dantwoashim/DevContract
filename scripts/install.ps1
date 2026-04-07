@@ -3,55 +3,81 @@
 
 $ErrorActionPreference = 'Stop'
 
-$Repo = "envsync/envsync"
-$InstallDir = "$env:LOCALAPPDATA\EnvSync\bin"
+$Repo = if ($env:ENVSYNC_INSTALL_REPO) { $env:ENVSYNC_INSTALL_REPO } else { "dantwoashim/Env_sync" }
+$InstallDir = if ($env:ENVSYNC_INSTALL_DIR) { $env:ENVSYNC_INSTALL_DIR } else { "$env:LOCALAPPDATA\EnvSync\bin" }
+$Version = if ($env:ENVSYNC_VERSION) { $env:ENVSYNC_VERSION } else { "latest" }
 
-# Detect architecture
-$Arch = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "386" }
-if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { $Arch = "arm64" }
+if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
+    $Arch = "arm64"
+} elseif ([Environment]::Is64BitOperatingSystem) {
+    $Arch = "amd64"
+} else {
+    throw "Unsupported architecture: only amd64 and arm64 Windows builds are published."
+}
 
-Write-Host "  ✦ Installing EnvSync for windows/$Arch" -ForegroundColor Magenta
+Write-Host "Installing EnvSync for windows/$Arch"
 
-# Get latest version
 try {
-    $Release = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest"
-    $Version = $Release.tag_name -replace '^v', ''
+    if ($Version -eq "latest") {
+        $Release = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest"
+        $Version = $Release.tag_name -replace '^v', ''
+    } else {
+        $Version = $Version -replace '^v', ''
+    }
 } catch {
-    Write-Host "  ✗ Failed to get latest version" -ForegroundColor Red
-    exit 1
+    throw "Failed to determine the release version: $($_.Exception.Message)"
 }
 
-Write-Host "  ▸ Version: v$Version"
+Write-Host "Version: v$Version"
 
-# Download
 $Filename = "envsync_${Version}_windows_${Arch}.zip"
-$Url = "https://github.com/$Repo/releases/download/v$Version/$Filename"
-$TempDir = New-TemporaryFile | ForEach-Object { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
+$ArchiveUrl = "https://github.com/$Repo/releases/download/v$Version/$Filename"
+$ChecksumsUrl = "https://github.com/$Repo/releases/download/v$Version/checksums.txt"
+$TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("envsync-install-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 
-Write-Host "  ▸ Downloading $Filename..."
-Invoke-WebRequest -Uri $Url -OutFile "$TempDir\$Filename"
+try {
+    $ArchivePath = Join-Path $TempDir $Filename
+    $ChecksumsPath = Join-Path $TempDir "checksums.txt"
 
-# Extract
-Expand-Archive -Path "$TempDir\$Filename" -DestinationPath $TempDir -Force
+    Write-Host "Downloading $Filename"
+    Invoke-WebRequest -Uri $ArchiveUrl -OutFile $ArchivePath
+    Invoke-WebRequest -Uri $ChecksumsUrl -OutFile $ChecksumsPath
 
-# Install
-if (!(Test-Path $InstallDir)) {
-    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    $Expected = Select-String -Path $ChecksumsPath -Pattern ([regex]::Escape($Filename) + '$') |
+        ForEach-Object { ($_ -split '\s+')[0] } |
+        Select-Object -First 1
+    if (-not $Expected) {
+        throw "Checksum for $Filename not found in checksums.txt"
+    }
+
+    $Actual = (Get-FileHash -Path $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($Actual -ne $Expected.ToLowerInvariant()) {
+        throw "Checksum verification failed for $Filename"
+    }
+
+    Write-Host "Checksum verified"
+    Expand-Archive -Path $ArchivePath -DestinationPath $TempDir -Force
+
+    if (!(Test-Path $InstallDir)) {
+        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    }
+
+    Move-Item (Join-Path $TempDir "envsync.exe") (Join-Path $InstallDir "envsync.exe") -Force
+
+    $UserPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    if ($UserPath -notlike "*$InstallDir*") {
+        $NewPath = if ([string]::IsNullOrWhiteSpace($UserPath)) { $InstallDir } else { "$UserPath;$InstallDir" }
+        [Environment]::SetEnvironmentVariable("PATH", $NewPath, "User")
+        Write-Host "Added $InstallDir to PATH"
+    }
+
+    Write-Host "Installed envsync v$Version to $InstallDir\envsync.exe"
+    Write-Host ""
+    Write-Host "Get started:"
+    Write-Host "  envsync init"
+} finally {
+    if (Test-Path $TempDir) {
+        Remove-Item $TempDir -Recurse -Force
+    }
 }
-Move-Item "$TempDir\envsync.exe" "$InstallDir\envsync.exe" -Force
-
-# Add to PATH if not already there
-$UserPath = [Environment]::GetEnvironmentVariable("PATH", "User")
-if ($UserPath -notlike "*$InstallDir*") {
-    [Environment]::SetEnvironmentVariable("PATH", "$UserPath;$InstallDir", "User")
-    Write-Host "  ▸ Added $InstallDir to PATH"
-}
-
-# Cleanup
-Remove-Item $TempDir -Recurse -Force
-
-Write-Host "  ✓ Installed envsync v$Version to $InstallDir\envsync.exe" -ForegroundColor Green
-Write-Host ""
-Write-Host "  Get started:"
-Write-Host "    envsync init"
-Write-Host ""

@@ -16,14 +16,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/envsync/envsync/internal/apply"
-	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/discovery"
-	"github.com/envsync/envsync/internal/envfile"
-	"github.com/envsync/envsync/internal/fsutil"
-	"github.com/envsync/envsync/internal/peer"
-	"github.com/envsync/envsync/internal/transport"
+	"github.com/dantwoashim/Env_sync/internal/apply"
+	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/discovery"
+	"github.com/dantwoashim/Env_sync/internal/envfile"
+	"github.com/dantwoashim/Env_sync/internal/fsutil"
+	"github.com/dantwoashim/Env_sync/internal/peer"
+	"github.com/dantwoashim/Env_sync/internal/transport"
 	"github.com/flynn/noise"
 )
 

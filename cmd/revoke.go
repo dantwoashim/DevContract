@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/envsync/envsync/internal/audit"
-	"github.com/envsync/envsync/internal/peer"
-	"github.com/envsync/envsync/internal/relay"
+	"github.com/dantwoashim/Env_sync/internal/audit"
+	"github.com/dantwoashim/Env_sync/internal/peer"
+	"github.com/dantwoashim/Env_sync/internal/relay"
 	"github.com/spf13/cobra"
 )
 

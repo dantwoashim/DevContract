@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/contract"
-	"github.com/envsync/envsync/internal/guard"
-	"github.com/envsync/envsync/internal/ui"
+	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/contract"
+	"github.com/dantwoashim/Env_sync/internal/guard"
+	"github.com/dantwoashim/Env_sync/internal/ui"
 	"github.com/spf13/cobra"
 )
 

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/envsync/envsync/internal/apply"
-	"github.com/envsync/envsync/internal/ui"
+	"github.com/dantwoashim/Env_sync/internal/apply"
+	"github.com/dantwoashim/Env_sync/internal/ui"
 	"github.com/spf13/cobra"
 )
 

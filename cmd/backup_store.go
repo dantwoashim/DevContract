@@ -5,9 +5,9 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/store"
+	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/store"
 )
 
 func atRestKey(kp *crypto.KeyPair) ([32]byte, error) {

@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
 	"github.com/spf13/cobra"
 )
 

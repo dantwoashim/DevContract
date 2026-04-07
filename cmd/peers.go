@@ -5,7 +5,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/envsync/envsync/internal/peer"
+	"github.com/dantwoashim/Env_sync/internal/peer"
 	"github.com/spf13/cobra"
 )
 

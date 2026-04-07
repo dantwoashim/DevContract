@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/discovery"
-	"github.com/envsync/envsync/internal/envfile"
-	"github.com/envsync/envsync/internal/transport"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/discovery"
+	"github.com/dantwoashim/Env_sync/internal/envfile"
+	"github.com/dantwoashim/Env_sync/internal/transport"
 	"github.com/flynn/noise"
 )
 

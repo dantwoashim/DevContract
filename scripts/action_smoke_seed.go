@@ -11,10 +11,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/relay"
-	"github.com/envsync/envsync/internal/revision"
-	envsync "github.com/envsync/envsync/internal/sync"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/relay"
+	"github.com/dantwoashim/Env_sync/internal/revision"
+	envsync "github.com/dantwoashim/Env_sync/internal/sync"
 )
 
 func main() {

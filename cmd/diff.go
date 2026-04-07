@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/envsync/envsync/internal/envfile"
-	"github.com/envsync/envsync/internal/ui"
+	"github.com/dantwoashim/Env_sync/internal/envfile"
+	"github.com/dantwoashim/Env_sync/internal/ui"
 	"github.com/spf13/cobra"
 )
 

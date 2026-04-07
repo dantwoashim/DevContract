@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/peer"
+	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/peer"
 )
 
 type projectContext struct {

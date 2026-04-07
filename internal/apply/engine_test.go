@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/revision"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/revision"
 )
 
 func TestApplyOverwriteWritesIncomingData(t *testing.T) {

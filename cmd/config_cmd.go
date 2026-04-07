@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/ui"
+	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/ui"
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 )

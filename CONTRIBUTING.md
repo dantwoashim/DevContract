@@ -6,7 +6,7 @@ Thank you for your interest in contributing!
 
 ```bash
 # Clone
-git clone https://github.com/envsync/envsync.git
+git clone https://github.com/dantwoashim/Env_sync.git
 cd envsync
 
 # Build

@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/fsutil"
-	"github.com/envsync/envsync/internal/ui"
+	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/fsutil"
+	"github.com/dantwoashim/Env_sync/internal/ui"
 )
 
 type contractTrustEntry struct {

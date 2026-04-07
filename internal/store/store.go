@@ -14,9 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/fsutil"
+	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/fsutil"
 )
 
 const (

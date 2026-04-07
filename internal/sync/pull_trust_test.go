@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/envsync/envsync/internal/peer"
+	"github.com/dantwoashim/Env_sync/internal/peer"
 )
 
 type stubPullRegistry struct {

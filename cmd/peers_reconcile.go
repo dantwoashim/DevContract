@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/envsync/envsync/internal/peer"
-	"github.com/envsync/envsync/internal/relay"
+	"github.com/dantwoashim/Env_sync/internal/peer"
+	"github.com/dantwoashim/Env_sync/internal/relay"
 	"github.com/spf13/cobra"
 )
 

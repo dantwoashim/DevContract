@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/envsync/envsync/internal/apply"
-	"github.com/envsync/envsync/internal/audit"
-	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/envfile"
-	envsync "github.com/envsync/envsync/internal/sync"
-	"github.com/envsync/envsync/internal/ui"
+	"github.com/dantwoashim/Env_sync/internal/apply"
+	"github.com/dantwoashim/Env_sync/internal/audit"
+	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/envfile"
+	envsync "github.com/dantwoashim/Env_sync/internal/sync"
+	"github.com/dantwoashim/Env_sync/internal/ui"
 	"github.com/spf13/cobra"
 )
 

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/envsync/envsync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
 )
 
 func TestListPendingSignsPathWithoutQueryString(t *testing.T) {

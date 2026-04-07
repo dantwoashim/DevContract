@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/fsutil"
+	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/fsutil"
 	toml "github.com/pelletier/go-toml/v2"
 )
 

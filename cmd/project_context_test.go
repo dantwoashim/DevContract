@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/envsync/envsync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/config"
 )
 
 func TestEnsureProjectContextRepairsIncompleteConfig(t *testing.T) {

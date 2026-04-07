@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/envsync/envsync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
 	"github.com/flynn/noise"
 )
 

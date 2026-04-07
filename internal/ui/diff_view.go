@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/envsync/envsync/internal/envfile"
+	"github.com/dantwoashim/Env_sync/internal/envfile"
 )
 
 // RenderDiff displays a color-coded diff between two env files.

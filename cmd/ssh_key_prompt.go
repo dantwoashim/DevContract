@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/envsync/envsync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
 	"golang.org/x/term"
 )
 
