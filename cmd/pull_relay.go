@@ -8,14 +8,14 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/envsync/envsync/internal/apply"
-	"github.com/envsync/envsync/internal/audit"
-	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/envfile"
-	"github.com/envsync/envsync/internal/relay"
-	envsync "github.com/envsync/envsync/internal/sync"
-	"github.com/envsync/envsync/internal/ui"
+	"github.com/dantwoashim/Env_sync/internal/apply"
+	"github.com/dantwoashim/Env_sync/internal/audit"
+	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/envfile"
+	"github.com/dantwoashim/Env_sync/internal/relay"
+	envsync "github.com/dantwoashim/Env_sync/internal/sync"
+	"github.com/dantwoashim/Env_sync/internal/ui"
 )
 
 type pullApplyOptions struct {
@@ -59,6 +59,7 @@ func pullPendingRelay(projectID, relayURL, targetFile string, cfg *config.Config
 		if decErr != nil {
 			summary.Warnings = append(summary.Warnings, fmt.Sprintf("invalid relay ephemeral key for %s: %v", blob.BlobID, decErr))
 			ui.Warning(fmt.Sprintf("  Invalid ephemeral key: %s", decErr))
+			rejectRelayBlob(relayClient, projectID, blob.BlobID, fmt.Sprintf("invalid ephemeral key: %v", decErr), summary)
 			continue
 		}
 
@@ -68,6 +69,7 @@ func pullPendingRelay(projectID, relayURL, targetFile string, cfg *config.Config
 		if err := verifyRelayBlobSignature(memberKeyMap, blob.SenderFingerprint, data, ephKey, sigB64); err != nil {
 			summary.Warnings = append(summary.Warnings, err.Error())
 			ui.Warning(fmt.Sprintf("  %s", err))
+			rejectRelayBlob(relayClient, projectID, blob.BlobID, err.Error(), summary)
 			continue
 		}
 
@@ -75,6 +77,7 @@ func pullPendingRelay(projectID, relayURL, targetFile string, cfg *config.Config
 		if err != nil {
 			summary.Warnings = append(summary.Warnings, fmt.Sprintf("relay decrypt failed for %s: %v", blob.BlobID, err))
 			ui.Warning(fmt.Sprintf("  Decryption failed: %s", err))
+			rejectRelayBlob(relayClient, projectID, blob.BlobID, fmt.Sprintf("decrypt failed: %v", err), summary)
 			continue
 		}
 
@@ -82,11 +85,13 @@ func pullPendingRelay(projectID, relayURL, targetFile string, cfg *config.Config
 		if err != nil {
 			summary.Warnings = append(summary.Warnings, fmt.Sprintf("relay payload decode failed for %s: %v", blob.BlobID, err))
 			ui.Warning(fmt.Sprintf("  Invalid relay payload: %s", err))
+			rejectRelayBlob(relayClient, projectID, blob.BlobID, fmt.Sprintf("payload decode failed: %v", err), summary)
 			continue
 		}
 		if payload.Checksum != envsync.NewEnvPayload(payload.FileName, payload.Data, payload.Sequence, payload.BaseRevisionID, payload.RevisionID).Checksum {
 			summary.Warnings = append(summary.Warnings, fmt.Sprintf("relay checksum mismatch for %s", blob.BlobID))
 			ui.Warning("  Relay payload checksum mismatch")
+			rejectRelayBlob(relayClient, projectID, blob.BlobID, "payload checksum mismatch", summary)
 			continue
 		}
 
@@ -150,4 +155,11 @@ func pullPendingRelay(projectID, relayURL, targetFile string, cfg *config.Config
 	}
 
 	return summary, nil
+}
+
+func rejectRelayBlob(client *relay.Client, projectID, blobID, reason string, summary *relayPullSummary) {
+	if err := client.RejectBlob(projectID, blobID, reason); err != nil {
+		summary.Warnings = append(summary.Warnings, fmt.Sprintf("relay reject failed for %s: %v", blobID, err))
+		ui.Warning(fmt.Sprintf("  Failed to reject blob: %s", err))
+	}
 }

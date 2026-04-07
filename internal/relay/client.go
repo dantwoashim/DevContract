@@ -15,7 +15,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/envsync/envsync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
 )
 
 // Client is an HTTP client for the EnvSync relay API.
@@ -28,13 +28,15 @@ type Client struct {
 
 // TeamMember represents a registered project member on the relay.
 type TeamMember struct {
-	Username             string `json:"username"`
-	Fingerprint          string `json:"fingerprint"`
-	PublicKey            string `json:"public_key"`
-	TransportPublicKey   string `json:"transport_public_key"`
-	TransportFingerprint string `json:"transport_fingerprint"`
-	Role                 string `json:"role"`
-	AddedAt              int64  `json:"added_at"`
+	Username             string   `json:"username"`
+	Fingerprint          string   `json:"fingerprint"`
+	PublicKey            string   `json:"public_key"`
+	TransportPublicKey   string   `json:"transport_public_key"`
+	TransportFingerprint string   `json:"transport_fingerprint"`
+	Role                 string   `json:"role"`
+	PrincipalType        string   `json:"principal_type,omitempty"`
+	Scopes               []string `json:"scopes,omitempty"`
+	AddedAt              int64    `json:"added_at"`
 }
 
 type TeamMetrics struct {
@@ -200,6 +202,39 @@ type JoinInviteRequest struct {
 	TransportFingerprint string `json:"transport_fingerprint"`
 }
 
+type BootstrapTeamRequest struct {
+	Username             string `json:"username"`
+	Fingerprint          string `json:"fingerprint"`
+	PublicKey            string `json:"public_key"`
+	TransportPublicKey   string `json:"transport_public_key"`
+	TransportFingerprint string `json:"transport_fingerprint"`
+	TeamName             string `json:"team_name,omitempty"`
+	BootstrapNonce       string `json:"bootstrap_nonce"`
+	ContractHash         string `json:"contract_hash,omitempty"`
+}
+
+type UpsertTeamMemberRequest struct {
+	Username             string   `json:"username"`
+	Fingerprint          string   `json:"fingerprint"`
+	PublicKey            string   `json:"public_key"`
+	TransportPublicKey   string   `json:"transport_public_key"`
+	TransportFingerprint string   `json:"transport_fingerprint"`
+	Role                 string   `json:"role,omitempty"`
+	PrincipalType        string   `json:"principal_type,omitempty"`
+	Scopes               []string `json:"scopes,omitempty"`
+}
+
+type RejectedBlobInfo struct {
+	BlobID               string `json:"blob_id"`
+	TeamID               string `json:"team_id"`
+	SenderFingerprint    string `json:"sender_fingerprint"`
+	RecipientFingerprint string `json:"recipient_fingerprint"`
+	Status               string `json:"status"`
+	FailureReason        string `json:"failure_reason,omitempty"`
+	RejectedAt           int64  `json:"rejected_at,omitempty"`
+	Filename             string `json:"filename"`
+}
+
 type JoinInviteResponse struct {
 	TeamID             string       `json:"team_id"`
 	Inviter            string       `json:"inviter"`
@@ -291,6 +326,25 @@ func (c *Client) JoinInvite(tokenHash string, req JoinInviteRequest) (*JoinInvit
 		return nil, err
 	}
 	return &result, nil
+}
+
+// BootstrapTeam creates the initial relay-side project record with an explicit founder.
+func (c *Client) BootstrapTeam(teamID string, req BootstrapTeamRequest) error {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.doRequest("POST", "/teams/"+teamID+"/bootstrap", body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 && resp.StatusCode != 201 {
+		return readError(resp)
+	}
+	return nil
 }
 
 // UploadBlob uploads an encrypted blob to the relay.
@@ -388,17 +442,85 @@ func (c *Client) DeleteBlob(teamID, blobID string) error {
 	return nil
 }
 
+// RejectBlob retires a malformed relay payload so it does not keep resurfacing.
+func (c *Client) RejectBlob(teamID, blobID, reason string) error {
+	body, err := json.Marshal(map[string]string{"reason": reason})
+	if err != nil {
+		return err
+	}
+
+	path := fmt.Sprintf("/relay/%s/%s/reject", teamID, blobID)
+	resp, err := c.doRequest("POST", path, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return readError(resp)
+	}
+	return nil
+}
+
+// ListRejectedBlobs returns rejected/quarantined relay metadata for operators.
+func (c *Client) ListRejectedBlobs(teamID string) ([]RejectedBlobInfo, error) {
+	path := fmt.Sprintf("/relay/%s/rejected", teamID)
+	resp, err := c.doRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, readError(resp)
+	}
+
+	var result struct {
+		Rejected []RejectedBlobInfo `json:"rejected"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.Rejected, nil
+}
+
 // AddTeamMember adds or updates a member on the relay.
 func (c *Client) AddTeamMember(teamID, username, fingerprint, publicKey, transportPublicKey, transportFingerprint, role string) error {
-	body, _ := json.Marshal(map[string]string{
-		"fingerprint":           fingerprint,
-		"public_key":            publicKey,
-		"transport_public_key":  transportPublicKey,
-		"transport_fingerprint": transportFingerprint,
-		"role":                  role,
+	return c.UpsertTeamMember(teamID, UpsertTeamMemberRequest{
+		Username:             username,
+		Fingerprint:          fingerprint,
+		PublicKey:            publicKey,
+		TransportPublicKey:   transportPublicKey,
+		TransportFingerprint: transportFingerprint,
+		Role:                 role,
+		PrincipalType:        "human_member",
 	})
+}
 
-	path := fmt.Sprintf("/teams/%s/members/%s", teamID, username)
+// UpsertTeamMember adds or updates a principal on the relay.
+func (c *Client) UpsertTeamMember(teamID string, req UpsertTeamMemberRequest) error {
+	body, _ := json.Marshal(map[string]string{
+		"fingerprint":           req.Fingerprint,
+		"public_key":            req.PublicKey,
+		"transport_public_key":  req.TransportPublicKey,
+		"transport_fingerprint": req.TransportFingerprint,
+		"role":                  req.Role,
+		"principal_type":        req.PrincipalType,
+	})
+	if len(req.Scopes) > 0 {
+		payload := map[string]any{
+			"fingerprint":           req.Fingerprint,
+			"public_key":            req.PublicKey,
+			"transport_public_key":  req.TransportPublicKey,
+			"transport_fingerprint": req.TransportFingerprint,
+			"role":                  req.Role,
+			"principal_type":        req.PrincipalType,
+			"scopes":                req.Scopes,
+		}
+		body, _ = json.Marshal(payload)
+	}
+
+	path := fmt.Sprintf("/teams/%s/members/%s", teamID, req.Username)
 	resp, err := c.doRequest("PUT", path, body)
 	if err != nil {
 		return err
@@ -443,6 +565,26 @@ func (c *Client) RotateSelf(teamID string, req RotateSelfRequest) error {
 	}
 
 	path := fmt.Sprintf("/teams/%s/rotate-self", teamID)
+	resp, err := c.doRequest("POST", path, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return readError(resp)
+	}
+	return nil
+}
+
+// TransferOwnership promotes another human member and demotes the caller to member.
+func (c *Client) TransferOwnership(teamID, fingerprint string) error {
+	body, err := json.Marshal(map[string]string{"fingerprint": fingerprint})
+	if err != nil {
+		return err
+	}
+
+	path := fmt.Sprintf("/teams/%s/transfer-ownership", teamID)
 	resp, err := c.doRequest("POST", path, body)
 	if err != nil {
 		return err
@@ -504,7 +646,7 @@ func readError(resp *http.Response) error {
 		Message string `json:"message"`
 	}
 	if json.Unmarshal(body, &errResp) == nil && errResp.Message != "" {
-		return fmt.Errorf("relay error: %s — %s", errResp.Error, errResp.Message)
+		return fmt.Errorf("relay error: %s - %s", errResp.Error, errResp.Message)
 	}
 	return fmt.Errorf("relay returned HTTP %d: %s", resp.StatusCode, string(body))
 }

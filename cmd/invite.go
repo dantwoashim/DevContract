@@ -4,15 +4,18 @@ package cmd
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/envsync/envsync/internal/audit"
-	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/peer"
-	"github.com/envsync/envsync/internal/relay"
+	"github.com/dantwoashim/Env_sync/internal/audit"
+	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/peer"
+	"github.com/dantwoashim/Env_sync/internal/relay"
 	"github.com/spf13/cobra"
 )
 
@@ -57,15 +60,28 @@ func runInvite(cmd *cobra.Command, args []string) error {
 	}
 
 	client := relay.NewClient(projectRelayURL(project, cfg), kp)
-	if err := client.AddTeamMember(
-		project.ProjectID,
-		displayMemberLabel(cfg, kp),
-		kp.Fingerprint,
-		ed25519PublicKeyBase64(kp),
-		x25519PublicKeyBase64(kp),
-		crypto.ComputeFingerprint(kp.X25519Public),
-		"owner",
-	); err != nil {
+	bootstrapReq := relay.BootstrapTeamRequest{
+		Username:             displayMemberLabel(cfg, kp),
+		Fingerprint:          kp.Fingerprint,
+		PublicKey:            ed25519PublicKeyBase64(kp),
+		TransportPublicKey:   x25519PublicKeyBase64(kp),
+		TransportFingerprint: crypto.ComputeFingerprint(kp.X25519Public),
+		TeamName:             project.Config.Name,
+		BootstrapNonce:       tokenNonce(),
+		ContractHash:         currentContractHash(),
+	}
+	if err := client.BootstrapTeam(project.ProjectID, bootstrapReq); err != nil && !strings.Contains(err.Error(), "conflict") {
+		return fmt.Errorf("bootstrapping project on relay: %w", err)
+	}
+	if err := client.UpsertTeamMember(project.ProjectID, relay.UpsertTeamMemberRequest{
+		Username:             displayMemberLabel(cfg, kp),
+		Fingerprint:          kp.Fingerprint,
+		PublicKey:            ed25519PublicKeyBase64(kp),
+		TransportPublicKey:   x25519PublicKeyBase64(kp),
+		TransportFingerprint: crypto.ComputeFingerprint(kp.X25519Public),
+		Role:                 "owner",
+		PrincipalType:        "human_member",
+	}); err != nil {
 		return fmt.Errorf("registering project owner on relay: %w", err)
 	}
 
@@ -171,6 +187,9 @@ func runJoin(cmd *cobra.Command, args []string) error {
 
 	for _, member := range joinResp.Members {
 		if member.Fingerprint == kp.Fingerprint {
+			continue
+		}
+		if member.PrincipalType == "service_principal" {
 			continue
 		}
 
@@ -279,4 +298,25 @@ func projectRelayURL(project *projectContext, cfg *config.Config) string {
 func init() {
 	rootCmd.AddCommand(inviteCmd)
 	rootCmd.AddCommand(joinCmd)
+}
+
+func currentContractHash() string {
+	path, err := config.FindContractFile()
+	if err != nil {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+	return fmt.Sprintf("%x", sum[:])
+}
+
+func tokenNonce() string {
+	random := make([]byte, 16)
+	if _, err := rand.Read(random); err != nil {
+		return fmt.Sprintf("envsync-%d", time.Now().UnixNano())
+	}
+	return fmt.Sprintf("%x:%s", random, filepath.Base(mustGetwd()))
 }

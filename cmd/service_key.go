@@ -5,22 +5,23 @@ package cmd
 import (
 	"encoding/base64"
 	"fmt"
+	"strings"
 
-	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/relay"
-	"github.com/envsync/envsync/internal/ui"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/relay"
+	"github.com/dantwoashim/Env_sync/internal/ui"
 	"github.com/spf13/cobra"
 )
 
 var serviceKeyCmd = &cobra.Command{
 	Use:   "service-key",
-	Short: "Manage service account keys for CI/CD",
-	Long:  "Generate, export, and register service keys for use in GitHub Actions and other CI environments.",
+	Short: "Manage service principal keys for CI/CD",
+	Long:  "Generate, export, and register service principal keys for use in GitHub Actions and other CI environments.",
 }
 
 var serviceKeyGenerateCmd = &cobra.Command{
 	Use:   "generate",
-	Short: "Generate a new service account key",
+	Short: "Generate a new service principal key",
 	RunE:  runServiceKeyGenerate,
 }
 
@@ -32,7 +33,7 @@ var serviceKeyExportCmd = &cobra.Command{
 
 var serviceKeyRegisterCmd = &cobra.Command{
 	Use:   "register",
-	Short: "Register a service key with the current project",
+	Short: "Register a service principal with the current project",
 	RunE:  runServiceKeyRegister,
 }
 
@@ -40,6 +41,7 @@ var (
 	serviceKeyOutput       string
 	serviceKeyRegisterTeam string
 	serviceKeyRegisterName string
+	serviceKeyScopes       []string
 )
 
 func runServiceKeyGenerate(cmd *cobra.Command, args []string) error {
@@ -133,20 +135,32 @@ func runServiceKeyRegister(cmd *cobra.Command, args []string) error {
 	}
 
 	client := relay.NewClient(projectRelayURL(project, cfg), ownerKP)
-	if err := client.AddTeamMember(
-		targetProjectID,
-		memberName,
-		serviceKP.Fingerprint,
-		ed25519PublicKeyBase64(serviceKP),
-		x25519PublicKeyBase64(serviceKP),
-		crypto.ComputeFingerprint(serviceKP.X25519Public),
-		"member",
-	); err != nil {
+	scopes := serviceKeyScopes
+	if len(scopes) == 0 {
+		scopes = []string{"relay.pull", "member.read"}
+	}
+
+	if err := client.UpsertTeamMember(targetProjectID, relay.UpsertTeamMemberRequest{
+		Username:             memberName,
+		Fingerprint:          serviceKP.Fingerprint,
+		PublicKey:            ed25519PublicKeyBase64(serviceKP),
+		TransportPublicKey:   x25519PublicKeyBase64(serviceKP),
+		TransportFingerprint: crypto.ComputeFingerprint(serviceKP.X25519Public),
+		Role:                 "member",
+		PrincipalType:        "service_principal",
+		Scopes:               scopes,
+	}); err != nil {
 		return fmt.Errorf("registering service key: %w", err)
 	}
 
 	ui.Header("Service Key Registered")
 	ui.Success(fmt.Sprintf("Registered %s on project %s", memberName, targetProjectID))
+	ui.Blank()
+	ui.Line("Principal type:")
+	ui.Code("  service_principal")
+	ui.Blank()
+	ui.Line("Scopes:")
+	ui.Code(fmt.Sprintf("  %s", strings.Join(scopes, ", ")))
 	ui.Blank()
 	ui.Line("This key can now authenticate relay pulls in CI with:")
 	ui.Code(fmt.Sprintf("  envsync pull --service-key %s --project %s", keyPath, targetProjectID))
@@ -163,6 +177,7 @@ func init() {
 	serviceKeyRegisterCmd.Flags().StringVar(&serviceKeyRegisterTeam, "team", "", "Deprecated alias for --project")
 	_ = serviceKeyRegisterCmd.Flags().MarkHidden("team")
 	serviceKeyRegisterCmd.Flags().StringVar(&serviceKeyRegisterName, "name", "ci", "Member name to register for the service key")
+	serviceKeyRegisterCmd.Flags().StringSliceVar(&serviceKeyScopes, "scope", nil, "Explicit scope(s) for the service principal (default: relay.pull,member.read)")
 
 	serviceKeyCmd.AddCommand(serviceKeyGenerateCmd)
 	serviceKeyCmd.AddCommand(serviceKeyExportCmd)

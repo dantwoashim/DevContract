@@ -15,23 +15,24 @@ import (
 	"sync"
 	"time"
 
-	"github.com/envsync/envsync/internal/config"
-	"github.com/envsync/envsync/internal/fsutil"
+	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/fsutil"
 )
 
 // EventType identifies an audit event.
 type EventType string
 
 const (
-	EventPush             EventType = "push"
-	EventPull             EventType = "pull"
-	EventInvite           EventType = "invite"
-	EventJoin             EventType = "join"
-	EventRevoke           EventType = "revoke"
-	EventKeyRotate        EventType = "key_rotate"
-	EventConflictResolved EventType = "conflict_resolved"
-	EventBackup           EventType = "backup"
-	EventRestore          EventType = "restore"
+	EventPush              EventType = "push"
+	EventPull              EventType = "pull"
+	EventInvite            EventType = "invite"
+	EventJoin              EventType = "join"
+	EventRevoke            EventType = "revoke"
+	EventKeyRotate         EventType = "key_rotate"
+	EventOwnershipTransfer EventType = "ownership_transfer"
+	EventConflictResolved  EventType = "conflict_resolved"
+	EventBackup            EventType = "backup"
+	EventRestore           EventType = "restore"
 )
 
 // Entry is a single audit log entry with tamper-evident chaining.

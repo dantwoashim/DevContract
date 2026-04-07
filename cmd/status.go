@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/envsync/envsync/internal/audit"
-	"github.com/envsync/envsync/internal/peer"
-	"github.com/envsync/envsync/internal/relay"
-	"github.com/envsync/envsync/internal/store"
-	"github.com/envsync/envsync/internal/ui"
+	"github.com/dantwoashim/Env_sync/internal/audit"
+	"github.com/dantwoashim/Env_sync/internal/peer"
+	"github.com/dantwoashim/Env_sync/internal/relay"
+	"github.com/dantwoashim/Env_sync/internal/store"
+	"github.com/dantwoashim/Env_sync/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -79,6 +79,15 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			}
 		} else {
 			ui.Line("  Relay:      unavailable")
+		}
+
+		rejected, err := client.ListRejectedBlobs(teamID)
+		if err == nil {
+			if len(rejected) > 0 {
+				ui.Warning(fmt.Sprintf("  %d rejected relay blob(s) need operator review", len(rejected)))
+			} else {
+				ui.Line("  Relay rejects: none")
+			}
 		}
 	}
 	ui.Blank()
