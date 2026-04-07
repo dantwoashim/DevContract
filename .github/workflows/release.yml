@@ -30,7 +30,7 @@ jobs:
         run: bash ./scripts/package_source.sh dist/source "${GITHUB_REF_NAME}"
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
           args: release --clean
