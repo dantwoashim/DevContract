@@ -13,6 +13,10 @@ export type HealthRow = {
     description: string;
 };
 
+export function parseDoctorReport(raw: string): DoctorReport {
+    return JSON.parse(raw.trim()) as DoctorReport;
+}
+
 export function buildHealthRows(report: DoctorReport): HealthRow[] {
     const rows: HealthRow[] = [
         { label: 'Blocking Issues', description: String(report.blocking) },

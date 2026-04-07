@@ -1,9 +1,12 @@
 import * as vscode from 'vscode';
 import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { renderCommand } from './shell';
 
-const execFileAsync = promisify(execFile);
+export type ExecCapture = {
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+};
 
 export function getWorkspaceFolder(): string | undefined {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -13,36 +16,57 @@ export async function execEnvSync(
     args: string[],
     options: { cwd?: string; timeout?: number } = {},
 ): Promise<string> {
+    const result = await execEnvSyncCapture(args, options);
+    if (result.exitCode === 0) {
+        return (result.stdout || result.stderr).trim();
+    }
+
+    const detail = [result.stderr, result.stdout].filter(Boolean).join('\n').trim();
+    if (detail) {
+        throw new Error(detail);
+    }
+    throw new Error(`envsync exited with status ${result.exitCode}`);
+}
+
+export async function execEnvSyncCapture(
+    args: string[],
+    options: { cwd?: string; timeout?: number } = {},
+): Promise<ExecCapture> {
     const cwd = options.cwd ?? getWorkspaceFolder();
     if (!cwd) {
         throw new Error('No workspace folder is open.');
     }
 
-    try {
-        const { stdout, stderr } = await execFileAsync('envsync', args, {
+    return new Promise<ExecCapture>((resolve, reject) => {
+        execFile('envsync', args, {
             cwd,
             timeout: options.timeout ?? 15000,
             windowsHide: true,
             maxBuffer: 1024 * 1024,
             encoding: 'utf8',
-        });
+        }, (error, stdout, stderr) => {
+            const capture = {
+                stdout: String(stdout || '').trim(),
+                stderr: String(stderr || '').trim(),
+                exitCode: 0,
+            };
 
-        return (stdout || stderr).trim();
-    } catch (error) {
-        const stdout = typeof error === 'object' && error && 'stdout' in error
-            ? String((error as { stdout?: string }).stdout || '').trim()
-            : '';
-        if (typeof error === 'object' && error && 'stderr' in error) {
-            const stderr = String((error as { stderr?: string }).stderr || '').trim();
-            if (stderr) {
-                throw new Error(stdout ? `${stderr}\n${stdout}` : stderr);
+            if (!error) {
+                resolve(capture);
+                return;
             }
-        }
-        if (stdout) {
-            throw new Error(stdout);
-        }
-        throw error instanceof Error ? error : new Error(String(error));
-    }
+
+            if (typeof error === 'object' && error && 'code' in error) {
+                const code = (error as { code?: number | string }).code;
+                if (typeof code === 'number') {
+                    resolve({ ...capture, exitCode: code });
+                    return;
+                }
+            }
+
+            reject(error instanceof Error ? error : new Error(String(error)));
+        });
+    });
 }
 
 export function createEnvSyncTerminal(name: string, args: string[], cwd: string) {

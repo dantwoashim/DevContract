@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { execEnvSync, getWorkspaceFolder } from './cli';
-import { buildHealthRows, type DoctorReport } from './doctorView';
+import { execEnvSyncCapture, getWorkspaceFolder } from './cli';
+import { buildHealthRows, parseDoctorReport } from './doctorView';
 
 export function registerSidebar(context: vscode.ExtensionContext) {
     const actionsProvider = new ActionsProvider();
@@ -51,11 +51,11 @@ class HealthProvider implements vscode.TreeDataProvider<EnvSyncItem> {
         }
 
         try {
-            const output = await execEnvSync(['doctor', '--json', '--skip-relay', '--quiet'], {
+            const result = await execEnvSyncCapture(['doctor', '--json', '--quiet'], {
                 cwd,
-                timeout: 15000,
+                timeout: 20000,
             });
-            const report = JSON.parse(output) as DoctorReport;
+            const report = parseDoctorReport(result.stdout || result.stderr);
             return buildHealthRows(report).map((row) => new EnvSyncItem(row.label, row.description));
         } catch (error) {
             return [

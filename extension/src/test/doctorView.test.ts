@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildHealthRows, iconForStatus, type DoctorReport } from '../doctorView';
+import { buildHealthRows, iconForStatus, parseDoctorReport, type DoctorReport } from '../doctorView';
 
 test('buildHealthRows includes summary rows and every doctor check', () => {
     const report: DoctorReport = {
@@ -24,4 +24,17 @@ test('iconForStatus maps known statuses and defaults unknown to error', () => {
     assert.equal(iconForStatus('pass'), '$(check)');
     assert.equal(iconForStatus('warn'), '$(warning)');
     assert.equal(iconForStatus('anything-else'), '$(error)');
+});
+
+test('parseDoctorReport accepts doctor JSON even when the command exited non-zero', () => {
+    const report = parseDoctorReport(`{
+  "blocking": 1,
+  "warnings": 0,
+  "checks": [
+    { "name": "relay", "status": "fail", "detail": "offline" }
+  ]
+}`);
+
+    assert.equal(report.blocking, 1);
+    assert.equal(report.checks[0]?.name, 'relay');
 });
