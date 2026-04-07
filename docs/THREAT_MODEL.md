@@ -1,0 +1,51 @@
+# Threat Model
+
+EnvSync is designed for development-time environment sharing and onboarding. It reduces accidental secret sprawl, but it does not turn an untrusted machine or repository into a safe one.
+
+## Trust Boundaries
+
+- Repository contract: trusted only after the user explicitly accepts it.
+- Local machine: holds plaintext `.env` data before and after sync; compromise here defeats local secrecy.
+- Peer identity: derived from Ed25519 public keys and stored in the local trust registry.
+- Relay: transports encrypted blobs and stores metadata; it must not be treated as a plaintext secret authority.
+- CI/service principals: authenticated machine actors with scoped relay permissions.
+
+## What Is Encrypted
+
+- LAN sync traffic: Noise-secured transport between peers.
+- Relay payloads: encrypted client-side for one intended recipient before upload.
+- Local revision and backup history: encrypted at rest with a derived local key.
+
+## What Is Not Encrypted
+
+- Local plaintext `.env` files on the machine using them.
+- Relay routing metadata such as sender fingerprint, recipient fingerprint, filename, size, and timing.
+- Contract content in the repository.
+- Logs and shell output produced by user-defined bootstrap commands.
+
+## Relay Assumptions
+
+- The relay can see metadata and can deny service.
+- The relay should not be able to decrypt stored payloads.
+- A compromised relay can attempt replay, delay, or deletion attacks, so clients verify signatures and payload integrity before apply.
+
+## TOFU Caveats
+
+EnvSync uses trust-on-first-use in a few places:
+
+- repository contracts require an explicit local trust decision
+- first-contact public key registration on the relay is bound to a signed request
+- locally imported peers from the relay can remain pending until the operator verifies them
+
+That means the first trust decision still matters. If a user trusts the wrong repository or wrong identity, EnvSync cannot fully undo that mistake.
+
+## Local Machine Caveat
+
+If an attacker controls the developer machine, EnvSync cannot protect:
+
+- the loaded `.env` file
+- the user's SSH private key
+- shell commands run during bootstrap or `run`
+- files written by repository-defined commands
+
+EnvSync is a safer workflow for developer setup. It is not a sandbox.

@@ -232,7 +232,9 @@ policies:
 
 ## Optional Tool Targets
 
-The `agents` and `mcp` sections are optional. They exist for repositories that want EnvSync to generate instruction files and companion JSON config for supported tools.
+The `agents` and `mcp` sections are optional and should be treated as experimental companion features. This repository does not commit the generated outputs; generate them locally if you need them.
+
+They exist for repositories that want EnvSync to generate instruction files and companion JSON config for supported tools.
 
 Example:
 
