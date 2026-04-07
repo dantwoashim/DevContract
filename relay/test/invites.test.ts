@@ -143,3 +143,55 @@ describe('Invite joiner validation', () => {
         expect(res.status).toBe(200);
     });
 });
+
+describe('Invite administration', () => {
+    const tokenHash = `test-token-admin-${Date.now()}`;
+    const teamId = `test-team-admin-${Date.now()}`;
+
+    let owner: Awaited<ReturnType<typeof createIdentity>>;
+
+    beforeAll(async () => {
+        owner = await createIdentity('invite-admin-owner');
+        const bootstrap = await registerMember(worker, owner, teamId, 'owner', transportKey(11), 'owner');
+        expect(bootstrap.status).toBe(200);
+        const create = await signedFetch(worker, owner, '/invites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                token_hash: tokenHash,
+                team_id: teamId,
+                inviter: 'owner',
+                inviter_fingerprint: owner.fingerprint,
+                invitee: 'pending-user',
+            }),
+        });
+        expect(create.status).toBe(201);
+    });
+
+    it('lists relay invites for administrators', async () => {
+        const res = await signedFetch(worker, owner, `/teams/${teamId}/invites`);
+        expect(res.status).toBe(200);
+        const data = await res.json() as { invites: Array<{ token_hash: string; status: string }> };
+        expect(data.invites.some((invite) => invite.token_hash === tokenHash && invite.status === 'pending')).toBe(true);
+    });
+
+    it('revokes a pending invite and exposes the audit trail', async () => {
+        const revoke = await signedFetch(worker, owner, `/teams/${teamId}/invites/${tokenHash}/revoke`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: 'manual test revoke' }),
+        });
+        expect(revoke.status).toBe(200);
+
+        const invite = await worker.fetch(`/invites/${tokenHash}`);
+        expect(invite.status).toBe(410);
+        const invitePayload = await invite.json() as { error: string };
+        expect(invitePayload.error).toBe('revoked');
+
+        const audit = await signedFetch(worker, owner, `/teams/${teamId}/audit?limit=10`);
+        expect(audit.status).toBe(200);
+        const auditPayload = await audit.json() as { events: Array<{ action: string; invite_hash?: string; result: string }> };
+        expect(auditPayload.events.some((event) => event.action === 'invite.created' && event.invite_hash === tokenHash && event.result === 'succeeded')).toBe(true);
+        expect(auditPayload.events.some((event) => event.action === 'invite.revoked' && event.invite_hash === tokenHash && event.result === 'succeeded')).toBe(true);
+    });
+});

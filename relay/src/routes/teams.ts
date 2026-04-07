@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
-import type { Env, Team, TeamMember, TeamMemberInput, TeamMetrics } from '../types';
+import type { Env, TeamMemberInput, TeamMetrics } from '../types';
 import { computeIdentityFingerprint, computeTransportFingerprint, decodeBase64 } from '../middleware/auth';
-import { canAddMember, limitMessage } from '../middleware/tiers';
+import { getTeamLimits } from '../middleware/tiers';
 import { logRelayEvent } from '../middleware/observability';
-import { loadTeamStats, recordTeamEvent } from '../lib/teamCoordinator';
-import { canAdminMembers, canReadMembers, canReadMetrics, canRotateSelf, isHuman, normalizeMember, normalizePrincipalType, normalizeScopes, normalizeTeam, ownerCount } from '../lib/principals';
+import { loadTeamStats } from '../lib/teamCoordinator';
+import { bootstrapTeamState, listTeamAudit, listTeamInvites, loadTeamState, removeTeamMemberState, revokeInviteState, rotateSelfState, transferOwnershipState, upsertTeamMemberState } from '../lib/teamState';
+import { canAdminMembers, canReadMembers, canReadMetrics, normalizeMember, normalizePrincipalType, normalizeScopes } from '../lib/principals';
 
 export const teamRoutes = new Hono<{ Bindings: Env }>();
 
@@ -27,49 +28,28 @@ teamRoutes.post('/:team/bootstrap', async (c) => {
         return c.json({ error: 'missing_bootstrap_nonce', message: 'bootstrap_nonce is required for project bootstrap' }, 400);
     }
 
-    const existing = await loadTeam(c.env, teamId);
-    if (existing) {
-        return c.json({ error: 'conflict', message: 'Project already exists on the relay' }, 409);
-    }
-
-    const founder: TeamMember = {
-        username,
-        fingerprint: founderInput.fingerprint,
-        public_key: founderInput.public_key,
-        transport_public_key: founderInput.transport_public_key,
-        transport_fingerprint: founderInput.transport_fingerprint,
-        role: 'owner',
-        principal_type: 'human_member',
-        scopes: [],
-        added_at: Math.floor(Date.now() / 1000),
-    };
-
-    const team: Team = {
-        id: teamId,
-        name: (body.team_name || teamId).trim() || teamId,
-        members: [founder],
-        founded_by: founder.fingerprint,
-        founding_nonce_hash: await sha256Hex(body.bootstrap_nonce || ''),
+    const response = await bootstrapTeamState(c.env, teamId, {
+        founder: founderInput,
+        team_name: (body.team_name || teamId).trim() || teamId,
+        bootstrap_nonce_hash: await sha256Hex(body.bootstrap_nonce || ''),
         contract_hash: (body.contract_hash || '').trim() || undefined,
-        created_at: Math.floor(Date.now() / 1000),
-    };
-
-    await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
-    await c.env.ENVSYNC_DATA.put(`pubkey:${founder.fingerprint}`, founder.public_key);
-    await recordTeamEvent(c.env, teamId, 'team.bootstrapped');
-    logRelayEvent('team.bootstrapped', {
-        request_id: c.get('requestId' as never),
-        team_id: teamId,
-        actor_fingerprint: actorFingerprint,
     });
-    return c.json({ status: 'bootstrapped', member_count: 1, team });
+    if (response.ok) {
+        await c.env.ENVSYNC_DATA.put(`pubkey:${founderInput.fingerprint}`, founderInput.public_key);
+        logRelayEvent('team.bootstrapped', {
+            request_id: c.get('requestId' as never),
+            team_id: teamId,
+            actor_fingerprint: actorFingerprint,
+        });
+    }
+    return proxyCoordinatorResponse(response);
 });
 
 teamRoutes.get('/:team/members', async (c) => {
     const teamId = c.req.param('team');
     const actorFingerprint = c.get('fingerprint' as never) as string;
 
-    const team = await loadTeam(c.env, teamId);
+    const team = await loadTeamState(c.env, teamId);
     if (!team) {
         return c.json({ members: [] });
     }
@@ -86,7 +66,7 @@ teamRoutes.get('/:team/metrics', async (c) => {
     const teamId = c.req.param('team');
     const actorFingerprint = c.get('fingerprint' as never) as string;
 
-    const team = await loadTeam(c.env, teamId);
+    const team = await loadTeamState(c.env, teamId);
     if (!team) {
         return c.json({ error: 'not_found', message: 'Team not found' }, 404);
     }
@@ -120,74 +100,22 @@ teamRoutes.put('/:team/members/:user', async (c) => {
         return c.json({ error: 'invalid_member_keys', message: memberInput.error }, 400);
     }
 
-    const team = await loadTeam(c.env, teamId);
-    if (!team) {
-        return c.json({ error: 'not_found', message: 'Project not found. Bootstrap it before adding members.' }, 404);
-    }
-
-    {
-        const actor = team.members.find((member) => member.fingerprint === actorFingerprint);
-        if (!actor) {
-            return c.json({ error: 'forbidden', message: 'Only team members can update membership' }, 403);
-        }
-        if (!canAdminMembers(actor) && actorFingerprint !== memberInput.fingerprint) {
-            return c.json({ error: 'forbidden', message: 'Only owners can add or update other members' }, 403);
-        }
-    }
-
-    const existingIdx = team.members.findIndex((member) => member.fingerprint === memberInput.fingerprint);
-    const usernameConflict = team.members.find((member) => member.username === username && member.fingerprint !== memberInput.fingerprint);
-    if (usernameConflict) {
-        return c.json({ error: 'duplicate_username', message: `Member label ${username} is already used by another fingerprint` }, 409);
-    }
-    if (memberInput.principal_type === 'service_principal' && memberInput.role === 'owner') {
-        return c.json({ error: 'invalid_principal', message: 'Service principals cannot be owners' }, 400);
-    }
-    if (existingIdx < 0 && !(await canAddMember(c.env, teamId, team.members.length))) {
-        return c.json({
-            error: 'member_limit',
-            message: limitMessage('Team member limit reached'),
-        }, 429);
-    }
-
-    const existing = existingIdx >= 0 ? team.members[existingIdx] : undefined;
-    const member: TeamMember = {
-        username,
-        fingerprint: memberInput.fingerprint,
-        public_key: memberInput.public_key,
-        transport_public_key: memberInput.transport_public_key,
-        transport_fingerprint: memberInput.transport_fingerprint,
-        role: team.members.length === 0 ? 'owner' : (existing?.role || memberInput.role || 'member'),
-        principal_type: memberInput.principal_type,
-        scopes: memberInput.scopes,
-        added_at: existing?.added_at || Math.floor(Date.now() / 1000),
-    };
-
-    if (existingIdx >= 0) {
-        if (team.members[existingIdx].role !== 'owner' && team.members[existingIdx].role !== member.role && !canAdminMembers(team.members.find((candidate) => candidate.fingerprint === actorFingerprint)!)) {
-            return c.json({ error: 'forbidden', message: 'Only owners can change member roles' }, 403);
-        }
-        if (team.members[existingIdx].role === 'owner' && member.role !== 'owner' && ownerCount(team) <= 1) {
-            return c.json({ error: 'owner_invariant', message: 'A project must always retain at least one human owner' }, 409);
-        }
-        if (team.members[existingIdx].role === 'owner') {
-            member.role = 'owner';
-        }
-        team.members[existingIdx] = member;
-    } else {
-        team.members.push(member);
-    }
-
-    await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
-    await recordTeamEvent(c.env, teamId, 'team.member_upserted');
-    logRelayEvent('team.member_upserted', {
-        request_id: c.get('requestId' as never),
-        team_id: teamId,
+    const limits = await getTeamLimits(c.env, teamId);
+    const response = await upsertTeamMemberState(c.env, teamId, {
         actor_fingerprint: actorFingerprint,
-        member_fingerprint: memberInput.fingerprint,
-        status: existingIdx >= 0 ? 'updated' : 'added',
+        member: memberInput,
+        member_limit: limits.maxMembers,
     });
-    return c.json({ status: existingIdx >= 0 ? 'updated' : 'added', member_count: team.members.length, member });
+    if (response.ok) {
+        await c.env.ENVSYNC_DATA.put(`pubkey:${memberInput.fingerprint}`, memberInput.public_key);
+        logRelayEvent('team.member_upserted', {
+            request_id: c.get('requestId' as never),
+            team_id: teamId,
+            actor_fingerprint: actorFingerprint,
+            member_fingerprint: memberInput.fingerprint,
+        });
+    }
+    return proxyCoordinatorResponse(response);
 });
 
 teamRoutes.delete('/:team/members/:user', async (c) => {
@@ -195,34 +123,19 @@ teamRoutes.delete('/:team/members/:user', async (c) => {
     const username = c.req.param('user');
     const actorFingerprint = c.get('fingerprint' as never) as string;
 
-    const team = await loadTeam(c.env, teamId);
-    if (!team) {
-        return c.json({ error: 'not_found', message: 'Team not found' }, 404);
-    }
-
-    const actor = team.members.find((member) => member.fingerprint === actorFingerprint);
-    const target = team.members.find((member) => member.username === username);
-    if (!actor || !target) {
-        return c.json({ error: 'not_found', message: `User @${username} not in team` }, 404);
-    }
-    if (!canAdminMembers(actor) && actor.fingerprint !== target.fingerprint) {
-        return c.json({ error: 'forbidden', message: 'Only owners can remove other members' }, 403);
-    }
-    if (target.role === 'owner' && ownerCount(team) <= 1) {
-        return c.json({ error: 'owner_invariant', message: 'A project must always retain at least one human owner' }, 409);
-    }
-
-    team.members = team.members.filter((member) => member.username !== username);
-    await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
-    await recordTeamEvent(c.env, teamId, 'team.member_removed');
-    logRelayEvent('team.member_removed', {
-        request_id: c.get('requestId' as never),
-        team_id: teamId,
+    const response = await removeTeamMemberState(c.env, teamId, {
         actor_fingerprint: actorFingerprint,
-        member_fingerprint: target.fingerprint,
+        username,
     });
-
-    return c.json({ status: 'removed', member_count: team.members.length });
+    if (response.ok) {
+        logRelayEvent('team.member_removed', {
+            request_id: c.get('requestId' as never),
+            team_id: teamId,
+            actor_fingerprint: actorFingerprint,
+            member_label: username,
+        });
+    }
+    return proxyCoordinatorResponse(response);
 });
 
 teamRoutes.delete('/:team/members/by-fingerprint/:fingerprint', async (c) => {
@@ -230,34 +143,19 @@ teamRoutes.delete('/:team/members/by-fingerprint/:fingerprint', async (c) => {
     const targetFingerprint = c.req.param('fingerprint');
     const actorFingerprint = c.get('fingerprint' as never) as string;
 
-    const team = await loadTeam(c.env, teamId);
-    if (!team) {
-        return c.json({ error: 'not_found', message: 'Team not found' }, 404);
-    }
-
-    const actor = team.members.find((member) => member.fingerprint === actorFingerprint);
-    const target = team.members.find((member) => member.fingerprint === targetFingerprint);
-    if (!actor || !target) {
-        return c.json({ error: 'not_found', message: 'Member fingerprint not found in team' }, 404);
-    }
-    if (!canAdminMembers(actor) && actor.fingerprint !== target.fingerprint) {
-        return c.json({ error: 'forbidden', message: 'Only owners can remove other members' }, 403);
-    }
-    if (target.role === 'owner' && ownerCount(team) <= 1) {
-        return c.json({ error: 'owner_invariant', message: 'A project must always retain at least one human owner' }, 409);
-    }
-
-    team.members = team.members.filter((member) => member.fingerprint !== targetFingerprint);
-    await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
-    await recordTeamEvent(c.env, teamId, 'team.member_removed');
-    logRelayEvent('team.member_removed', {
-        request_id: c.get('requestId' as never),
-        team_id: teamId,
+    const response = await removeTeamMemberState(c.env, teamId, {
         actor_fingerprint: actorFingerprint,
-        member_fingerprint: targetFingerprint,
+        fingerprint: targetFingerprint,
     });
-
-    return c.json({ status: 'removed', member_count: team.members.length });
+    if (response.ok) {
+        logRelayEvent('team.member_removed', {
+            request_id: c.get('requestId' as never),
+            team_id: teamId,
+            actor_fingerprint: actorFingerprint,
+            member_fingerprint: targetFingerprint,
+        });
+    }
+    return proxyCoordinatorResponse(response);
 });
 
 teamRoutes.post('/:team/transfer-ownership', async (c) => {
@@ -269,46 +167,20 @@ teamRoutes.post('/:team/transfer-ownership', async (c) => {
         return c.json({ error: 'missing_target', message: 'fingerprint is required' }, 400);
     }
 
-    const team = await loadTeam(c.env, teamId);
-    if (!team) {
-        return c.json({ error: 'not_found', message: 'Team not found' }, 404);
-    }
-
-    const actorIdx = team.members.findIndex((member) => member.fingerprint === actorFingerprint);
-    const targetIdx = team.members.findIndex((member) => member.fingerprint === targetFingerprint);
-    if (actorIdx < 0 || targetIdx < 0) {
-        return c.json({ error: 'not_found', message: 'Actor or target not found in team' }, 404);
-    }
-
-    const actor = team.members[actorIdx];
-    const target = team.members[targetIdx];
-    if (!isHuman(actor) || actor.role !== 'owner') {
-        return c.json({ error: 'forbidden', message: 'Only a human owner can transfer ownership' }, 403);
-    }
-    if (!isHuman(target)) {
-        return c.json({ error: 'invalid_target', message: 'Ownership can only be transferred to a human member' }, 400);
-    }
-
-    team.members[actorIdx] = { ...actor, role: 'member' };
-    team.members[targetIdx] = { ...target, role: 'owner' };
-    await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
-    await recordTeamEvent(c.env, teamId, 'team.ownership_transferred');
-    logRelayEvent('team.ownership_transferred', {
-        request_id: c.get('requestId' as never),
-        team_id: teamId,
+    const response = await transferOwnershipState(c.env, teamId, {
         actor_fingerprint: actorFingerprint,
         target_fingerprint: targetFingerprint,
     });
-    return c.json({ status: 'transferred', owner_fingerprint: targetFingerprint });
-});
-
-async function loadTeam(env: Env, teamId: string): Promise<Team | null> {
-    const data = await env.ENVSYNC_DATA.get(`team:${teamId}`);
-    if (!data) {
-        return null;
+    if (response.ok) {
+        logRelayEvent('team.ownership_transferred', {
+            request_id: c.get('requestId' as never),
+            team_id: teamId,
+            actor_fingerprint: actorFingerprint,
+            target_fingerprint: targetFingerprint,
+        });
     }
-    return normalizeTeam(JSON.parse(data) as Team);
-}
+    return proxyCoordinatorResponse(response);
+});
 
 teamRoutes.post('/:team/rotate-self', async (c) => {
     const teamId = c.req.param('team');
@@ -319,70 +191,76 @@ teamRoutes.post('/:team/rotate-self', async (c) => {
     if ('error' in memberInput) {
         return c.json({ error: 'invalid_member_keys', message: memberInput.error }, 400);
     }
-    if (!body.proof) {
-        await recordTeamEvent(c.env, teamId, 'team.rotate_failed');
-        return c.json({ error: 'missing_proof', message: 'proof is required for self-rotation' }, 400);
-    }
 
-    const team = await loadTeam(c.env, teamId);
-    if (!team) {
-        await recordTeamEvent(c.env, teamId, 'team.rotate_failed');
-        return c.json({ error: 'not_found', message: 'Team not found' }, 404);
-    }
-
-    const actorIdx = team.members.findIndex((member) => member.fingerprint === actorFingerprint);
-    if (actorIdx < 0) {
-        await recordTeamEvent(c.env, teamId, 'team.rotate_failed');
-        return c.json({ error: 'forbidden', message: 'Only team members can rotate identity' }, 403);
-    }
-    if (!canRotateSelf(team.members[actorIdx])) {
-        await recordTeamEvent(c.env, teamId, 'team.rotate_failed');
-        return c.json({ error: 'forbidden', message: 'This principal may not rotate itself' }, 403);
-    }
-
-    const conflict = team.members.find((member) => member.fingerprint === memberInput.fingerprint && member.fingerprint !== actorFingerprint);
-    if (conflict) {
-        await recordTeamEvent(c.env, teamId, 'team.rotate_failed');
-        return c.json({ error: 'duplicate_fingerprint', message: 'New fingerprint is already registered on this team' }, 409);
-    }
-
-    const usernameConflict = team.members.find((member) => member.username === username && member.fingerprint !== actorFingerprint);
-    if (usernameConflict) {
-        await recordTeamEvent(c.env, teamId, 'team.rotate_failed');
-        return c.json({ error: 'duplicate_username', message: `Member label ${username} is already used by another fingerprint` }, 409);
-    }
-
-    const proofValid = await verifyRotationProof(teamId, actorFingerprint, memberInput, body.proof);
-    if (!proofValid) {
-        await recordTeamEvent(c.env, teamId, 'team.rotate_failed');
-        return c.json({ error: 'invalid_proof', message: 'Rotation proof did not verify against the replacement identity key' }, 401);
-    }
-
-    const existing = team.members[actorIdx];
-    team.members[actorIdx] = {
-        username,
-        fingerprint: memberInput.fingerprint,
-        public_key: memberInput.public_key,
-        transport_public_key: memberInput.transport_public_key,
-        transport_fingerprint: memberInput.transport_fingerprint,
-        role: existing.role,
-        principal_type: existing.principal_type,
-        scopes: existing.scopes,
-        added_at: existing.added_at,
-    };
-
-    await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
-    await c.env.ENVSYNC_DATA.put(`pubkey:${memberInput.fingerprint}`, memberInput.public_key);
-    await c.env.ENVSYNC_DATA.delete(`pubkey:${actorFingerprint}`);
-    await recordTeamEvent(c.env, teamId, 'team.member_rotated');
-    logRelayEvent('team.member_rotated', {
-        request_id: c.get('requestId' as never),
-        team_id: teamId,
+    const response = await rotateSelfState(c.env, teamId, {
+        ...memberInput,
         actor_fingerprint: actorFingerprint,
-        replacement_fingerprint: memberInput.fingerprint,
+        proof: body.proof,
     });
+    if (response.ok) {
+        await c.env.ENVSYNC_DATA.put(`pubkey:${memberInput.fingerprint}`, memberInput.public_key);
+        if (actorFingerprint !== memberInput.fingerprint) {
+            await c.env.ENVSYNC_DATA.delete(`pubkey:${actorFingerprint}`);
+        }
+        logRelayEvent('team.member_rotated', {
+            request_id: c.get('requestId' as never),
+            team_id: teamId,
+            actor_fingerprint: actorFingerprint,
+            replacement_fingerprint: memberInput.fingerprint,
+        });
+    }
+    return proxyCoordinatorResponse(response);
+});
 
-    return c.json({ status: 'rotated', fingerprint: memberInput.fingerprint, member_count: team.members.length });
+teamRoutes.get('/:team/invites', async (c) => {
+    const teamId = c.req.param('team');
+    const actorFingerprint = c.get('fingerprint' as never) as string;
+
+    const team = await loadTeamState(c.env, teamId);
+    const actor = team?.members.find((member) => member.fingerprint === actorFingerprint);
+    if (!team || !actor || !canAdminMembers(actor)) {
+        return c.json({ error: 'forbidden', message: 'Only project administrators can list invites' }, 403);
+    }
+
+    const response = await listTeamInvites(c.env, teamId);
+    return proxyCoordinatorResponse(response);
+});
+
+teamRoutes.post('/:team/invites/:hash/revoke', async (c) => {
+    const teamId = c.req.param('team');
+    const actorFingerprint = c.get('fingerprint' as never) as string;
+    const tokenHash = c.req.param('hash');
+    const body = await c.req.json<{ reason?: string }>().catch(() => ({} as { reason?: string }));
+
+    const response = await revokeInviteState(c.env, teamId, {
+        actor_fingerprint: actorFingerprint,
+        token_hash: tokenHash,
+        reason: (body.reason || '').trim() || undefined,
+    });
+    if (response.ok) {
+        logRelayEvent('invite.revoked', {
+            request_id: c.get('requestId' as never),
+            team_id: teamId,
+            actor_fingerprint: actorFingerprint,
+            invite_hash: tokenHash,
+        });
+    }
+    return proxyCoordinatorResponse(response);
+});
+
+teamRoutes.get('/:team/audit', async (c) => {
+    const teamId = c.req.param('team');
+    const actorFingerprint = c.get('fingerprint' as never) as string;
+    const limit = Number(c.req.query('limit') || 20);
+
+    const team = await loadTeamState(c.env, teamId);
+    const actor = team?.members.find((member) => member.fingerprint === actorFingerprint);
+    if (!team || !actor || !canAdminMembers(actor)) {
+        return c.json({ error: 'forbidden', message: 'Only project administrators can view project audit history' }, 403);
+    }
+
+    const response = await listTeamAudit(c.env, teamId, limit);
+    return proxyCoordinatorResponse(response);
 });
 
 async function validateMemberInput(username: string, body: TeamMemberInput): Promise<TeamMemberInput | { error: string }> {
@@ -403,7 +281,7 @@ async function validateMemberInput(username: string, body: TeamMemberInput): Pro
         return { error: error instanceof Error ? error.message : String(error) };
     }
 
-    const normalized = normalizeMember({
+    return normalizeMember({
         username,
         fingerprint: body.fingerprint,
         public_key: body.public_key,
@@ -413,7 +291,6 @@ async function validateMemberInput(username: string, body: TeamMemberInput): Pro
         principal_type: body.principal_type,
         scopes: normalizeScopes(body.scopes),
     });
-    return normalized;
 }
 
 async function sha256Hex(value: string): Promise<string> {
@@ -421,16 +298,9 @@ async function sha256Hex(value: string): Promise<string> {
     return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function verifyRotationProof(teamId: string, actorFingerprint: string, body: TeamMemberInput, proofB64: string): Promise<boolean> {
-    const message = new TextEncoder().encode([
-        'rotate-self',
-        teamId,
-        actorFingerprint,
-        body.fingerprint,
-        body.transport_fingerprint,
-    ].join('\n'));
-
-    const signature = decodeBase64(proofB64, 'proof');
-    const publicKey = decodeBase64(body.public_key, 'public_key');
-    return crypto.subtle.verify('Ed25519', await crypto.subtle.importKey('raw', publicKey, { name: 'Ed25519' }, false, ['verify']), signature, message);
+async function proxyCoordinatorResponse(response: Response) {
+    return new Response(await response.text(), {
+        status: response.status,
+        headers: { 'Content-Type': 'application/json' },
+    });
 }

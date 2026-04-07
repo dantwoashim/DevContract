@@ -21,6 +21,12 @@ export interface Invite {
     created_at: number;
     expires_at: number;
     consumed: boolean;
+    consumed_at?: number;
+    consumed_by_fingerprint?: string;
+    revoked_at?: number;
+    revoked_by_fingerprint?: string;
+    revoke_reason?: string;
+    status?: 'pending' | 'consumed' | 'revoked' | 'expired';
 }
 
 export interface BlobMetadata {
@@ -97,4 +103,19 @@ export interface TeamMetrics {
     event_totals: Record<string, number>;
     events_today: Record<string, number>;
     recorded_at: string;
+}
+
+export interface TeamAuditEvent {
+    id: string;
+    team_id: string;
+    action: string;
+    actor_fingerprint?: string;
+    actor_principal_type?: PrincipalType;
+    actor_scopes?: PrincipalScope[];
+    target_fingerprint?: string;
+    invite_hash?: string;
+    blob_id?: string;
+    result: 'succeeded' | 'failed';
+    details?: string;
+    created_at: number;
 }
