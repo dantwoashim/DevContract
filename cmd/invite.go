@@ -137,14 +137,20 @@ func runJoin(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	client := relay.NewClient(projectRelayURL(project, cfg), kp)
-	inviteResp, err := client.ConsumeInvite(relay.HashToken(token), displayMemberLabel(cfg, kp))
+	joinResp, err := client.JoinInvite(relay.HashToken(token), relay.JoinInviteRequest{
+		Username:             displayMemberLabel(cfg, kp),
+		Fingerprint:          kp.Fingerprint,
+		PublicKey:            ed25519PublicKeyBase64(kp),
+		TransportPublicKey:   x25519PublicKeyBase64(kp),
+		TransportFingerprint: crypto.ComputeFingerprint(kp.X25519Public),
+	})
 	if err != nil {
 		return fmt.Errorf("could not redeem invite code: %w", err)
 	}
 
-	if project.ProjectID != "" && project.ProjectID != inviteResp.TeamID {
-		project.Config.ProjectID = inviteResp.TeamID
-		project.ProjectID = inviteResp.TeamID
+	if project.ProjectID != "" && project.ProjectID != joinResp.TeamID {
+		project.Config.ProjectID = joinResp.TeamID
+		project.ProjectID = joinResp.TeamID
 	}
 	if err := peer.SaveProjectConfig(project.Config); err != nil {
 		return err
@@ -155,7 +161,7 @@ func runJoin(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	team := defaultTeam(inviteResp.TeamID, inviteResp.TeamID, inviteResp.InviterFingerprint)
+	team := defaultTeam(joinResp.TeamID, joinResp.TeamID, joinResp.InviterFingerprint)
 	if project.Config.Name != "" {
 		team.Name = project.Config.Name
 	}
@@ -163,31 +169,14 @@ func runJoin(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := client.AddTeamMember(
-		inviteResp.TeamID,
-		displayMemberLabel(cfg, kp),
-		kp.Fingerprint,
-		ed25519PublicKeyBase64(kp),
-		x25519PublicKeyBase64(kp),
-		crypto.ComputeFingerprint(kp.X25519Public),
-		"member",
-	); err != nil {
-		return fmt.Errorf("registering device on relay: %w", err)
-	}
-
-	members, err := client.ListTeamMembers(inviteResp.TeamID)
-	if err != nil {
-		return fmt.Errorf("fetching project members: %w", err)
-	}
-
-	for _, member := range members {
+	for _, member := range joinResp.Members {
 		if member.Fingerprint == kp.Fingerprint {
 			continue
 		}
 
 		trustState := peer.TrustPending
 		trustedAt := time.Time{}
-		if member.Fingerprint == inviteResp.InviterFingerprint {
+		if member.Fingerprint == joinResp.InviterFingerprint {
 			trustState = peer.TrustTrusted
 			trustedAt = time.Now()
 		}
@@ -204,7 +193,7 @@ func runJoin(cmd *cobra.Command, args []string) error {
 			LastSeen:             time.Now(),
 			TrustedAt:            trustedAt,
 		}
-		if err := registry.SavePeer(inviteResp.TeamID, p); err != nil {
+		if err := registry.SavePeer(joinResp.TeamID, p); err != nil {
 			return err
 		}
 		team.AddMember(member.Fingerprint)
@@ -214,8 +203,8 @@ func runJoin(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("  + Joined project %s from %s\n", inviteResp.TeamID, inviteResp.Inviter)
-	fmt.Printf("  - Trusted identity: %s\n", inviteResp.InviterFingerprint)
+	fmt.Printf("  + Joined project %s from %s\n", joinResp.TeamID, joinResp.Inviter)
+	fmt.Printf("  - Trusted identity: %s\n", joinResp.InviterFingerprint)
 	fmt.Println("  - Other relay members were imported as pending until you verify them locally.")
 	fmt.Println()
 	fmt.Println("  Ready. Run 'envsync pull' to receive the latest .env.")
@@ -224,8 +213,8 @@ func runJoin(cmd *cobra.Command, args []string) error {
 	if logger != nil {
 		_ = logger.Log(audit.Entry{
 			Event:   audit.EventJoin,
-			Peer:    inviteResp.Inviter,
-			Details: fmt.Sprintf("project %s", inviteResp.TeamID),
+			Peer:    joinResp.Inviter,
+			Details: fmt.Sprintf("project %s", joinResp.TeamID),
 		})
 	}
 

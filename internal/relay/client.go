@@ -4,8 +4,8 @@ package relay
 
 import (
 	"bytes"
-	crand "crypto/rand"
 	"crypto/ed25519"
+	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -181,6 +181,22 @@ type InviteResponse struct {
 	ExpiresAt          int64  `json:"expires_at"`
 }
 
+type JoinInviteRequest struct {
+	Username             string `json:"username"`
+	Fingerprint          string `json:"fingerprint"`
+	PublicKey            string `json:"public_key"`
+	TransportPublicKey   string `json:"transport_public_key"`
+	TransportFingerprint string `json:"transport_fingerprint"`
+}
+
+type JoinInviteResponse struct {
+	TeamID             string       `json:"team_id"`
+	Inviter            string       `json:"inviter"`
+	InviterFingerprint string       `json:"inviter_fingerprint"`
+	JoinerFingerprint  string       `json:"joiner_fingerprint"`
+	Members            []TeamMember `json:"members"`
+}
+
 // CreateInvite creates a new invite on the relay.
 func (c *Client) CreateInvite(req InviteRequest) error {
 	body, err := json.Marshal(req)
@@ -236,6 +252,30 @@ func (c *Client) ConsumeInvite(tokenHash, joinerLabel string) (*InviteResponse, 
 	}
 
 	var result InviteResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// JoinInvite atomically redeems an invite and registers the authenticated member.
+func (c *Client) JoinInvite(tokenHash string, req JoinInviteRequest) (*JoinInviteResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.doRequest("POST", "/invites/"+tokenHash+"/join", body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, readError(resp)
+	}
+
+	var result JoinInviteResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
@@ -379,6 +419,35 @@ func (c *Client) RemoveTeamMember(teamID, username string) error {
 func (c *Client) RemoveTeamMemberByFingerprint(teamID, fingerprint string) error {
 	path := fmt.Sprintf("/teams/%s/members/by-fingerprint/%s", teamID, url.PathEscape(fingerprint))
 	resp, err := c.doRequest("DELETE", path, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return readError(resp)
+	}
+	return nil
+}
+
+type RotateSelfRequest struct {
+	Username             string `json:"username"`
+	Fingerprint          string `json:"fingerprint"`
+	PublicKey            string `json:"public_key"`
+	TransportPublicKey   string `json:"transport_public_key"`
+	TransportFingerprint string `json:"transport_fingerprint"`
+	Proof                string `json:"proof"`
+}
+
+// RotateSelf atomically swaps the authenticated member to a replacement identity.
+func (c *Client) RotateSelf(teamID string, req RotateSelfRequest) error {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	path := fmt.Sprintf("/teams/%s/rotate-self", teamID)
+	resp, err := c.doRequest("POST", path, body)
 	if err != nil {
 		return err
 	}
