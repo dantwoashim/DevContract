@@ -267,6 +267,27 @@ func renderShellCommand(shellName, command string) string {
 	}
 }
 
+func contractShellCommands(spec *contract.Contract) []string {
+	if spec == nil {
+		return nil
+	}
+
+	commands := []string{}
+	for _, step := range spec.Bootstrap.Steps {
+		if strings.TrimSpace(step.Run) == "" {
+			continue
+		}
+		commands = append(commands, renderShellCommand(step.Shell, step.Run))
+	}
+	for name, target := range spec.Run.Targets {
+		if strings.TrimSpace(target.Command) == "" {
+			continue
+		}
+		commands = append(commands, fmt.Sprintf("%s (run target %s)", renderShellCommand("", target.Command), name))
+	}
+	return commands
+}
+
 func runShellCommand(root, shellName, command string) error {
 	if strings.TrimSpace(command) == "" {
 		return nil
