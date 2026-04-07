@@ -106,6 +106,7 @@ func Discover(ctx context.Context, timeout time.Duration, ownFingerprint string)
 	entryCh := make(chan *mdns.ServiceEntry, 16)
 	var peers []Peer
 	var mu sync.Mutex
+	seen := map[string]struct{}{}
 
 	// Collect entries in background
 	done := make(chan struct{})
@@ -114,7 +115,13 @@ func Discover(ctx context.Context, timeout time.Duration, ownFingerprint string)
 		for entry := range entryCh {
 			peer := entryToPeer(entry)
 			if peer != nil && peer.Fingerprint != ownFingerprint {
+				key := peer.Fingerprint + "|" + peer.TeamID + "|" + peer.Addr.String()
 				mu.Lock()
+				if _, ok := seen[key]; ok {
+					mu.Unlock()
+					continue
+				}
+				seen[key] = struct{}{}
 				peers = append(peers, *peer)
 				mu.Unlock()
 			}
@@ -181,6 +188,10 @@ func entryToPeer(entry *mdns.ServiceEntry) *Peer {
 		case "ver":
 			peer.Version = parts[1]
 		}
+	}
+
+	if peer.Fingerprint == "" || peer.TeamID == "" {
+		return nil
 	}
 
 	return peer
