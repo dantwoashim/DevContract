@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/envsync/envsync/internal/crypto"
-	"github.com/envsync/envsync/internal/store"
+	"github.com/envsync/envsync/internal/revision"
 )
 
 func TestApplyOverwriteWritesIncomingData(t *testing.T) {
@@ -62,7 +62,7 @@ func TestApplyInteractiveRequiresUIWhenDisabled(t *testing.T) {
 	}
 }
 
-func TestApplyThreeWayUsesLatestBackupAsMergeBase(t *testing.T) {
+func TestApplyThreeWayUsesKnownRevisionBase(t *testing.T) {
 	dataHome := t.TempDir()
 	t.Setenv("HOME", dataHome)
 	t.Setenv("USERPROFILE", dataHome)
@@ -73,22 +73,27 @@ func TestApplyThreeWayUsesLatestBackupAsMergeBase(t *testing.T) {
 		t.Fatalf("derive key: %v", err)
 	}
 
-	vStore, err := store.New(10)
+	revStore, err := revision.New()
 	if err != nil {
-		t.Fatalf("store new: %v", err)
+		t.Fatalf("revision store: %v", err)
 	}
-	if _, err := vStore.Append("project-merge", []byte("API_KEY=base\nLOCAL_ONLY=1\n"), key); err != nil {
-		t.Fatalf("seed backup: %v", err)
+	baseData := []byte("API_KEY=base\nLOCAL_ONLY=1\n")
+	baseRevisionID := revision.RevisionID(baseData)
+	if _, err := revStore.SaveRevision("project-merge", baseRevisionID, "", baseData, key); err != nil {
+		t.Fatalf("seed base revision: %v", err)
 	}
+	incoming := []byte("API_KEY=base\nLOCAL_ONLY=1\nREMOTE_ONLY=2\n")
 
 	result, err := Apply(Options{
-		ProjectID:     "project-merge",
-		TargetFile:    target,
-		IncomingData:  []byte("API_KEY=base\nLOCAL_ONLY=1\nREMOTE_ONLY=2\n"),
-		Policy:        PolicyThreeWay,
-		BackupEnabled: false,
-		BackupKey:     key,
-		MaxVersions:   10,
+		ProjectID:      "project-merge",
+		TargetFile:     target,
+		IncomingData:   incoming,
+		BaseRevisionID: baseRevisionID,
+		NewRevisionID:  revision.RevisionID(incoming),
+		Policy:         PolicyThreeWay,
+		BackupEnabled:  false,
+		BackupKey:      key,
+		MaxVersions:    10,
 	})
 	if err != nil {
 		t.Fatalf("apply three-way: %v", err)
@@ -103,6 +108,33 @@ func TestApplyThreeWayUsesLatestBackupAsMergeBase(t *testing.T) {
 	}
 	if !strings.Contains(contents, "REMOTE_ONLY=2") {
 		t.Fatalf("expected merged file to include remote change, got:\n%s", contents)
+	}
+}
+
+func TestApplyThreeWayRejectsUnknownRevisionBase(t *testing.T) {
+	dataHome := t.TempDir()
+	t.Setenv("HOME", dataHome)
+	t.Setenv("USERPROFILE", dataHome)
+
+	target := writeTempFile(t, "API_KEY=old\nLOCAL_ONLY=2\n")
+	key, err := crypto.DeriveAtRestKey([]byte("test-merge-key"))
+	if err != nil {
+		t.Fatalf("derive key: %v", err)
+	}
+
+	_, err = Apply(Options{
+		ProjectID:      "project-merge",
+		TargetFile:     target,
+		IncomingData:   []byte("API_KEY=base\nLOCAL_ONLY=1\nREMOTE_ONLY=2\n"),
+		BaseRevisionID: "missing-base",
+		NewRevisionID:  "incoming-revision",
+		Policy:         PolicyThreeWay,
+		BackupEnabled:  false,
+		BackupKey:      key,
+		MaxVersions:    10,
+	})
+	if err == nil || !strings.Contains(err.Error(), ErrUnknownAncestry.Error()) {
+		t.Fatalf("apply three-way unknown ancestry error = %v, want %v", err, ErrUnknownAncestry)
 	}
 }
 
