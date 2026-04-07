@@ -161,6 +161,8 @@ run:
 
 The full reference is in [docs/CONTRACT.md](docs/CONTRACT.md).
 
+Operator-facing deployment, observability, and recovery guidance lives in [docs/OPERATIONS.md](docs/OPERATIONS.md). Release packaging and reproducibility notes live in [docs/RELEASES.md](docs/RELEASES.md).
+
 ## Example Contracts
 
 Starter contracts live in [examples/contracts](examples/contracts):
