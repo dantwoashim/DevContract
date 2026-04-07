@@ -34,7 +34,20 @@ export interface BlobMetadata {
     uploaded_at: number;
     expires_at: number;
     filename: string;
+    status?: 'pending' | 'handled' | 'rejected_client' | 'quarantined_server' | 'expired';
+    failure_reason?: string;
+    rejected_at?: number;
 }
+
+export type PrincipalType = 'human_member' | 'service_principal';
+export type PrincipalScope =
+    | 'member.read'
+    | 'relay.pull'
+    | 'relay.push'
+    | 'invite.create'
+    | 'member.rotate.self'
+    | 'admin.members'
+    | 'metrics.read';
 
 export interface TeamMember {
     username: string;
@@ -43,6 +56,8 @@ export interface TeamMember {
     transport_public_key: string;
     transport_fingerprint: string;
     role: 'owner' | 'member';
+    principal_type?: PrincipalType;
+    scopes?: PrincipalScope[];
     added_at: number;
 }
 
@@ -50,6 +65,9 @@ export interface Team {
     id: string;
     name: string;
     members: TeamMember[];
+    founded_by?: string;
+    founding_nonce_hash?: string;
+    contract_hash?: string;
     created_at: number;
 }
 
@@ -66,6 +84,8 @@ export interface TeamMemberInput {
     transport_public_key: string;
     transport_fingerprint: string;
     role?: 'owner' | 'member';
+    principal_type?: PrincipalType;
+    scopes?: PrincipalScope[];
 }
 
 export interface TeamMetrics {

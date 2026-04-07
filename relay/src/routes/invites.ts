@@ -3,6 +3,7 @@ import type { Env, Invite, Team, TeamMember, TeamMemberInput } from '../types';
 import { computeIdentityFingerprint, computeTransportFingerprint, decodeBase64 } from '../middleware/auth';
 import { logRelayEvent } from '../middleware/observability';
 import { recordTeamEvent } from '../lib/teamCoordinator';
+import { canCreateInvite, normalizeMember, normalizeTeam } from '../lib/principals';
 
 export const inviteRoutes = new Hono<{ Bindings: Env }>();
 
@@ -29,9 +30,9 @@ inviteRoutes.post('/', async (c) => {
         return c.json({ error: 'not_found', message: 'Team not found' }, 404);
     }
 
-    const team: Team = JSON.parse(teamData);
+    const team: Team = normalizeTeam(JSON.parse(teamData));
     const inviterMember = team.members.find((member) => member.fingerprint === actorFingerprint);
-    if (!inviterMember) {
+    if (!inviterMember || !canCreateInvite(inviterMember)) {
         return c.json({ error: 'forbidden', message: 'Inviter is not a team member' }, 403);
     }
 
@@ -147,7 +148,7 @@ inviteRoutes.post('/:hash/join', async (c) => {
         return c.json({ error: 'not_found', message: 'Team not found' }, 404);
     }
 
-    const team: Team = JSON.parse(teamData);
+    const team: Team = normalizeTeam(JSON.parse(teamData));
     const usernameConflict = team.members.find((member) => member.username === username && member.fingerprint !== body.fingerprint);
     if (usernameConflict) {
         await recordTeamEvent(c.env, invite.team_id, 'invite.join_failed');
@@ -156,7 +157,7 @@ inviteRoutes.post('/:hash/join', async (c) => {
 
     const existingIdx = team.members.findIndex((member) => member.fingerprint === body.fingerprint);
     const existing = existingIdx >= 0 ? team.members[existingIdx] : undefined;
-    const member: TeamMember = {
+    const member: TeamMember = normalizeMember({
         username,
         fingerprint: body.fingerprint,
         public_key: body.public_key,
@@ -164,7 +165,7 @@ inviteRoutes.post('/:hash/join', async (c) => {
         transport_fingerprint: body.transport_fingerprint,
         role: existing?.role || 'member',
         added_at: existing?.added_at || Math.floor(Date.now() / 1000),
-    };
+    });
 
     if (existingIdx >= 0) {
         team.members[existingIdx] = member;
@@ -195,7 +196,7 @@ inviteRoutes.post('/:hash/join', async (c) => {
         inviter: invite.inviter,
         inviter_fingerprint: invite.inviter_fingerprint,
         joiner_fingerprint: joinerFingerprint,
-        members: team.members,
+        members: team.members.filter((member) => member.principal_type !== 'service_principal'),
     });
 });
 

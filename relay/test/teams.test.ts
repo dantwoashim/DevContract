@@ -66,6 +66,13 @@ describe('Team membership routes', () => {
         expect(data.members.filter((member) => member.fingerprint === owner.fingerprint)).toHaveLength(1);
         expect(data.members.find((member) => member.fingerprint === owner.fingerprint)?.username).toBe('charlie');
     });
+
+    it('blocks removing the last owner', async () => {
+        const res = await signedFetch(worker, owner, `/teams/${teamId}/members/by-fingerprint/${encodeURIComponent(owner.fingerprint)}`, {
+            method: 'DELETE',
+        });
+        expect(res.status).toBe(409);
+    });
 });
 
 describe('Team identity rotation', () => {
@@ -110,6 +117,79 @@ describe('Team identity rotation', () => {
         const data = await membersRes.json() as { members: Array<{ fingerprint: string; username: string }> };
         expect(data.members.find((member) => member.fingerprint === oldMember.fingerprint)).toBeUndefined();
         expect(data.members.find((member) => member.fingerprint === newMember.fingerprint)?.username).toBe('member-renamed');
+    });
+});
+
+describe('Ownership transfer', () => {
+    const teamId = `test-team-transfer-${Date.now()}`;
+
+    it('transfers ownership to another human member', async () => {
+        const owner = await createIdentity('transfer-owner');
+        const teammate = await createIdentity('transfer-target');
+
+        expect((await registerMember(worker, owner, teamId, 'owner', transportKey(20), 'owner')).status).toBe(200);
+        expect((await signedFetch(worker, owner, `/teams/${teamId}/members/teammate`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                fingerprint: teammate.fingerprint,
+                public_key: teammate.publicKeyB64,
+                transport_public_key: transportKey(21),
+                transport_fingerprint: transportFingerprint(transportKey(21)),
+                role: 'member',
+            }),
+        })).status).toBe(200);
+
+        const transferRes = await signedFetch(worker, owner, `/teams/${teamId}/transfer-ownership`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fingerprint: teammate.fingerprint }),
+        });
+        expect(transferRes.status).toBe(200);
+
+        const membersRes = await signedFetch(worker, teammate, `/teams/${teamId}/members`);
+        const data = await membersRes.json() as { members: Array<{ fingerprint: string; role: string }> };
+        expect(data.members.find((member) => member.fingerprint === teammate.fingerprint)?.role).toBe('owner');
+        expect(data.members.find((member) => member.fingerprint === owner.fingerprint)?.role).toBe('member');
+    });
+});
+
+describe('Service principal restrictions', () => {
+    const teamId = `test-team-service-${Date.now()}`;
+
+    it('blocks service principals from owner role and admin workflows by default', async () => {
+        const owner = await createIdentity('service-owner');
+        const service = await createIdentity('service-ci');
+
+        expect((await registerMember(worker, owner, teamId, 'owner', transportKey(30), 'owner')).status).toBe(200);
+        expect((await signedFetch(worker, owner, `/teams/${teamId}/members/ci`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                fingerprint: service.fingerprint,
+                public_key: service.publicKeyB64,
+                transport_public_key: transportKey(31),
+                transport_fingerprint: transportFingerprint(transportKey(31)),
+                principal_type: 'service_principal',
+                scopes: ['relay.pull', 'member.read'],
+            }),
+        })).status).toBe(200);
+
+        const inviteRes = await signedFetch(worker, service, '/invites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                token_hash: `service-forbidden-${Date.now()}`,
+                team_id: teamId,
+                inviter: 'ci',
+                inviter_fingerprint: service.fingerprint,
+                invitee: 'someone',
+            }),
+        });
+        expect(inviteRes.status).toBe(403);
+
+        const metricsRes = await signedFetch(worker, service, `/teams/${teamId}/metrics`);
+        expect(metricsRes.status).toBe(200);
     });
 });
 

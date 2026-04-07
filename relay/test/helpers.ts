@@ -79,6 +79,23 @@ export async function registerMember(
     transportPublicKey: string,
     role: 'owner' | 'member' = 'member',
 ) {
+    if (role === 'owner') {
+        return signedFetch(worker, actor, `/teams/${teamId}/bootstrap`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username,
+                fingerprint: actor.fingerprint,
+                public_key: actor.publicKeyB64,
+                transport_public_key: transportPublicKey,
+                transport_fingerprint: transportFingerprint(transportPublicKey),
+                role: 'owner',
+                team_name: teamId,
+                bootstrap_nonce: `nonce-${teamId}-${username}`,
+            }),
+        });
+    }
+
     return signedFetch(worker, actor, `/teams/${teamId}/members/${username}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
