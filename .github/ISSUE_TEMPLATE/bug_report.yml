@@ -1,0 +1,44 @@
+name: Bug report
+description: Report a reproducible problem in the CLI, relay, action, or extension.
+title: "[bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem. Please include enough detail for someone else to reproduce it.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Exact steps, commands, or repository state needed to reproduce the issue.
+      placeholder: |
+        1. Run ...
+        2. Open ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or output
+      description: Paste relevant command output, stack traces, or screenshots. Redact secrets first.
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: EnvSync version
+      placeholder: envsync version
+  - type: input
+    id: platform
+    attributes:
+      label: OS / shell
+      placeholder: Windows 11 / PowerShell, macOS / zsh, Ubuntu / bash
