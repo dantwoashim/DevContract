@@ -118,24 +118,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check for tracked build artifacts
+      - name: Check repo hygiene
         shell: bash
-        run: |
-          set -euo pipefail
-          forbidden="$(git ls-files \
-            'envsync.exe' \
-            '.gocache/**' \
-            'relay/node_modules/**' \
-            'extension/node_modules/**' \
-            'extension/out/**' \
-            'relay/.wrangler/**' \
-            'extension/*.vsix' \
-            '.envsync/generated/**')"
-          if [ -n "$forbidden" ]; then
-            echo "Tracked artifacts must not be committed:"
-            echo "$forbidden"
-            exit 1
-          fi
+        run: bash ./scripts/check_repo_hygiene.sh
 
   source-bundle:
     name: Source Bundle Validation
@@ -152,7 +137,7 @@ jobs:
           set -euo pipefail
           TAR_FILE="$(ls "$RUNNER_TEMP/source-bundle"/*.tar.gz)"
           tar -tf "$TAR_FILE" > "$RUNNER_TEMP/source-contents.txt"
-          if grep -E '(^|/)(\.env(\.|$)|envsync\.exe|node_modules/|extension/out/|relay/\.wrangler/|\.gocache/|.*\.vsix$)' "$RUNNER_TEMP/source-contents.txt"; then
+          if grep -E '(^|/)(\.env(\.|$)|\.envsync\.toml$|\.envsync/|WORKSPACE\.md$|mcp\.json$|\.cursor/|\.claude/|\.github/copilot-instructions\.md$|envsync\.exe|node_modules/|extension/out/|relay/\.wrangler/|\.gocache/|.*\.vsix$)' "$RUNNER_TEMP/source-contents.txt"; then
             echo "unexpected files detected in source archive"
             exit 1
           fi
