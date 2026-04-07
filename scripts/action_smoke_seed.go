@@ -13,6 +13,8 @@ import (
 
 	"github.com/envsync/envsync/internal/crypto"
 	"github.com/envsync/envsync/internal/relay"
+	"github.com/envsync/envsync/internal/revision"
+	envsync "github.com/envsync/envsync/internal/sync"
 )
 
 func main() {
@@ -79,7 +81,12 @@ func main() {
 	}
 
 	plaintext := []byte("API_KEY=abc123\nMULTILINE=\"line1\\nline2\"\n")
-	ephPub, encrypted, err := crypto.EncryptForRecipient(plaintext, serviceKP.X25519Public)
+	payload := envsync.NewEnvPayload(fileName, plaintext, time.Now().UnixMilli(), "", revision.RevisionID(plaintext))
+	encodedPayload, err := envsync.EncodeEnvPayload(payload)
+	if err != nil {
+		exitf("encode payload: %v", err)
+	}
+	ephPub, encrypted, err := crypto.EncryptForRecipient(encodedPayload, serviceKP.X25519Public)
 	if err != nil {
 		exitf("encrypt payload: %v", err)
 	}

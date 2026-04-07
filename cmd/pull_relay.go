@@ -14,6 +14,7 @@ import (
 	"github.com/envsync/envsync/internal/crypto"
 	"github.com/envsync/envsync/internal/envfile"
 	"github.com/envsync/envsync/internal/relay"
+	envsync "github.com/envsync/envsync/internal/sync"
 	"github.com/envsync/envsync/internal/ui"
 )
 
@@ -77,16 +78,30 @@ func pullPendingRelay(projectID, relayURL, targetFile string, cfg *config.Config
 			continue
 		}
 
+		payload, err := envsync.DecodeEnvPayload(plaintext)
+		if err != nil {
+			summary.Warnings = append(summary.Warnings, fmt.Sprintf("relay payload decode failed for %s: %v", blob.BlobID, err))
+			ui.Warning(fmt.Sprintf("  Invalid relay payload: %s", err))
+			continue
+		}
+		if payload.Checksum != envsync.NewEnvPayload(payload.FileName, payload.Data, payload.Sequence, payload.BaseRevisionID, payload.RevisionID).Checksum {
+			summary.Warnings = append(summary.Warnings, fmt.Sprintf("relay checksum mismatch for %s", blob.BlobID))
+			ui.Warning("  Relay payload checksum mismatch")
+			continue
+		}
+
 		applyResult, applyErr := apply.Apply(apply.Options{
-			ProjectID:     projectID,
-			TargetFile:    targetFile,
-			IncomingFile:  blob.Filename,
-			IncomingData:  plaintext,
-			Policy:        opts.Policy,
-			Interactive:   opts.Interactive,
-			BackupEnabled: cfg.Sync.AutoBackup,
-			BackupKey:     opts.BackupKey,
-			MaxVersions:   cfg.Sync.MaxVersions,
+			ProjectID:      projectID,
+			TargetFile:     targetFile,
+			IncomingFile:   payload.FileName,
+			IncomingData:   payload.Data,
+			BaseRevisionID: payload.BaseRevisionID,
+			NewRevisionID:  payload.RevisionID,
+			Policy:         opts.Policy,
+			Interactive:    opts.Interactive,
+			BackupEnabled:  cfg.Sync.AutoBackup,
+			BackupKey:      opts.BackupKey,
+			MaxVersions:    cfg.Sync.MaxVersions,
 			ConfirmApply: func(diff *envfile.DiffResult) bool {
 				if diff == nil {
 					return true
