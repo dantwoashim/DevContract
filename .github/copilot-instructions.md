@@ -2,20 +2,20 @@
 
 Project: `EnvSync`
 
-Agent-safe repo onboarding for the EnvSync CLI, relay, and extension workspace.
+Repository-safe onboarding for the EnvSync CLI, relay, and extension workspace.
 
 ## Workflow
 
 - Run `envsync bootstrap` on a fresh clone.
 - Run `envsync doctor` before major edits.
-- Run `envsync guard scan` before commits touching agent files or config.
+- Run `envsync guard scan` before commits touching generated instruction files or config.
 - Use `envsync run test` for the default development workflow.
 
 ## Secret Safety
 
-- Never inline secrets in prompts, markdown instructions, JSON config, or logs.
+- Never inline secrets in markdown instructions, JSON config, or logs.
 - Use environment variables only when configuring tools or MCP servers.
-- If you touch `.env`, `AGENTS.md`, `.github/copilot-instructions.md`, `.cursor/`, `.claude/`, or MCP config, run `envsync guard scan`.
+- If you touch `.env`, `hi.md`, `.github/copilot-instructions.md`, `.cursor/`, `.claude/`, or MCP config, run `envsync guard scan`.
 
 ## Environment Variables
 
