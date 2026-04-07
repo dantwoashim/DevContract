@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
-import type { Env, Team, TeamMember, TeamMemberInput } from '../types';
+import type { Env, Team, TeamMember, TeamMemberInput, TeamMetrics } from '../types';
 import { computeIdentityFingerprint, computeTransportFingerprint, decodeBase64 } from '../middleware/auth';
 import { canAddMember, limitMessage } from '../middleware/tiers';
 import { logRelayEvent } from '../middleware/observability';
+import { loadTeamStats, recordTeamEvent } from '../lib/teamCoordinator';
 
 export const teamRoutes = new Hono<{ Bindings: Env }>();
 
@@ -21,6 +22,34 @@ teamRoutes.get('/:team/members', async (c) => {
     }
 
     return c.json({ members: team.members });
+});
+
+teamRoutes.get('/:team/metrics', async (c) => {
+    const teamId = c.req.param('team');
+    const actorFingerprint = c.get('fingerprint' as never) as string;
+
+    const team = await loadTeam(c.env, teamId);
+    if (!team) {
+        return c.json({ error: 'not_found', message: 'Team not found' }, 404);
+    }
+
+    const actor = team.members.find((member) => member.fingerprint === actorFingerprint);
+    if (!actor) {
+        return c.json({ error: 'forbidden', message: 'Only team members can view relay metrics' }, 403);
+    }
+
+    const stats = await loadTeamStats(c.env, teamId);
+    const payload: TeamMetrics = {
+        team_id: teamId,
+        member_count: team.members.length,
+        pending_count: stats.pending_count,
+        pending_by_recipient: stats.pending_by_recipient,
+        uploads_today: stats.uploads_today,
+        event_totals: stats.event_totals,
+        events_today: stats.events_today,
+        recorded_at: new Date().toISOString(),
+    };
+    return c.json(payload);
 });
 
 teamRoutes.put('/:team/members/:user', async (c) => {
@@ -91,6 +120,7 @@ teamRoutes.put('/:team/members/:user', async (c) => {
     }
 
     await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
+    await recordTeamEvent(c.env, teamId, 'team.member_upserted');
     logRelayEvent('team.member_upserted', {
         request_id: c.get('requestId' as never),
         team_id: teamId,
@@ -122,6 +152,7 @@ teamRoutes.delete('/:team/members/:user', async (c) => {
 
     team.members = team.members.filter((member) => member.username !== username);
     await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
+    await recordTeamEvent(c.env, teamId, 'team.member_removed');
     logRelayEvent('team.member_removed', {
         request_id: c.get('requestId' as never),
         team_id: teamId,
@@ -153,6 +184,7 @@ teamRoutes.delete('/:team/members/by-fingerprint/:fingerprint', async (c) => {
 
     team.members = team.members.filter((member) => member.fingerprint !== targetFingerprint);
     await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
+    await recordTeamEvent(c.env, teamId, 'team.member_removed');
     logRelayEvent('team.member_removed', {
         request_id: c.get('requestId' as never),
         team_id: teamId,
@@ -181,31 +213,37 @@ teamRoutes.post('/:team/rotate-self', async (c) => {
         return c.json({ error: 'invalid_member_keys', message: memberInput.error }, 400);
     }
     if (!body.proof) {
+        await recordTeamEvent(c.env, teamId, 'team.rotate_failed');
         return c.json({ error: 'missing_proof', message: 'proof is required for self-rotation' }, 400);
     }
 
     const team = await loadTeam(c.env, teamId);
     if (!team) {
+        await recordTeamEvent(c.env, teamId, 'team.rotate_failed');
         return c.json({ error: 'not_found', message: 'Team not found' }, 404);
     }
 
     const actorIdx = team.members.findIndex((member) => member.fingerprint === actorFingerprint);
     if (actorIdx < 0) {
+        await recordTeamEvent(c.env, teamId, 'team.rotate_failed');
         return c.json({ error: 'forbidden', message: 'Only team members can rotate identity' }, 403);
     }
 
     const conflict = team.members.find((member) => member.fingerprint === memberInput.fingerprint && member.fingerprint !== actorFingerprint);
     if (conflict) {
+        await recordTeamEvent(c.env, teamId, 'team.rotate_failed');
         return c.json({ error: 'duplicate_fingerprint', message: 'New fingerprint is already registered on this team' }, 409);
     }
 
     const usernameConflict = team.members.find((member) => member.username === username && member.fingerprint !== actorFingerprint);
     if (usernameConflict) {
+        await recordTeamEvent(c.env, teamId, 'team.rotate_failed');
         return c.json({ error: 'duplicate_username', message: `Member label ${username} is already used by another fingerprint` }, 409);
     }
 
     const proofValid = await verifyRotationProof(teamId, actorFingerprint, memberInput, body.proof);
     if (!proofValid) {
+        await recordTeamEvent(c.env, teamId, 'team.rotate_failed');
         return c.json({ error: 'invalid_proof', message: 'Rotation proof did not verify against the replacement identity key' }, 401);
     }
 
@@ -223,6 +261,7 @@ teamRoutes.post('/:team/rotate-self', async (c) => {
     await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
     await c.env.ENVSYNC_DATA.put(`pubkey:${memberInput.fingerprint}`, memberInput.public_key);
     await c.env.ENVSYNC_DATA.delete(`pubkey:${actorFingerprint}`);
+    await recordTeamEvent(c.env, teamId, 'team.member_rotated');
     logRelayEvent('team.member_rotated', {
         request_id: c.get('requestId' as never),
         team_id: teamId,

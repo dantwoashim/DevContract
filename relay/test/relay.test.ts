@@ -79,4 +79,19 @@ describe('Relay Blob Operations', () => {
         const res = await signedFetch(worker, recipient, `/relay/${TEAM_ID}/${BLOB_ID}`);
         expect(res.status).toBe(404);
     });
+
+    it('should expose queue and blob counters via team metrics', async () => {
+        const res = await signedFetch(worker, sender, `/teams/${TEAM_ID}/metrics`);
+        expect(res.status).toBe(200);
+        const data = await res.json() as {
+            pending_count: number;
+            uploads_today: number;
+            event_totals: Record<string, number>;
+        };
+        expect(data.pending_count).toBe(0);
+        expect(data.uploads_today).toBeGreaterThanOrEqual(1);
+        expect(data.event_totals['relay.blob_stored']).toBeGreaterThanOrEqual(1);
+        expect(data.event_totals['relay.blob_downloaded']).toBeGreaterThanOrEqual(1);
+        expect(data.event_totals['relay.blob_deleted']).toBeGreaterThanOrEqual(1);
+    });
 });

@@ -67,3 +67,14 @@ export interface TeamMemberInput {
     transport_fingerprint: string;
     role?: 'owner' | 'member';
 }
+
+export interface TeamMetrics {
+    team_id: string;
+    member_count: number;
+    pending_count: number;
+    pending_by_recipient: Record<string, number>;
+    uploads_today: number;
+    event_totals: Record<string, number>;
+    events_today: Record<string, number>;
+    recorded_at: string;
+}

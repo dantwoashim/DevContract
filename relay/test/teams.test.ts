@@ -112,3 +112,66 @@ describe('Team identity rotation', () => {
         expect(data.members.find((member) => member.fingerprint === newMember.fingerprint)?.username).toBe('member-renamed');
     });
 });
+
+describe('Team metrics routes', () => {
+    const teamId = `test-team-metrics-${Date.now()}`;
+
+    it('surfaces relay-side counters for operators', async () => {
+        const owner = await createIdentity('metrics-owner');
+        const joiner = await createIdentity('metrics-joiner');
+        const tokenHash = `metrics-token-${Date.now()}`;
+
+        expect((await registerMember(worker, owner, teamId, 'owner', transportKey(12), 'owner')).status).toBe(200);
+        expect((await signedFetch(worker, owner, '/invites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                token_hash: tokenHash,
+                team_id: teamId,
+                inviter: 'owner',
+                inviter_fingerprint: owner.fingerprint,
+                invitee: 'joiner',
+            }),
+        })).status).toBe(201);
+
+        const mismatchTransport = transportKey(13);
+        expect((await signedFetch(worker, joiner, `/invites/${tokenHash}/join`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: 'wrong-name',
+                fingerprint: joiner.fingerprint,
+                public_key: joiner.publicKeyB64,
+                transport_public_key: mismatchTransport,
+                transport_fingerprint: transportFingerprint(mismatchTransport),
+            }),
+        })).status).toBe(409);
+
+        const joinTransport = transportKey(14);
+        expect((await signedFetch(worker, joiner, `/invites/${tokenHash}/join`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: 'joiner',
+                fingerprint: joiner.fingerprint,
+                public_key: joiner.publicKeyB64,
+                transport_public_key: joinTransport,
+                transport_fingerprint: transportFingerprint(joinTransport),
+            }),
+        })).status).toBe(200);
+
+        const metricsRes = await signedFetch(worker, owner, `/teams/${teamId}/metrics`);
+        expect(metricsRes.status).toBe(200);
+        const metrics = await metricsRes.json() as {
+            team_id: string;
+            member_count: number;
+            event_totals: Record<string, number>;
+        };
+
+        expect(metrics.team_id).toBe(teamId);
+        expect(metrics.member_count).toBe(2);
+        expect(metrics.event_totals['invite.created']).toBe(1);
+        expect(metrics.event_totals['invite.join_failed']).toBe(1);
+        expect(metrics.event_totals['invite.joined']).toBe(1);
+    });
+});
