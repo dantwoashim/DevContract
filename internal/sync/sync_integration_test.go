@@ -31,7 +31,7 @@ func TestProtocolRoundTripIntegration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			payload := sync.NewEnvPayload(tt.file, []byte(tt.content), tt.seq)
+			payload := sync.NewEnvPayload(tt.file, []byte(tt.content), tt.seq, "base-revision", "revision-id")
 			encoded, err := sync.EncodeEnvPayload(payload)
 			if err != nil {
 				t.Fatalf("encode failed: %v", err)
@@ -67,18 +67,20 @@ func TestProtocolRoundTripIntegration(t *testing.T) {
 // TestPayloadChecksumIntegrity verifies corrupted payloads are caught.
 func TestPayloadChecksumIntegrity(t *testing.T) {
 	content := "SECRET=hunter2\nAPI_KEY=abc123\nDB_PASS=correcthorsebatterystaple\n"
-	payload := sync.NewEnvPayload(".env", []byte(content), 1)
+	payload := sync.NewEnvPayload(".env", []byte(content), 1, "base-revision", "revision-id")
 	encoded, err := sync.EncodeEnvPayload(payload)
 	if err != nil {
 		t.Fatalf("encode failed: %v", err)
 	}
 
 	// Corrupt a byte in the data section of the encoded payload
-	// The data starts after: version(2) + seq(8) + ts(8) + nameLen(2) + name(4) + dataLen(4) = 28 bytes
-	if len(encoded) > 35 {
+	// The data starts after:
+	// version(2) + seq(8) + ts(8) + baseLen(2) + base(13) + revLen(2) + rev(11) + nameLen(2) + name(4) + dataLen(4)
+	// = 56 bytes for this fixture.
+	if len(encoded) > 60 {
 		corrupted := make([]byte, len(encoded))
 		copy(corrupted, encoded)
-		corrupted[35] ^= 0xFF // Flip a bit in the .env data
+		corrupted[60] ^= 0xFF // Flip a bit inside the .env data payload
 
 		decoded, err := sync.DecodeEnvPayload(corrupted)
 		if err != nil {
@@ -101,7 +103,7 @@ func TestLargePayloadBoundary(t *testing.T) {
 		data[i] = byte('A' + (i % 26))
 	}
 
-	payload := sync.NewEnvPayload(".env", data, 1)
+	payload := sync.NewEnvPayload(".env", data, 1, "base-revision", "revision-id")
 	encoded, err := sync.EncodeEnvPayload(payload)
 	if err != nil {
 		t.Fatalf("encode failed: %v", err)
@@ -129,7 +131,7 @@ func TestLargePayloadBoundary(t *testing.T) {
 // produces the same bytes (minus timestamp which changes between calls).
 func TestEncodeDecodeIdempotent(t *testing.T) {
 	content := "KEY=value\nOTHER=data\n"
-	payload := sync.NewEnvPayload(".env", []byte(content), 42)
+	payload := sync.NewEnvPayload(".env", []byte(content), 42, "base-revision", "revision-id")
 	encoded1, err := sync.EncodeEnvPayload(payload)
 	if err != nil {
 		t.Fatalf("first encode failed: %v", err)
@@ -160,7 +162,7 @@ func TestEncodeDecodeIdempotent(t *testing.T) {
 
 // TestEmptyPayload tests edge case of completely empty payload.
 func TestEmptyPayload(t *testing.T) {
-	payload := sync.NewEnvPayload("", []byte{}, 0)
+	payload := sync.NewEnvPayload("", []byte{}, 0, "", "")
 	encoded, err := sync.EncodeEnvPayload(payload)
 	if err != nil {
 		t.Fatalf("encode failed for empty payload: %v", err)

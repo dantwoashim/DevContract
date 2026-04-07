@@ -8,7 +8,7 @@ import (
 
 func TestProtocolRoundTrip(t *testing.T) {
 	// Create a payload
-	original := NewEnvPayload(".env", []byte("DATABASE_URL=postgres://localhost:5432/mydb\nAPI_KEY=sk_test_12345\n"), 42)
+	original := NewEnvPayload(".env", []byte("DATABASE_URL=postgres://localhost:5432/mydb\nAPI_KEY=sk_test_12345\n"), 42, "base-rev", "new-rev")
 
 	// Encode
 	encoded, err := EncodeEnvPayload(original)
@@ -34,6 +34,12 @@ func TestProtocolRoundTrip(t *testing.T) {
 	}
 	if decoded.FileName != original.FileName {
 		t.Errorf("filename: got %q, want %q", decoded.FileName, original.FileName)
+	}
+	if decoded.BaseRevisionID != original.BaseRevisionID {
+		t.Errorf("base revision: got %q, want %q", decoded.BaseRevisionID, original.BaseRevisionID)
+	}
+	if decoded.RevisionID != original.RevisionID {
+		t.Errorf("revision: got %q, want %q", decoded.RevisionID, original.RevisionID)
 	}
 	if string(decoded.Data) != string(original.Data) {
 		t.Errorf("data: got %q, want %q", decoded.Data, original.Data)

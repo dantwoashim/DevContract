@@ -34,17 +34,19 @@ type Message struct {
 
 // EnvPayload is the payload of an ENV_PUSH or ENV_PULL_RESP message.
 type EnvPayload struct {
-	Version   uint16
-	Sequence  int64
-	Timestamp int64
-	FileName  string
-	Data      []byte
-	Checksum  [32]byte
+	Version        uint16
+	Sequence       int64
+	Timestamp      int64
+	BaseRevisionID string
+	RevisionID     string
+	FileName       string
+	Data           []byte
+	Checksum       [32]byte
 }
 
 const (
 	// ProtocolVersion is the current wire protocol version.
-	ProtocolVersion uint16 = 1
+	ProtocolVersion uint16 = 2
 
 	// MaxMessageSize is the maximum message payload (64KB).
 	MaxMessageSize = 65536
@@ -79,12 +81,20 @@ func ReceiveMessage(conn *crypto.SecureConn) (Message, error) {
 
 // EncodeEnvPayload serializes an env payload into bytes.
 func EncodeEnvPayload(p EnvPayload) ([]byte, error) {
+	baseRevisionBytes := []byte(p.BaseRevisionID)
+	revisionBytes := []byte(p.RevisionID)
 	nameBytes := []byte(p.FileName)
 	if p.Sequence < 0 {
 		return nil, fmt.Errorf("sequence must be non-negative")
 	}
 	if p.Timestamp < 0 {
 		return nil, fmt.Errorf("timestamp must be non-negative")
+	}
+	if len(baseRevisionBytes) > math.MaxUint16 {
+		return nil, fmt.Errorf("base revision too long: %d bytes", len(baseRevisionBytes))
+	}
+	if len(revisionBytes) > math.MaxUint16 {
+		return nil, fmt.Errorf("revision too long: %d bytes", len(revisionBytes))
 	}
 	if len(nameBytes) > math.MaxUint16 {
 		return nil, fmt.Errorf("filename too long: %d bytes", len(nameBytes))
@@ -93,8 +103,8 @@ func EncodeEnvPayload(p EnvPayload) ([]byte, error) {
 		return nil, fmt.Errorf("payload too large: %d bytes", len(p.Data))
 	}
 
-	// Version(2) + Sequence(8) + Timestamp(8) + NameLen(2) + Name + DataLen(4) + Data + Checksum(32)
-	size := 2 + 8 + 8 + 2 + len(nameBytes) + 4 + len(p.Data) + 32
+	// Version(2) + Sequence(8) + Timestamp(8) + BaseLen(2) + Base + RevLen(2) + Rev + NameLen(2) + Name + DataLen(4) + Data + Checksum(32)
+	size := 2 + 8 + 8 + 2 + len(baseRevisionBytes) + 2 + len(revisionBytes) + 2 + len(nameBytes) + 4 + len(p.Data) + 32
 	buf := make([]byte, 0, size)
 
 	// Version
@@ -103,6 +113,12 @@ func EncodeEnvPayload(p EnvPayload) ([]byte, error) {
 	buf = binary.BigEndian.AppendUint64(buf, uint64(p.Sequence))
 	// Timestamp
 	buf = binary.BigEndian.AppendUint64(buf, uint64(p.Timestamp))
+	// BaseRevisionID
+	buf = binary.BigEndian.AppendUint16(buf, uint16(len(baseRevisionBytes)))
+	buf = append(buf, baseRevisionBytes...)
+	// RevisionID
+	buf = binary.BigEndian.AppendUint16(buf, uint16(len(revisionBytes)))
+	buf = append(buf, revisionBytes...)
 	// FileName
 	// #nosec G115 -- length is bounded by the check above.
 	buf = binary.BigEndian.AppendUint16(buf, uint16(len(nameBytes)))
@@ -149,6 +165,28 @@ func DecodeEnvPayload(data []byte) (EnvPayload, error) {
 	}
 	p.Timestamp = int64(ts)
 
+	// BaseRevisionID
+	baseRevisionLen, err := r.readUint16()
+	if err != nil {
+		return p, fmt.Errorf("reading base revision length: %w", err)
+	}
+	baseRevisionBytes, err := r.readBytes(int(baseRevisionLen))
+	if err != nil {
+		return p, fmt.Errorf("reading base revision: %w", err)
+	}
+	p.BaseRevisionID = string(baseRevisionBytes)
+
+	// RevisionID
+	revisionLen, err := r.readUint16()
+	if err != nil {
+		return p, fmt.Errorf("reading revision length: %w", err)
+	}
+	revisionBytes, err := r.readBytes(int(revisionLen))
+	if err != nil {
+		return p, fmt.Errorf("reading revision: %w", err)
+	}
+	p.RevisionID = string(revisionBytes)
+
 	// FileName
 	nameLen, err := r.readUint16()
 	if err != nil {
@@ -181,14 +219,16 @@ func DecodeEnvPayload(data []byte) (EnvPayload, error) {
 }
 
 // NewEnvPayload creates an EnvPayload from raw .env content.
-func NewEnvPayload(fileName string, data []byte, sequence int64) EnvPayload {
+func NewEnvPayload(fileName string, data []byte, sequence int64, baseRevisionID, revisionID string) EnvPayload {
 	return EnvPayload{
-		Version:   ProtocolVersion,
-		Sequence:  sequence,
-		Timestamp: time.Now().Unix(),
-		FileName:  fileName,
-		Data:      data,
-		Checksum:  sha256Sum(data),
+		Version:        ProtocolVersion,
+		Sequence:       sequence,
+		Timestamp:      time.Now().Unix(),
+		BaseRevisionID: baseRevisionID,
+		RevisionID:     revisionID,
+		FileName:       fileName,
+		Data:           data,
+		Checksum:       sha256Sum(data),
 	}
 }
 
