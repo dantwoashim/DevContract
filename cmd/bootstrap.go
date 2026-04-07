@@ -37,10 +37,12 @@ type bootstrapReport struct {
 }
 
 var (
-	bootstrapJSON     bool
-	bootstrapSkipPull bool
-	bootstrapSkipRun  bool
-	bootstrapDryRun   bool
+	bootstrapJSON       bool
+	bootstrapSkipPull   bool
+	bootstrapSkipRun    bool
+	bootstrapDryRun     bool
+	bootstrapTrust      bool
+	bootstrapRestricted bool
 )
 
 var bootstrapCmd = &cobra.Command{
@@ -152,6 +154,16 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	}
 
 	if !bootstrapSkipRun {
+		commands := make([]string, 0, len(ctx.Contract.Bootstrap.Steps))
+		for _, step := range ctx.Contract.Bootstrap.Steps {
+			commands = append(commands, renderShellCommand(step.Shell, step.Run))
+		}
+		if !bootstrapDryRun && !bootstrapRestricted {
+			if err := ensureContractTrust(ctx, commands, bootstrapTrust); err != nil {
+				return renderBootstrapReport(report, err)
+			}
+		}
+
 		for _, step := range ctx.Contract.Bootstrap.Steps {
 			display := renderShellCommand(step.Shell, step.Run)
 			stepReport := bootstrapStepReport{Name: step.Name, Run: display, Status: "ok"}
@@ -160,6 +172,15 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 				report.Steps = append(report.Steps, stepReport)
 				if !bootstrapJSON {
 					ui.Line(fmt.Sprintf("  [plan] step %-10s %s", step.Name, display))
+				}
+				continue
+			}
+			if bootstrapRestricted {
+				stepReport.Status = "blocked"
+				report.Warnings = append(report.Warnings, fmt.Sprintf("restricted mode blocked bootstrap step %s", step.Name))
+				report.Steps = append(report.Steps, stepReport)
+				if !bootstrapJSON {
+					ui.Warning(fmt.Sprintf("  [blocked] step %-10s %s", step.Name, display))
 				}
 				continue
 			}
@@ -215,5 +236,7 @@ func init() {
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipPull, "skip-pull", false, "Skip relay pull of shared secrets")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipRun, "skip-run", false, "Skip executing bootstrap steps")
 	bootstrapCmd.Flags().BoolVar(&bootstrapDryRun, "dry-run", false, "Show what bootstrap would do without executing shell steps or pulling shared secrets")
+	bootstrapCmd.Flags().BoolVar(&bootstrapTrust, "trust-contract", false, "Trust the current repo contract and persist that decision for this contract revision")
+	bootstrapCmd.Flags().BoolVar(&bootstrapRestricted, "restricted", false, "Prepare outputs and checks without executing repo-defined shell commands")
 	rootCmd.AddCommand(bootstrapCmd)
 }

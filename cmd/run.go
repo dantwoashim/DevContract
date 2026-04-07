@@ -10,6 +10,8 @@ import (
 )
 
 var runDryRun bool
+var runTrustContract bool
+var runRestricted bool
 
 var runCmd = &cobra.Command{
 	Use:   "run [target]",
@@ -46,6 +48,13 @@ func runRun(cmd *cobra.Command, args []string) error {
 		ui.Warning("Dry run enabled; command was not executed.")
 		return nil
 	}
+	if runRestricted {
+		ui.Warning("Restricted mode blocked repo-defined shell execution.")
+		return nil
+	}
+	if err := ensureContractTrust(ctx, []string{renderShellCommand("", target.Command)}, runTrustContract); err != nil {
+		return err
+	}
 
 	if err := runShellCommand(ctx.Root, "", target.Command); err != nil {
 		return fmt.Errorf("run target %s failed: %w", targetName, err)
@@ -57,5 +66,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 
 func init() {
 	runCmd.Flags().BoolVar(&runDryRun, "dry-run", false, "Show the resolved command without executing it")
+	runCmd.Flags().BoolVar(&runTrustContract, "trust-contract", false, "Trust the current repo contract and persist that decision for this contract revision")
+	runCmd.Flags().BoolVar(&runRestricted, "restricted", false, "Block repo-defined shell execution and only show the resolved command")
 	rootCmd.AddCommand(runCmd)
 }
