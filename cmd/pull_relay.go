@@ -43,6 +43,7 @@ func pullPendingRelay(projectID, relayURL, targetFile string, cfg *config.Config
 	}
 
 	summary := &relayPullSummary{}
+	summary.FoundCount = len(pending)
 	for _, blob := range pending {
 		ui.Line(fmt.Sprintf("  - Downloading %s from %s...", blob.Filename, shortFP(blob.SenderFingerprint)))
 
@@ -77,15 +78,15 @@ func pullPendingRelay(projectID, relayURL, targetFile string, cfg *config.Config
 		}
 
 		applyResult, applyErr := apply.Apply(apply.Options{
-			ProjectID:        projectID,
-			TargetFile:       targetFile,
-			IncomingFile:     blob.Filename,
-			IncomingData:     plaintext,
-			Policy:           opts.Policy,
-			Interactive:      opts.Interactive,
-			BackupEnabled:    cfg.Sync.AutoBackup,
-			BackupKey:        opts.BackupKey,
-			MaxVersions:      cfg.Sync.MaxVersions,
+			ProjectID:     projectID,
+			TargetFile:    targetFile,
+			IncomingFile:  blob.Filename,
+			IncomingData:  plaintext,
+			Policy:        opts.Policy,
+			Interactive:   opts.Interactive,
+			BackupEnabled: cfg.Sync.AutoBackup,
+			BackupKey:     opts.BackupKey,
+			MaxVersions:   cfg.Sync.MaxVersions,
 			ConfirmApply: func(diff *envfile.DiffResult) bool {
 				if diff == nil {
 					return true
@@ -108,16 +109,18 @@ func pullPendingRelay(projectID, relayURL, targetFile string, cfg *config.Config
 		if applyResult.ConflictPolicyApplied != "" {
 			summary.ConflictPolicyApplied = applyResult.ConflictPolicyApplied
 		}
+		if delErr := relayClient.DeleteBlob(projectID, blob.BlobID); delErr != nil {
+			summary.Warnings = append(summary.Warnings, fmt.Sprintf("relay cleanup failed for %s: %v", blob.BlobID, delErr))
+			ui.Warning(fmt.Sprintf("  Failed to clean up blob: %s", delErr))
+			continue
+		}
+
+		summary.HandledCount++
 		if !applyResult.Applied {
 			continue
 		}
 
 		summary.AppliedCount++
-		if delErr := relayClient.DeleteBlob(projectID, blob.BlobID); delErr != nil {
-			summary.Warnings = append(summary.Warnings, fmt.Sprintf("relay cleanup failed for %s: %v", blob.BlobID, delErr))
-			ui.Warning(fmt.Sprintf("  Failed to clean up blob: %s", delErr))
-		}
-
 		logger, _ := audit.NewLogger()
 		if logger != nil {
 			_ = logger.Log(audit.Entry{

@@ -36,6 +36,8 @@ type pullReport struct {
 	RelayChecked             bool     `json:"relay_checked"`
 	RelayAttempted           bool     `json:"relay_attempted"`
 	RelayUnavailable         bool     `json:"relay_unavailable"`
+	RelayPendingFound        int      `json:"relay_pending_found"`
+	RelayHandled             int      `json:"relay_handled"`
 	RelayApplied             int      `json:"relay_applied"`
 	LANAttempted             bool     `json:"lan_attempted"`
 	LANApplied               bool     `json:"lan_applied"`
@@ -49,6 +51,8 @@ type pullReport struct {
 }
 
 type relayPullSummary struct {
+	FoundCount               int
+	HandledCount             int
 	AppliedCount             int
 	Warnings                 []string
 	InteractiveRequired      bool
@@ -141,6 +145,8 @@ func runPull(cmd *cobra.Command, args []string) error {
 		BackupKey:   backupKey,
 	})
 	if relayErr == nil && relaySummary.AppliedCount > 0 {
+		report.RelayPendingFound = relaySummary.FoundCount
+		report.RelayHandled = relaySummary.HandledCount
 		report.RelayApplied = relaySummary.AppliedCount
 		report.Warnings = append(report.Warnings, relaySummary.Warnings...)
 		report.InteractiveRequired = relaySummary.InteractiveRequired
@@ -153,6 +159,8 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return renderPullReport(report, nil)
 	}
 	if relaySummary != nil {
+		report.RelayPendingFound = relaySummary.FoundCount
+		report.RelayHandled = relaySummary.HandledCount
 		report.Warnings = append(report.Warnings, relaySummary.Warnings...)
 		report.InteractiveRequired = relaySummary.InteractiveRequired
 		report.ManualInterventionNeeded = relaySummary.ManualInterventionNeeded
@@ -165,8 +173,12 @@ func runPull(cmd *cobra.Command, args []string) error {
 		report.RelayUnavailable = true
 		report.Warnings = append(report.Warnings, fmt.Sprintf("relay unavailable: %v", relayErr))
 		ui.Warning(fmt.Sprintf("  Relay unavailable: %v", relayErr))
-	} else {
+	} else if report.RelayPendingFound == 0 {
 		ui.Line("  No pending blobs on relay")
+	} else if report.RelayApplied == 0 && report.RelayHandled > 0 {
+		ui.Line(fmt.Sprintf("  Handled %d relay blob(s) without mutating the target file", report.RelayHandled))
+	} else if report.RelayPendingFound > 0 && report.RelayHandled == 0 {
+		ui.Warning(fmt.Sprintf("  Found %d relay blob(s), but none were handled successfully", report.RelayPendingFound))
 	}
 
 	if pullServiceKeyPath != "" {

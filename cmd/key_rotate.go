@@ -3,10 +3,12 @@
 package cmd
 
 import (
+	"crypto/ed25519"
 	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/envsync/envsync/internal/audit"
 	"github.com/envsync/envsync/internal/crypto"
@@ -126,10 +128,6 @@ func runKeyRotate(cmd *cobra.Command, args []string) error {
 
 		team, err := registry.LoadTeam(projectID)
 		if err == nil {
-			role := "member"
-			if team.CreatedBy == oldKP.Fingerprint {
-				role = "owner"
-			}
 			if team.CreatedBy == oldKP.Fingerprint {
 				team.CreatedBy = newKP.Fingerprint
 			}
@@ -148,19 +146,22 @@ func runKeyRotate(cmd *cobra.Command, args []string) error {
 			}
 			updatedTeams++
 
-			if err := oldClient.AddTeamMember(
+			proof := ed25519.Sign(newKP.Ed25519Private, []byte(strings.Join([]string{
+				"rotate-self",
 				projectID,
-				memberLabel,
+				oldKP.Fingerprint,
 				newKP.Fingerprint,
-				base64.StdEncoding.EncodeToString(newKP.Ed25519Public),
-				base64.StdEncoding.EncodeToString(newKP.X25519Public[:]),
 				crypto.ComputeFingerprint(newKP.X25519Public),
-				role,
-			); err != nil {
-				return fmt.Errorf("registering new identity on relay for %s: %w", projectID, err)
-			}
-			if err := oldClient.RemoveTeamMemberByFingerprint(projectID, oldKP.Fingerprint); err != nil {
-				return fmt.Errorf("removing previous identity from relay for %s: %w", projectID, err)
+			}, "\n")))
+			if err := oldClient.RotateSelf(projectID, relay.RotateSelfRequest{
+				Username:             memberLabel,
+				Fingerprint:          newKP.Fingerprint,
+				PublicKey:            base64.StdEncoding.EncodeToString(newKP.Ed25519Public),
+				TransportPublicKey:   base64.StdEncoding.EncodeToString(newKP.X25519Public[:]),
+				TransportFingerprint: crypto.ComputeFingerprint(newKP.X25519Public),
+				Proof:                base64.StdEncoding.EncodeToString(proof),
+			}); err != nil {
+				return fmt.Errorf("rotating identity on relay for %s: %w", projectID, err)
 			}
 			relayUpdates++
 		}
