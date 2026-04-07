@@ -20,14 +20,16 @@ import (
 
 // OrchestratorOptions configures the sync orchestrator.
 type OrchestratorOptions struct {
-	EnvFilePath  string
-	TeamID       string
-	KeyPair      *crypto.KeyPair
-	NoiseKeypair noise.DHKey
-	RelayClient  *relay.Client
-	RelayURL     string
-	Sequence     int64
-	OnStatus     func(status string)
+	EnvFilePath    string
+	TeamID         string
+	KeyPair        *crypto.KeyPair
+	NoiseKeypair   noise.DHKey
+	RelayClient    *relay.Client
+	RelayURL       string
+	Sequence       int64
+	BaseRevisionID string
+	RevisionID     string
+	OnStatus       func(status string)
 }
 
 // OrchestratorResult summarizes the sync.
@@ -113,7 +115,7 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 				continue
 			}
 
-			payload := NewEnvPayload(fileName, data, opts.Sequence)
+			payload := NewEnvPayload(fileName, data, opts.Sequence, opts.BaseRevisionID, opts.RevisionID)
 			encodedPayload, encodeErr := EncodeEnvPayload(payload)
 			if encodeErr != nil {
 				_ = conn.Close()
@@ -171,7 +173,14 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 			var recipientPub [32]byte
 			copy(recipientPub[:], recipientPubBytes)
 
-			ephPub, encrypted, err := crypto.EncryptForRecipient(data, recipientPub)
+			payload := NewEnvPayload(fileName, data, opts.Sequence, opts.BaseRevisionID, opts.RevisionID)
+			encodedPayload, encodeErr := EncodeEnvPayload(payload)
+			if encodeErr != nil {
+				report(fmt.Sprintf("Relay payload encode failed for %s: %s", peerLabel(trustedPeer), encodeErr))
+				continue
+			}
+
+			ephPub, encrypted, err := crypto.EncryptForRecipient(encodedPayload, recipientPub)
 			if err != nil {
 				report(fmt.Sprintf("Encrypt failed for %s: %s", peerLabel(trustedPeer), err))
 				continue

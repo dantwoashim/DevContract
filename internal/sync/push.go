@@ -33,6 +33,9 @@ type PushOptions struct {
 	// Sequence is the version sequence number.
 	Sequence int64
 
+	BaseRevisionID string
+	RevisionID     string
+
 	// OnPeerFound is called when a peer is discovered.
 	OnPeerFound func(peer discovery.Peer)
 
@@ -81,7 +84,7 @@ func Push(ctx context.Context, opts PushOptions) (*PushResult, error) {
 	}
 
 	// Create wire protocol payload
-	payload := NewEnvPayload(fileName, data, opts.Sequence)
+	payload := NewEnvPayload(fileName, data, opts.Sequence, opts.BaseRevisionID, opts.RevisionID)
 	encodedPayload, err := EncodeEnvPayload(payload)
 	if err != nil {
 		return result, fmt.Errorf("encoding sync payload: %w", err)

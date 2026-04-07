@@ -55,23 +55,23 @@ type PullOptions struct {
 	Advertise          bool
 	AdvertiseVersion   string
 
-	OnListening func(port int)
-	OnReceived  func(payload EnvPayload, diff *envfile.DiffResult)
-	OnConfirm   func(diff *envfile.DiffResult) bool
+	OnListening        func(port int)
+	OnReceived         func(payload EnvPayload, diff *envfile.DiffResult)
+	OnConfirm          func(diff *envfile.DiffResult) bool
 	OnResolveConflicts func(conflicts []envfile.Conflict) ([]apply.ConflictResolution, bool)
-	OnApplied   func(fileName string)
+	OnApplied          func(fileName string)
 }
 
 // PullResult summarizes the pull operation.
 type PullResult struct {
-	FileName    string
-	FileSize    int
-	VarCount    int
-	Applied     bool
-	DiffSummary string
-	ConflictPolicyApplied string
-	BackupCreated         bool
-	InteractiveRequired   bool
+	FileName                 string
+	FileSize                 int
+	VarCount                 int
+	Applied                  bool
+	DiffSummary              string
+	ConflictPolicyApplied    string
+	BackupCreated            bool
+	InteractiveRequired      bool
 	ManualInterventionNeeded bool
 }
 
@@ -207,6 +207,8 @@ func Pull(ctx context.Context, opts PullOptions) (*PullResult, error) {
 		TargetFile:       envPath,
 		IncomingFile:     payload.FileName,
 		IncomingData:     payload.Data,
+		BaseRevisionID:   payload.BaseRevisionID,
+		NewRevisionID:    payload.RevisionID,
 		Policy:           normalizePullPolicy(opts),
 		Interactive:      opts.Interactive,
 		BackupEnabled:    opts.BackupEnabled,
