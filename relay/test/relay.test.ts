@@ -19,10 +19,12 @@ const ENCRYPTED_BODY = Buffer.from('ENCRYPTED_DATA_HERE');
 describe('Relay Blob Operations', () => {
     let sender: Awaited<ReturnType<typeof createIdentity>>;
     let recipient: Awaited<ReturnType<typeof createIdentity>>;
+    let servicePrincipal: Awaited<ReturnType<typeof createIdentity>>;
 
     beforeAll(async () => {
         sender = await createIdentity('relay-sender');
         recipient = await createIdentity('relay-recipient');
+        servicePrincipal = await createIdentity('relay-ci');
 
         expect((await registerMember(worker, sender, TEAM_ID, 'alice', transportKey(11), 'owner')).status).toBe(200);
         expect((await signedFetch(worker, sender, `/teams/${TEAM_ID}/members/bob`, {
@@ -34,6 +36,19 @@ describe('Relay Blob Operations', () => {
                 transport_public_key: transportKey(22),
                 transport_fingerprint: transportFingerprint(transportKey(22)),
                 role: 'member',
+            }),
+        })).status).toBe(200);
+        expect((await signedFetch(worker, sender, `/teams/${TEAM_ID}/members/ci`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                fingerprint: servicePrincipal.fingerprint,
+                public_key: servicePrincipal.publicKeyB64,
+                transport_public_key: transportKey(44),
+                transport_fingerprint: transportFingerprint(transportKey(44)),
+                role: 'member',
+                principal_type: 'service_principal',
+                scopes: ['relay.pull', 'member.read'],
             }),
         })).status).toBe(200);
     });
@@ -93,5 +108,78 @@ describe('Relay Blob Operations', () => {
         expect(data.event_totals['relay.blob_stored']).toBeGreaterThanOrEqual(1);
         expect(data.event_totals['relay.blob_downloaded']).toBeGreaterThanOrEqual(1);
         expect(data.event_totals['relay.blob_deleted']).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should report truthful billing usage from coordinator-backed metrics', async () => {
+        const res = await signedFetch(worker, sender, `/billing/status/${TEAM_ID}`);
+        expect(res.status).toBe(200);
+        const data = await res.json() as {
+            billing_enabled: boolean;
+            metering_source: string;
+            usage: {
+                member_records: number;
+                human_members: number;
+                service_principals: number;
+                blobs_today: number;
+            };
+        };
+        expect(data.billing_enabled).toBe(false);
+        expect(data.metering_source).toBe('team_coordinator');
+        expect(data.usage.member_records).toBe(3);
+        expect(data.usage.human_members).toBe(2);
+        expect(data.usage.service_principals).toBe(1);
+        expect(data.usage.blobs_today).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should reject malformed blobs and expose them to owners', async () => {
+        const rejectedBlobId = `blob-rejected-${Date.now()}`;
+        const upload = await signedFetch(worker, sender, `/relay/${TEAM_ID}/${rejectedBlobId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/octet-stream',
+                'X-EnvSync-Sender': sender.fingerprint,
+                'X-EnvSync-Recipient': recipient.fingerprint,
+                'X-EnvSync-EphemeralKey': transportKey(55),
+                'X-EnvSync-Filename': '.env',
+                'X-EnvSync-Signature': Buffer.from('test-signature').toString('base64'),
+            },
+            body: Buffer.from('BROKEN_BLOB'),
+        });
+        expect(upload.status).toBe(201);
+
+        const reject = await signedFetch(worker, recipient, `/relay/${TEAM_ID}/${rejectedBlobId}/reject`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: 'signature mismatch' }),
+        });
+        expect(reject.status).toBe(200);
+
+        const pending = await signedFetch(worker, recipient, `/relay/${TEAM_ID}/pending?for=${encodeURIComponent(recipient.fingerprint)}`);
+        expect(pending.status).toBe(200);
+        const pendingData = await pending.json() as { pending: Array<{ blob_id: string }> };
+        expect(pendingData.pending.some((blob) => blob.blob_id === rejectedBlobId)).toBe(false);
+
+        const rejected = await signedFetch(worker, sender, `/relay/${TEAM_ID}/rejected`);
+        expect(rejected.status).toBe(200);
+        const rejectedData = await rejected.json() as {
+            rejected: Array<{ blob_id: string; status: string; failure_reason: string }>;
+        };
+        expect(rejectedData.rejected.some((blob) => blob.blob_id === rejectedBlobId && blob.status === 'rejected_client' && blob.failure_reason === 'signature mismatch')).toBe(true);
+    });
+
+    it('should block service principals from relay uploads without relay.push scope', async () => {
+        const res = await signedFetch(worker, servicePrincipal, `/relay/${TEAM_ID}/blob-service-${Date.now()}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/octet-stream',
+                'X-EnvSync-Sender': servicePrincipal.fingerprint,
+                'X-EnvSync-Recipient': recipient.fingerprint,
+                'X-EnvSync-EphemeralKey': transportKey(66),
+                'X-EnvSync-Filename': '.env',
+                'X-EnvSync-Signature': Buffer.from('test-signature').toString('base64'),
+            },
+            body: Buffer.from('SERVICE_PRINCIPAL_UPLOAD'),
+        });
+        expect(res.status).toBe(403);
     });
 });
