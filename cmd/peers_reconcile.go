@@ -57,34 +57,9 @@ func runPeersReconcile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading relay member roster: %w", err)
 	}
 
-	localPeerMap := make(map[string]peer.Peer, len(localPeers))
-	for _, p := range localPeers {
-		localPeerMap[p.Fingerprint] = p
-	}
-
-	relayMap := make(map[string]relay.TeamMember, len(relayMembers))
-	for _, member := range relayMembers {
-		relayMap[member.Fingerprint] = member
-	}
-
-	localMissingOnRelay := []string{}
-	for _, fingerprint := range team.Members {
-		if _, ok := relayMap[fingerprint]; ok || fingerprint == kp.Fingerprint {
-			continue
-		}
-		localMissingOnRelay = append(localMissingOnRelay, fingerprint)
-	}
-
-	relayMissingLocal := []relay.TeamMember{}
+	localMissingOnRelay, relayMissingLocal := membershipDrift(team, localPeers, relayMembers, kp.Fingerprint)
 	imported := 0
-	for _, member := range relayMembers {
-		if member.Fingerprint == kp.Fingerprint {
-			continue
-		}
-		if _, ok := localPeerMap[member.Fingerprint]; ok {
-			continue
-		}
-		relayMissingLocal = append(relayMissingLocal, member)
+	for _, member := range relayMissingLocal {
 		if !peersReconcileImport {
 			continue
 		}
@@ -152,4 +127,37 @@ func runPeersReconcile(cmd *cobra.Command, args []string) error {
 func init() {
 	peersReconcileCmd.Flags().BoolVar(&peersReconcileImport, "import-pending", false, "Import relay-only members into the local registry as pending")
 	peersCmd.AddCommand(peersReconcileCmd)
+}
+
+func membershipDrift(team *peer.Team, localPeers []peer.Peer, relayMembers []relay.TeamMember, selfFingerprint string) ([]string, []relay.TeamMember) {
+	localPeerMap := make(map[string]peer.Peer, len(localPeers))
+	for _, p := range localPeers {
+		localPeerMap[p.Fingerprint] = p
+	}
+
+	relayMap := make(map[string]relay.TeamMember, len(relayMembers))
+	for _, member := range relayMembers {
+		relayMap[member.Fingerprint] = member
+	}
+
+	localMissingOnRelay := []string{}
+	for _, fingerprint := range team.Members {
+		if _, ok := relayMap[fingerprint]; ok || fingerprint == selfFingerprint {
+			continue
+		}
+		localMissingOnRelay = append(localMissingOnRelay, fingerprint)
+	}
+
+	relayMissingLocal := []relay.TeamMember{}
+	for _, member := range relayMembers {
+		if member.Fingerprint == selfFingerprint {
+			continue
+		}
+		if _, ok := localPeerMap[member.Fingerprint]; ok {
+			continue
+		}
+		relayMissingLocal = append(relayMissingLocal, member)
+	}
+
+	return localMissingOnRelay, relayMissingLocal
 }
