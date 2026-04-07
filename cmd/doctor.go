@@ -367,6 +367,20 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 				} else {
 					addCheck("membership", "warn", "Current device is not registered on relay. Run invite/join or service-key register as needed.", false)
 				}
+
+				if registry != nil {
+					team, teamErr := registry.LoadTeam(project.ProjectID)
+					localPeers, peerErr := registry.ListPeers(project.ProjectID)
+					if teamErr == nil && peerErr == nil {
+						localOnly, relayOnly := membershipDrift(team, localPeers, members, kp.Fingerprint)
+						switch {
+						case len(localOnly) == 0 && len(relayOnly) == 0:
+							addCheck("membership:drift", "pass", "Local registry and relay membership agree", false)
+						default:
+							addCheck("membership:drift", "warn", fmt.Sprintf("Local-only=%d relay-only=%d; run 'envsync peers reconcile' for details", len(localOnly), len(relayOnly)), false)
+						}
+					}
+				}
 			}
 		}
 	}
