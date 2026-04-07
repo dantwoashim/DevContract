@@ -6,6 +6,8 @@ Most teams still do this with a mix of chat threads, stale setup notes, copied `
 
 EnvSync gives the repository a contract for local setup and a secure path for sharing development secrets. The contract lives in the repo. Identity comes from existing SSH keys. Shared values are encrypted end to end.
 
+Bootstrap and run targets are a trust boundary. If a repository contract defines shell commands, EnvSync will show them, require an explicit trust decision, and let you use restricted mode when you only want outputs and checks without executing repo-defined commands.
+
 ## What EnvSync Does
 
 - Syncs project `.env` files between trusted developers

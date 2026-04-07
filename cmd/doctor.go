@@ -116,6 +116,21 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		} else {
 			addCheck("contract", "pass", fmt.Sprintf("Loaded %s", contractPath), false)
 		}
+
+		if commands := contractShellCommands(spec); len(commands) > 0 {
+			trusted, trustErr := contractTrustedForContext(&contractContext{
+				Root:     repoRoot,
+				Path:     contractPath,
+				Contract: spec,
+			})
+			if trustErr != nil {
+				addCheck("contract-trust", "warn", fmt.Sprintf("Could not read contract trust state: %v", trustErr), false)
+			} else if trusted {
+				addCheck("contract-trust", "pass", fmt.Sprintf("Trusted contract revision for %d shell command(s)", len(commands)), false)
+			} else {
+				addCheck("contract-trust", "warn", fmt.Sprintf("Repo contract defines %d shell command(s) that will require trust acceptance before execution", len(commands)), false)
+			}
+		}
 	}
 
 	var kpDetail string
