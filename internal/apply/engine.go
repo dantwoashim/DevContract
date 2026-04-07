@@ -48,20 +48,21 @@ type ConflictResolution struct {
 }
 
 type Options struct {
-	ProjectID        string
-	TargetFile       string
-	IncomingFile     string
-	IncomingData     []byte
-	BaseRevisionID   string
-	NewRevisionID    string
-	Policy           Policy
-	Interactive      bool
-	BackupEnabled    bool
-	BackupKey        [32]byte
-	MaxVersions      int
-	OnDiff           func(diff *envfile.DiffResult)
-	ConfirmApply     func(diff *envfile.DiffResult) bool
-	ResolveConflicts func(conflicts []envfile.Conflict) ([]ConflictResolution, bool)
+	ProjectID           string
+	TargetFile          string
+	IncomingFile        string
+	IncomingData        []byte
+	BaseRevisionID      string
+	AncestorRevisionIDs []string
+	NewRevisionID       string
+	Policy              Policy
+	Interactive         bool
+	BackupEnabled       bool
+	BackupKey           [32]byte
+	MaxVersions         int
+	OnDiff              func(diff *envfile.DiffResult)
+	ConfirmApply        func(diff *envfile.DiffResult) bool
+	ResolveConflicts    func(conflicts []envfile.Conflict) ([]ConflictResolution, bool)
 }
 
 type Result struct {
@@ -182,7 +183,7 @@ func Apply(opts Options) (*Result, error) {
 		result.ManualInterventionNeeded = true
 		return result, ErrConflictRefused
 	case PolicyThreeWay:
-		merged, mergeErr := applyThreeWay(localEnv, incomingEnv, opts, revStore)
+		merged, mergeErr := applyThreeWay(localEnv, incomingEnv, opts, revStore, localCurrent)
 		if mergeErr != nil {
 			if errors.Is(mergeErr, ErrInteractiveRequired) {
 				result.InteractiveRequired = true
@@ -228,14 +229,26 @@ func Apply(opts Options) (*Result, error) {
 	return result, nil
 }
 
-func applyThreeWay(localEnv, incomingEnv *envfile.EnvFile, opts Options, revStore *revision.Store) (*envfile.EnvFile, error) {
+func applyThreeWay(localEnv, incomingEnv *envfile.EnvFile, opts Options, revStore *revision.Store, localCurrent *revision.Metadata) (*envfile.EnvFile, error) {
 	if opts.ProjectID == "" || revStore == nil {
 		return nil, ErrMergeBaseMissing
 	}
-	if opts.BaseRevisionID == "" {
+	candidates := append([]string{}, opts.BaseRevisionID)
+	candidates = append(candidates, opts.AncestorRevisionIDs...)
+	baseRevisionID := opts.BaseRevisionID
+	if localCurrent != nil {
+		ancestorID, err := revStore.NearestCommonAncestor(opts.ProjectID, localCurrent.ID, candidates)
+		if err != nil {
+			return nil, fmt.Errorf("selecting merge base: %w", err)
+		}
+		if ancestorID != "" {
+			baseRevisionID = ancestorID
+		}
+	}
+	if baseRevisionID == "" {
 		return nil, ErrMergeBaseMissing
 	}
-	baseData, err := revStore.LoadRevision(opts.ProjectID, opts.BaseRevisionID, opts.BackupKey)
+	baseData, err := revStore.LoadRevision(opts.ProjectID, baseRevisionID, opts.BackupKey)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUnknownAncestry, err)
 	}
@@ -299,21 +312,53 @@ func persistRevisionState(revStore *revision.Store, opts Options, rendered []byt
 		return "", nil
 	}
 
-	parentID := opts.BaseRevisionID
-	if parentID == "" && localCurrent != nil {
-		parentID = localCurrent.ID
-	}
+	parentIDs := revisionParents(opts, rendered, localCurrent)
 
 	revisionID := opts.NewRevisionID
 	if revisionID == "" || !bytes.Equal(rendered, opts.IncomingData) {
 		revisionID = revision.RevisionID(rendered)
 	}
 
-	if _, err := revStore.SaveRevision(opts.ProjectID, revisionID, parentID, rendered, opts.BackupKey); err != nil {
+	if _, err := revStore.SaveRevisionWithParents(opts.ProjectID, revisionID, parentIDs, rendered, opts.BackupKey); err != nil {
 		return "", fmt.Errorf("saving revision metadata: %w", err)
 	}
 	if err := revStore.MarkCurrent(opts.ProjectID, revisionID, rendered); err != nil {
 		return "", fmt.Errorf("updating current revision state: %w", err)
 	}
 	return revisionID, nil
+}
+
+func revisionParents(opts Options, rendered []byte, localCurrent *revision.Metadata) []string {
+	if bytes.Equal(rendered, opts.IncomingData) {
+		parents := []string{opts.BaseRevisionID}
+		return compactRevisionIDs(parents)
+	}
+
+	parents := []string{}
+	if localCurrent != nil {
+		parents = append(parents, localCurrent.ID)
+	}
+	if opts.NewRevisionID != "" {
+		parents = append(parents, opts.NewRevisionID)
+	}
+	if len(parents) == 0 {
+		parents = append(parents, opts.BaseRevisionID)
+	}
+	return compactRevisionIDs(parents)
+}
+
+func compactRevisionIDs(ids []string) []string {
+	seen := make(map[string]struct{}, len(ids))
+	compact := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		compact = append(compact, id)
+	}
+	return compact
 }

@@ -63,7 +63,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	baseRevisionID, revisionID, err := resolveCurrentRevision(project.ProjectID, targetFile, backupKey)
+	lineage, err := resolveCurrentRevision(project.ProjectID, targetFile, backupKey)
 	if err != nil {
 		return err
 	}
@@ -73,15 +73,16 @@ func runPush(cmd *cobra.Command, args []string) error {
 	ui.Header("EnvSync Push")
 
 	result := envsync.Orchestrate(context.Background(), envsync.OrchestratorOptions{
-		EnvFilePath:    targetFile,
-		TeamID:         project.ProjectID,
-		KeyPair:        kp,
-		NoiseKeypair:   noiseKP,
-		RelayClient:    relayClient,
-		RelayURL:       projectRelayURL(project, cfg),
-		Sequence:       time.Now().UnixMilli(),
-		BaseRevisionID: baseRevisionID,
-		RevisionID:     revisionID,
+		EnvFilePath:         targetFile,
+		TeamID:              project.ProjectID,
+		KeyPair:             kp,
+		NoiseKeypair:        noiseKP,
+		RelayClient:         relayClient,
+		RelayURL:            projectRelayURL(project, cfg),
+		Sequence:            time.Now().UnixMilli(),
+		BaseRevisionID:      lineage.BaseRevisionID,
+		RevisionID:          lineage.RevisionID,
+		AncestorRevisionIDs: lineage.AncestorRevisionIDs,
 		OnStatus: func(status string) {
 			ui.Line(fmt.Sprintf("  %s", status))
 		},

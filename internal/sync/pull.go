@@ -203,19 +203,20 @@ func Pull(ctx context.Context, opts PullOptions) (*PullResult, error) {
 	}
 
 	applyResult, err := apply.Apply(apply.Options{
-		ProjectID:        opts.ProjectID,
-		TargetFile:       envPath,
-		IncomingFile:     payload.FileName,
-		IncomingData:     payload.Data,
-		BaseRevisionID:   payload.BaseRevisionID,
-		NewRevisionID:    payload.RevisionID,
-		Policy:           normalizePullPolicy(opts),
-		Interactive:      opts.Interactive,
-		BackupEnabled:    opts.BackupEnabled,
-		BackupKey:        opts.BackupKey,
-		MaxVersions:      opts.MaxVersions,
-		ConfirmApply:     opts.OnConfirm,
-		ResolveConflicts: opts.OnResolveConflicts,
+		ProjectID:           opts.ProjectID,
+		TargetFile:          envPath,
+		IncomingFile:        payload.FileName,
+		IncomingData:        payload.Data,
+		BaseRevisionID:      payload.BaseRevisionID,
+		AncestorRevisionIDs: payload.AncestorRevisionIDs,
+		NewRevisionID:       payload.RevisionID,
+		Policy:              normalizePullPolicy(opts),
+		Interactive:         opts.Interactive,
+		BackupEnabled:       opts.BackupEnabled,
+		BackupKey:           opts.BackupKey,
+		MaxVersions:         opts.MaxVersions,
+		ConfirmApply:        opts.OnConfirm,
+		ResolveConflicts:    opts.OnResolveConflicts,
 	})
 	if err != nil {
 		_ = SendMessage(conn, Message{Type: MsgNack, Payload: []byte(err.Error())})

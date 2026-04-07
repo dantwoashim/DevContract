@@ -138,6 +138,63 @@ func TestApplyThreeWayRejectsUnknownRevisionBase(t *testing.T) {
 	}
 }
 
+func TestApplyThreeWayFallsBackToSharedAncestorCandidate(t *testing.T) {
+	dataHome := t.TempDir()
+	t.Setenv("HOME", dataHome)
+	t.Setenv("USERPROFILE", dataHome)
+
+	target := writeTempFile(t, "API_KEY=local\nLOCAL_ONLY=2\n")
+	key, err := crypto.DeriveAtRestKey([]byte("test-merge-key"))
+	if err != nil {
+		t.Fatalf("derive key: %v", err)
+	}
+
+	revStore, err := revision.New()
+	if err != nil {
+		t.Fatalf("revision store: %v", err)
+	}
+
+	rootData := []byte("API_KEY=base\nLOCAL_ONLY=1\n")
+	rootID := revision.RevisionID(rootData)
+	if _, err := revStore.SaveRevision("project-merge", rootID, "", rootData, key); err != nil {
+		t.Fatalf("seed root revision: %v", err)
+	}
+
+	localData := []byte("API_KEY=local\nLOCAL_ONLY=2\n")
+	localMeta, err := revStore.SaveRevision("project-merge", revision.RevisionID(localData), rootID, localData, key)
+	if err != nil {
+		t.Fatalf("seed local revision: %v", err)
+	}
+	if err := revStore.MarkCurrent("project-merge", localMeta.ID, localData); err != nil {
+		t.Fatalf("mark current: %v", err)
+	}
+
+	incoming := []byte("API_KEY=base\nLOCAL_ONLY=1\nREMOTE_ONLY=2\n")
+	result, err := Apply(Options{
+		ProjectID:           "project-merge",
+		TargetFile:          target,
+		IncomingData:        incoming,
+		BaseRevisionID:      "missing-base",
+		AncestorRevisionIDs: []string{rootID},
+		NewRevisionID:       revision.RevisionID(incoming),
+		Policy:              PolicyThreeWay,
+		BackupEnabled:       false,
+		BackupKey:           key,
+		MaxVersions:         10,
+	})
+	if err != nil {
+		t.Fatalf("apply three-way with ancestor fallback: %v", err)
+	}
+	if !result.Applied {
+		t.Fatal("expected three-way merge to apply merged data")
+	}
+
+	contents := readTempFile(t, target)
+	if !strings.Contains(contents, "LOCAL_ONLY=2") || !strings.Contains(contents, "REMOTE_ONLY=2") {
+		t.Fatalf("expected merged file to contain local and remote changes, got:\n%s", contents)
+	}
+}
+
 func writeTempFile(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), ".env")

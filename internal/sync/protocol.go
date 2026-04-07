@@ -34,19 +34,20 @@ type Message struct {
 
 // EnvPayload is the payload of an ENV_PUSH or ENV_PULL_RESP message.
 type EnvPayload struct {
-	Version        uint16
-	Sequence       int64
-	Timestamp      int64
-	BaseRevisionID string
-	RevisionID     string
-	FileName       string
-	Data           []byte
-	Checksum       [32]byte
+	Version             uint16
+	Sequence            int64
+	Timestamp           int64
+	BaseRevisionID      string
+	RevisionID          string
+	AncestorRevisionIDs []string
+	FileName            string
+	Data                []byte
+	Checksum            [32]byte
 }
 
 const (
 	// ProtocolVersion is the current wire protocol version.
-	ProtocolVersion uint16 = 2
+	ProtocolVersion uint16 = 3
 
 	// MaxMessageSize is the maximum message payload (64KB).
 	MaxMessageSize = 65536
@@ -83,6 +84,7 @@ func ReceiveMessage(conn *crypto.SecureConn) (Message, error) {
 func EncodeEnvPayload(p EnvPayload) ([]byte, error) {
 	baseRevisionBytes := []byte(p.BaseRevisionID)
 	revisionBytes := []byte(p.RevisionID)
+	ancestorRevisionIDs := sanitizeAncestorRevisionIDs(p.AncestorRevisionIDs)
 	nameBytes := []byte(p.FileName)
 	if p.Sequence < 0 {
 		return nil, fmt.Errorf("sequence must be non-negative")
@@ -99,12 +101,26 @@ func EncodeEnvPayload(p EnvPayload) ([]byte, error) {
 	if len(nameBytes) > math.MaxUint16 {
 		return nil, fmt.Errorf("filename too long: %d bytes", len(nameBytes))
 	}
+	if len(ancestorRevisionIDs) > math.MaxUint16 {
+		return nil, fmt.Errorf("too many ancestor revisions: %d", len(ancestorRevisionIDs))
+	}
+	ancestorBytes := make([][]byte, 0, len(ancestorRevisionIDs))
+	for _, ancestorID := range ancestorRevisionIDs {
+		encoded := []byte(ancestorID)
+		if len(encoded) > math.MaxUint16 {
+			return nil, fmt.Errorf("ancestor revision too long: %d bytes", len(encoded))
+		}
+		ancestorBytes = append(ancestorBytes, encoded)
+	}
 	if len(p.Data) > math.MaxUint32 {
 		return nil, fmt.Errorf("payload too large: %d bytes", len(p.Data))
 	}
 
-	// Version(2) + Sequence(8) + Timestamp(8) + BaseLen(2) + Base + RevLen(2) + Rev + NameLen(2) + Name + DataLen(4) + Data + Checksum(32)
-	size := 2 + 8 + 8 + 2 + len(baseRevisionBytes) + 2 + len(revisionBytes) + 2 + len(nameBytes) + 4 + len(p.Data) + 32
+	// Version(2) + Sequence(8) + Timestamp(8) + BaseLen(2) + Base + RevLen(2) + Rev + AncestorCount(2) + repeated(AncestorLen(2)+Ancestor) + NameLen(2) + Name + DataLen(4) + Data + Checksum(32)
+	size := 2 + 8 + 8 + 2 + len(baseRevisionBytes) + 2 + len(revisionBytes) + 2 + 2 + len(nameBytes) + 4 + len(p.Data) + 32
+	for _, ancestorID := range ancestorBytes {
+		size += 2 + len(ancestorID)
+	}
 	buf := make([]byte, 0, size)
 
 	// Version
@@ -121,6 +137,14 @@ func EncodeEnvPayload(p EnvPayload) ([]byte, error) {
 	// #nosec G115 -- length is bounded by the check above.
 	buf = binary.BigEndian.AppendUint16(buf, uint16(len(revisionBytes)))
 	buf = append(buf, revisionBytes...)
+	// AncestorRevisionIDs
+	// #nosec G115 -- length is bounded by the check above.
+	buf = binary.BigEndian.AppendUint16(buf, uint16(len(ancestorBytes)))
+	for _, ancestorID := range ancestorBytes {
+		// #nosec G115 -- length is bounded by the check above.
+		buf = binary.BigEndian.AppendUint16(buf, uint16(len(ancestorID)))
+		buf = append(buf, ancestorID...)
+	}
 	// FileName
 	// #nosec G115 -- length is bounded by the check above.
 	buf = binary.BigEndian.AppendUint16(buf, uint16(len(nameBytes)))
@@ -189,6 +213,25 @@ func DecodeEnvPayload(data []byte) (EnvPayload, error) {
 	}
 	p.RevisionID = string(revisionBytes)
 
+	if p.Version >= 3 {
+		ancestorCount, err := r.readUint16()
+		if err != nil {
+			return p, fmt.Errorf("reading ancestor count: %w", err)
+		}
+		p.AncestorRevisionIDs = make([]string, 0, ancestorCount)
+		for i := 0; i < int(ancestorCount); i++ {
+			ancestorLen, err := r.readUint16()
+			if err != nil {
+				return p, fmt.Errorf("reading ancestor length: %w", err)
+			}
+			ancestorBytes, err := r.readBytes(int(ancestorLen))
+			if err != nil {
+				return p, fmt.Errorf("reading ancestor revision: %w", err)
+			}
+			p.AncestorRevisionIDs = append(p.AncestorRevisionIDs, string(ancestorBytes))
+		}
+	}
+
 	// FileName
 	nameLen, err := r.readUint16()
 	if err != nil {
@@ -222,15 +265,20 @@ func DecodeEnvPayload(data []byte) (EnvPayload, error) {
 
 // NewEnvPayload creates an EnvPayload from raw .env content.
 func NewEnvPayload(fileName string, data []byte, sequence int64, baseRevisionID, revisionID string) EnvPayload {
+	return NewEnvPayloadWithAncestors(fileName, data, sequence, baseRevisionID, revisionID, nil)
+}
+
+func NewEnvPayloadWithAncestors(fileName string, data []byte, sequence int64, baseRevisionID, revisionID string, ancestorRevisionIDs []string) EnvPayload {
 	return EnvPayload{
-		Version:        ProtocolVersion,
-		Sequence:       sequence,
-		Timestamp:      time.Now().Unix(),
-		BaseRevisionID: baseRevisionID,
-		RevisionID:     revisionID,
-		FileName:       fileName,
-		Data:           data,
-		Checksum:       sha256Sum(data),
+		Version:             ProtocolVersion,
+		Sequence:            sequence,
+		Timestamp:           time.Now().Unix(),
+		BaseRevisionID:      baseRevisionID,
+		RevisionID:          revisionID,
+		AncestorRevisionIDs: sanitizeAncestorRevisionIDs(ancestorRevisionIDs),
+		FileName:            fileName,
+		Data:                data,
+		Checksum:            sha256Sum(data),
 	}
 }
 
@@ -287,4 +335,23 @@ func sha256Sum(data []byte) [32]byte {
 	sum := sha256Digest(data)
 	copy(h[:], sum[:])
 	return h
+}
+
+func sanitizeAncestorRevisionIDs(ancestorRevisionIDs []string) []string {
+	if len(ancestorRevisionIDs) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(ancestorRevisionIDs))
+	normalized := make([]string, 0, len(ancestorRevisionIDs))
+	for _, ancestorID := range ancestorRevisionIDs {
+		if ancestorID == "" {
+			continue
+		}
+		if _, ok := seen[ancestorID]; ok {
+			continue
+		}
+		seen[ancestorID] = struct{}{}
+		normalized = append(normalized, ancestorID)
+	}
+	return normalized
 }

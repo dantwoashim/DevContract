@@ -8,7 +8,7 @@ import (
 
 func TestProtocolRoundTrip(t *testing.T) {
 	// Create a payload
-	original := NewEnvPayload(".env", []byte("DATABASE_URL=postgres://localhost:5432/mydb\nAPI_KEY=sk_test_12345\n"), 42, "base-rev", "new-rev")
+	original := NewEnvPayloadWithAncestors(".env", []byte("DATABASE_URL=postgres://localhost:5432/mydb\nAPI_KEY=sk_test_12345\n"), 42, "base-rev", "new-rev", []string{"parent-1", "parent-2"})
 
 	// Encode
 	encoded, err := EncodeEnvPayload(original)
@@ -40,6 +40,14 @@ func TestProtocolRoundTrip(t *testing.T) {
 	}
 	if decoded.RevisionID != original.RevisionID {
 		t.Errorf("revision: got %q, want %q", decoded.RevisionID, original.RevisionID)
+	}
+	if len(decoded.AncestorRevisionIDs) != len(original.AncestorRevisionIDs) {
+		t.Fatalf("ancestor count: got %d, want %d", len(decoded.AncestorRevisionIDs), len(original.AncestorRevisionIDs))
+	}
+	for i, ancestorID := range original.AncestorRevisionIDs {
+		if decoded.AncestorRevisionIDs[i] != ancestorID {
+			t.Fatalf("ancestor[%d]: got %q, want %q", i, decoded.AncestorRevisionIDs[i], ancestorID)
+		}
 	}
 	if string(decoded.Data) != string(original.Data) {
 		t.Errorf("data: got %q, want %q", decoded.Data, original.Data)
