@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, BlobMetadata, Team } from '../types';
-import { canUploadBlob, getBlobTtl, limitMessage } from '../middleware/tiers';
+import { getBlobTtl, getTeamLimits, limitMessage } from '../middleware/tiers';
+import { logRelayEvent } from '../middleware/observability';
 
 export const relayRoutes = new Hono<{ Bindings: Env }>();
 
@@ -38,9 +39,8 @@ relayRoutes.put('/:team/:blob', async (c) => {
         return c.json({ error: 'forbidden', message: 'Recipient is not a team member' }, 403);
     }
 
-    const rateLimitKey = `ratelimit:blob:${teamId}:${dateKey()}`;
-    const currentCount = parseInt(await c.env.ENVSYNC_DATA.get(rateLimitKey) || '0', 10);
-    if (!(await canUploadBlob(c.env, teamId, currentCount))) {
+    const blobLimit = await reserveBlobSlot(c.env, teamId);
+    if (!blobLimit.allowed) {
         return c.json({
             error: 'rate_limited',
             message: limitMessage('Relay blob limit reached'),
@@ -65,14 +65,14 @@ relayRoutes.put('/:team/:blob', async (c) => {
     await c.env.ENVSYNC_DATA.put(`blob:${teamId}:${blobId}:data`, body, { expirationTtl: ttlSeconds });
     await c.env.ENVSYNC_DATA.put(`blob:${teamId}:${blobId}:meta`, JSON.stringify(metadata), { expirationTtl: ttlSeconds });
 
-    const pendingKey = `pending:${teamId}:${recipientFingerprint}`;
-    const pendingList = JSON.parse(await c.env.ENVSYNC_DATA.get(pendingKey) || '[]') as string[];
-    if (!pendingList.includes(blobId)) {
-        pendingList.push(blobId);
-        await c.env.ENVSYNC_DATA.put(pendingKey, JSON.stringify(pendingList), { expirationTtl: ttlSeconds });
-    }
-
-    await c.env.ENVSYNC_DATA.put(rateLimitKey, String(currentCount + 1), { expirationTtl: 86400 });
+    await enqueuePending(c.env, teamId, recipientFingerprint, blobId);
+    logRelayEvent('relay.blob_stored', {
+        request_id: c.get('requestId' as never),
+        team_id: teamId,
+        actor_fingerprint: actorFingerprint,
+        recipient_fingerprint: recipientFingerprint,
+        blob_id: blobId,
+    });
     return c.json({ status: 'stored', blob_id: blobId, expires_at: metadata.expires_at }, 201);
 });
 
@@ -90,14 +90,15 @@ relayRoutes.get('/:team/pending', async (c) => {
         return c.json({ error: 'forbidden', message: 'Only team members can list pending blobs' }, 403);
     }
 
-    const pendingKey = `pending:${teamId}:${requestedFingerprint}`;
-    const pendingList = JSON.parse(await c.env.ENVSYNC_DATA.get(pendingKey) || '[]') as string[];
+    const pendingList = await listPending(c.env, teamId, requestedFingerprint);
 
     const blobs: BlobMetadata[] = [];
     for (const blobId of pendingList) {
         const metaData = await c.env.ENVSYNC_DATA.get(`blob:${teamId}:${blobId}:meta`);
         if (metaData) {
             blobs.push(JSON.parse(metaData));
+        } else {
+            await removePending(c.env, teamId, requestedFingerprint, blobId);
         }
     }
 
@@ -154,14 +155,13 @@ relayRoutes.delete('/:team/:blob', async (c) => {
     await c.env.ENVSYNC_DATA.delete(`blob:${teamId}:${blobId}:data`);
     await c.env.ENVSYNC_DATA.delete(`blob:${teamId}:${blobId}:meta`);
 
-    const pendingKey = `pending:${teamId}:${actorFingerprint}`;
-    const pendingList = JSON.parse(await c.env.ENVSYNC_DATA.get(pendingKey) || '[]') as string[];
-    const updated = pendingList.filter((id) => id !== blobId);
-    if (updated.length > 0) {
-        await c.env.ENVSYNC_DATA.put(pendingKey, JSON.stringify(updated));
-    } else {
-        await c.env.ENVSYNC_DATA.delete(pendingKey);
-    }
+    await removePending(c.env, teamId, actorFingerprint, blobId);
+    logRelayEvent('relay.blob_deleted', {
+        request_id: c.get('requestId' as never),
+        team_id: teamId,
+        actor_fingerprint: actorFingerprint,
+        blob_id: blobId,
+    });
 
     return c.json({ status: 'deleted' });
 });
@@ -176,4 +176,54 @@ async function loadTeam(env: Env, teamId: string): Promise<Team | null> {
 
 function dateKey(): string {
     return new Date().toISOString().split('T')[0];
+}
+
+async function reserveBlobSlot(env: Env, teamId: string): Promise<{ allowed: boolean; count: number }> {
+    const limits = await getTeamLimits(env, teamId);
+    const limit = limits.maxBlobsPerDay < 0 ? 1000000 : limits.maxBlobsPerDay;
+    const id = env.TEAM_COORDINATOR.idFromName(teamId);
+    const stub = env.TEAM_COORDINATOR.get(id);
+    const response = await stub.fetch('https://team/reserve-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            date_key: dateKey(),
+            limit,
+        }),
+    });
+    return response.json<{ allowed: boolean; count: number }>();
+}
+
+async function enqueuePending(env: Env, teamId: string, recipientFingerprint: string, blobId: string): Promise<void> {
+    const id = env.TEAM_COORDINATOR.idFromName(teamId);
+    const stub = env.TEAM_COORDINATOR.get(id);
+    await stub.fetch('https://team/enqueue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            recipient_fingerprint: recipientFingerprint,
+            blob_id: blobId,
+        }),
+    });
+}
+
+async function listPending(env: Env, teamId: string, recipientFingerprint: string): Promise<string[]> {
+    const id = env.TEAM_COORDINATOR.idFromName(teamId);
+    const stub = env.TEAM_COORDINATOR.get(id);
+    const response = await stub.fetch(`https://team/pending?recipient_fingerprint=${encodeURIComponent(recipientFingerprint)}`);
+    const payload = await response.json<{ pending: string[] }>();
+    return payload.pending || [];
+}
+
+async function removePending(env: Env, teamId: string, recipientFingerprint: string, blobId: string): Promise<void> {
+    const id = env.TEAM_COORDINATOR.idFromName(teamId);
+    const stub = env.TEAM_COORDINATOR.get(id);
+    await stub.fetch('https://team/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            recipient_fingerprint: recipientFingerprint,
+            blob_id: blobId,
+        }),
+    });
 }

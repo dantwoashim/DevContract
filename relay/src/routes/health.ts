@@ -24,9 +24,14 @@ healthRoutes.get('/live', async (c) => {
 healthRoutes.get('/ready', async (c) => {
     try {
         await c.env.ENVSYNC_DATA.get('healthcheck:ready');
+        const coordinator = c.env.TEAM_COORDINATOR.get(c.env.TEAM_COORDINATOR.idFromName('health'));
+        const statsResponse = await coordinator.fetch('https://team/stats');
+        const stats = await statsResponse.json<{ pending_count: number }>();
         return c.json({
             status: 'ready',
             service: 'envsync-relay',
+            coordinator: 'ok',
+            pending_count: stats.pending_count,
             timestamp: new Date().toISOString(),
         });
     } catch (error) {
