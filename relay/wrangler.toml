@@ -13,6 +13,18 @@ BLOB_TTL_HOURS = "72"
 binding = "ENVSYNC_DATA"
 id = "placeholder-kv-id"
 
+[[durable_objects.bindings]]
+name = "TEAM_COORDINATOR"
+class_name = "TeamCoordinator"
+
+[[durable_objects.bindings]]
+name = "RATE_LIMIT_COORDINATOR"
+class_name = "RateLimitCoordinator"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["TeamCoordinator", "RateLimitCoordinator"]
+
 # Rate limiting
 [placement]
 mode = "smart"

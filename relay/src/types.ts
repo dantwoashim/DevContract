@@ -2,6 +2,8 @@
 
 export interface Env {
     ENVSYNC_DATA: KVNamespace;
+    TEAM_COORDINATOR: DurableObjectNamespace;
+    RATE_LIMIT_COORDINATOR: DurableObjectNamespace;
     ENVIRONMENT: string;
     MAX_BLOB_SIZE: string;
     INVITE_TTL_HOURS: string;

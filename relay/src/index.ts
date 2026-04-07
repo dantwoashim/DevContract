@@ -10,6 +10,8 @@ import { computeIdentityFingerprint, decodeBase64, parseAuthHeader, verifySignat
 import { allowedOrigin } from './middleware/cors';
 import { logRelayError, requestIdMiddleware } from './middleware/observability';
 import { rateLimitMiddleware } from './middleware/ratelimit';
+import { TeamCoordinator } from './durable/teamCoordinator';
+import { RateLimitCoordinator } from './durable/rateLimitCoordinator';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -156,3 +158,4 @@ app.notFound((c) => {
 });
 
 export default app;
+export { TeamCoordinator, RateLimitCoordinator };
