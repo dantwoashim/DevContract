@@ -11,22 +11,18 @@ export async function rateLimitMiddleware(c: Context<{ Bindings: Env }>, next: N
 
     const key = `ratelimit:${ip}:${Math.floor(Date.now() / 60000)}:${limit}`;
     try {
-        const kv = c.env.ENVSYNC_DATA;
-        const current = await kv.get(key);
-        const count = current ? parseInt(current, 10) : 0;
+        const result = await checkRateLimit(c.env, key, limit, 120);
 
         c.header('X-RateLimit-Limit', String(limit));
-        c.header('X-RateLimit-Remaining', String(Math.max(limit-(count+1), 0)));
+        c.header('X-RateLimit-Remaining', String(Math.max(limit-result.count, 0)));
 
-        if (count >= limit) {
+        if (!result.allowed) {
             return c.json({
                 error: 'rate_limited',
                 message: 'Too many requests. Please wait a moment.',
-                retry_after: 60,
+                retry_after: result.retryAfter,
             }, 429);
         }
-
-        await kv.put(key, String(count + 1), { expirationTtl: 120 });
     } catch (error) {
         logRelayError('rate_limit.backend_unavailable', {
             path: c.req.path,
@@ -43,17 +39,9 @@ export async function teamRateLimitMiddleware(teamID: string, c: Context<{ Bindi
     const key = `teamlimit:${teamID}:${new Date().toISOString().slice(0, 10)}`;
 
     try {
-        const kv = c.env.ENVSYNC_DATA;
-        const current = await kv.get(key);
-        const count = current ? parseInt(current, 10) : 0;
-
         const dailyLimit = 200;
-        if (count >= dailyLimit) {
-            return { limited: true, count, limit: dailyLimit, degraded: false };
-        }
-
-        await kv.put(key, String(count + 1), { expirationTtl: 86400 });
-        return { limited: false, count: count + 1, limit: dailyLimit, degraded: false };
+        const result = await checkRateLimit(c.env, key, dailyLimit, 86400);
+        return { limited: !result.allowed, count: result.count, limit: dailyLimit, degraded: false };
     } catch (error) {
         logRelayError('team_rate_limit.backend_unavailable', {
             team_id: teamID,
@@ -61,6 +49,26 @@ export async function teamRateLimitMiddleware(teamID: string, c: Context<{ Bindi
         });
         return { limited: false, count: 0, limit: 0, degraded: true };
     }
+}
+
+async function checkRateLimit(env: Env, key: string, limit: number, ttlSeconds: number): Promise<{ allowed: boolean; count: number; retryAfter: number }> {
+    const id = env.RATE_LIMIT_COORDINATOR.idFromName('global');
+    const stub = env.RATE_LIMIT_COORDINATOR.get(id);
+    const response = await stub.fetch('https://ratelimit/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            key,
+            limit,
+            ttl_seconds: ttlSeconds,
+        }),
+    });
+    const payload = await response.json<{ allowed: boolean; count: number; retry_after: number }>();
+    return {
+        allowed: payload.allowed,
+        count: payload.count,
+        retryAfter: payload.retry_after,
+    };
 }
 
 function requestLimitForPath(path: string, method: string): number {
