@@ -2,6 +2,8 @@
 
 package envfile
 
+import "slices"
+
 // MergeResult is the result of a three-way merge.
 type MergeResult struct {
 	// Merged is the resulting env file after auto-merge.
@@ -16,9 +18,9 @@ type MergeResult struct {
 
 // Conflict represents a variable modified by both local and remote.
 type Conflict struct {
-	Key       string
-	BaseValue string // value in common ancestor
-	OurValue  string // local value
+	Key        string
+	BaseValue  string // value in common ancestor
+	OurValue   string // local value
 	TheirValue string // remote value
 }
 
@@ -31,7 +33,10 @@ func (r *MergeResult) HasConflicts() bool {
 // base = last synced version, ours = local file, theirs = incoming from peer.
 func ThreeWayMerge(base, ours, theirs *EnvFile) *MergeResult {
 	result := &MergeResult{
-		Merged: &EnvFile{},
+		Merged: cloneEnvFile(ours),
+	}
+	if result.Merged == nil {
+		result.Merged = &EnvFile{}
 	}
 
 	// Build lookup maps
@@ -39,19 +44,7 @@ func ThreeWayMerge(base, ours, theirs *EnvFile) *MergeResult {
 	ourMap := envToMap(ours)
 	theirMap := envToMap(theirs)
 
-	// Collect all keys
-	allKeys := make(map[string]bool)
-	for k := range baseMap {
-		allKeys[k] = true
-	}
-	for k := range ourMap {
-		allKeys[k] = true
-	}
-	for k := range theirMap {
-		allKeys[k] = true
-	}
-
-	for key := range allKeys {
+	for _, key := range mergeKeyOrder(base, ours, theirs) {
 		baseVal, inBase := baseMap[key]
 		ourVal, inOurs := ourMap[key]
 		theirVal, inTheirs := theirMap[key]
@@ -85,12 +78,14 @@ func ThreeWayMerge(base, ours, theirs *EnvFile) *MergeResult {
 				OurValue:   ourVal,
 				TheirValue: theirVal,
 			})
-			// Default to ours until resolved
-			result.Merged.Set(key, ourVal)
+			if inOurs {
+				result.Merged.Set(key, ourVal)
+			} else {
+				result.Merged.Delete(key)
+			}
 
 		// We added, they didn't
 		case !inBase && inOurs && !inTheirs:
-			result.Merged.Set(key, ourVal)
 			result.AutoMerged++
 
 		// They added, we didn't
@@ -116,11 +111,13 @@ func ThreeWayMerge(base, ours, theirs *EnvFile) *MergeResult {
 		// We deleted, they kept unchanged
 		case inBase && !inOurs && inTheirs && theirVal == baseVal:
 			// Honor our deletion
+			result.Merged.Delete(key)
 			result.AutoMerged++
 
 		// They deleted, we kept unchanged
 		case inBase && inOurs && !inTheirs && ourVal == baseVal:
 			// Honor their deletion
+			result.Merged.Delete(key)
 			result.AutoMerged++
 
 		// One deleted, other modified — conflict
@@ -131,6 +128,7 @@ func ThreeWayMerge(base, ours, theirs *EnvFile) *MergeResult {
 				OurValue:   "(deleted)",
 				TheirValue: theirVal,
 			})
+			result.Merged.Delete(key)
 
 		case inBase && inOurs && !inTheirs && ourVal != baseVal:
 			result.Conflicts = append(result.Conflicts, Conflict{
@@ -139,20 +137,47 @@ func ThreeWayMerge(base, ours, theirs *EnvFile) *MergeResult {
 				OurValue:   ourVal,
 				TheirValue: "(deleted)",
 			})
+			result.Merged.Set(key, ourVal)
 
 		// Both deleted
 		case inBase && !inOurs && !inTheirs:
 			// Both agreed to delete
+			result.Merged.Delete(key)
 			result.AutoMerged++
 
 		// Only exists on our side (not in base or theirs)
 		case !inBase && inOurs:
-			result.Merged.Set(key, ourVal)
 			result.AutoMerged++
 		}
 	}
 
 	return result
+}
+
+func mergeKeyOrder(files ...*EnvFile) []string {
+	seen := make(map[string]struct{})
+	keys := make([]string, 0)
+	for _, file := range files {
+		if file == nil {
+			continue
+		}
+		for _, key := range file.Keys() {
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			keys = append(keys, key)
+		}
+	}
+	return keys
+}
+
+func cloneEnvFile(file *EnvFile) *EnvFile {
+	if file == nil {
+		return nil
+	}
+	clone := &EnvFile{Entries: slices.Clone(file.Entries)}
+	return clone
 }
 
 // envToMap converts an EnvFile to a simple key→value map.
