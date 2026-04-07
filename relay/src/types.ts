@@ -19,7 +19,6 @@ export interface Invite {
     created_at: number;
     expires_at: number;
     consumed: boolean;
-    remaining_attempts?: number;
 }
 
 export interface BlobMetadata {
@@ -56,4 +55,13 @@ export interface AuthInfo {
     fingerprint: string;
     timestamp: number;
     verified: boolean;
+}
+
+export interface TeamMemberInput {
+    username: string;
+    fingerprint: string;
+    public_key: string;
+    transport_public_key: string;
+    transport_fingerprint: string;
+    role?: 'owner' | 'member';
 }

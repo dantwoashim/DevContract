@@ -5,6 +5,7 @@ type Identity = {
     fingerprint: string;
     publicKeyB64: string;
     privateKey: CryptoKey;
+    label: string;
 };
 
 export async function startTestWorker(): Promise<UnstableDevWorker> {
@@ -28,6 +29,7 @@ export async function createIdentity(label: string): Promise<Identity> {
 
     const publicKeyRaw = Buffer.from(await webcrypto.subtle.exportKey('raw', keyPair.publicKey));
     return {
+        label,
         fingerprint: computeIdentityFingerprint(publicKeyRaw),
         publicKeyB64: publicKeyRaw.toString('base64'),
         privateKey: keyPair.privateKey,
@@ -88,6 +90,18 @@ export async function registerMember(
             role,
         }),
     });
+}
+
+export async function rotationProof(identity: Identity, teamId: string, oldFingerprint: string, newFingerprint: string, newTransportFingerprint: string): Promise<string> {
+    const payload = Buffer.from([
+        'rotate-self',
+        teamId,
+        oldFingerprint,
+        newFingerprint,
+        newTransportFingerprint,
+    ].join('\n'));
+    const signature = Buffer.from(await webcrypto.subtle.sign('Ed25519', identity.privateKey, payload));
+    return signature.toString('base64');
 }
 
 function computeIdentityFingerprint(publicKeyRaw: Buffer): string {
