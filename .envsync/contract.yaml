@@ -41,7 +41,7 @@ bootstrap:
       header: Agent/session-local overrides for this repo.
 agents:
   assistant:
-    output: hi.md
+    output: WORKSPACE.md
     mcp_output: mcp.json
     header: Workspace instructions for EnvSync
     instructions:
@@ -68,10 +68,10 @@ mcp:
         - scripts/mcp-docs.js
       env:
         - GITHUB_TOKEN
-      description: Placeholder MCP docs server definition for local agent tooling.
+      description: Local MCP server that exposes the repository docs and operator guides over stdio.
 policies:
   redact_paths:
-    - hi.md
+    - WORKSPACE.md
     - .github/copilot-instructions.md
     - .cursor
     - .claude

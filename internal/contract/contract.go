@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/envsync/envsync/internal/config"
+	"github.com/dantwoashim/Env_sync/internal/config"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -511,7 +511,7 @@ func defaultAgentOutput(name string) string {
 	case "copilot":
 		return ".github/copilot-instructions.md"
 	case "assistant":
-		return "hi.md"
+		return "WORKSPACE.md"
 	case "cursor":
 		return filepath.Join(".cursor", "rules", "envsync.mdc")
 	case "claude":

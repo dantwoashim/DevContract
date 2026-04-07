@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/envsync/envsync/internal/contract"
+	"github.com/dantwoashim/Env_sync/internal/contract"
 )
 
 type Severity string
@@ -297,7 +297,7 @@ func severityRank(severity Severity) int {
 }
 
 func defaultScanPaths() []string {
-	return []string{"hi.md", ".github/copilot-instructions.md", ".cursor", ".claude", ".vscode/mcp.json", "mcp.json", ".envsync/generated", "prompts", "prompt", "logs"}
+	return []string{"WORKSPACE.md", ".github/copilot-instructions.md", ".cursor", ".claude", ".vscode/mcp.json", "mcp.json", ".envsync/generated", "prompts", "prompt", "logs"}
 }
 
 func contractScanPaths(spec *contract.Contract) []string {
@@ -351,7 +351,7 @@ func shouldScanFile(path string) bool {
 	}
 	base := strings.ToLower(filepath.Base(path))
 	switch base {
-	case "hi.md", "mcp.json", "copilot-instructions.md":
+	case "WORKSPACE.md", "mcp.json", "copilot-instructions.md":
 		return true
 	}
 	return ext == "" && strings.HasPrefix(base, ".env")

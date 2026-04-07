@@ -15,7 +15,7 @@ Repository-safe onboarding for the EnvSync CLI, relay, and extension workspace.
 
 - Never inline secrets in markdown instructions, JSON config, or logs.
 - Use environment variables only when configuring tools or MCP servers.
-- If you touch `.env`, `hi.md`, `.github/copilot-instructions.md`, `.cursor/`, `.claude/`, or MCP config, run `envsync guard scan`.
+- If you touch `.env`, `WORKSPACE.md`, `.github/copilot-instructions.md`, `.cursor/`, `.claude/`, or MCP config, run `envsync guard scan`.
 
 ## Environment Variables
 
