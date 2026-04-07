@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env, Team, TeamMember, TeamMemberInput } from '../types';
 import { computeIdentityFingerprint, computeTransportFingerprint, decodeBase64 } from '../middleware/auth';
 import { canAddMember, limitMessage } from '../middleware/tiers';
+import { logRelayEvent } from '../middleware/observability';
 
 export const teamRoutes = new Hono<{ Bindings: Env }>();
 
@@ -90,6 +91,13 @@ teamRoutes.put('/:team/members/:user', async (c) => {
     }
 
     await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
+    logRelayEvent('team.member_upserted', {
+        request_id: c.get('requestId' as never),
+        team_id: teamId,
+        actor_fingerprint: actorFingerprint,
+        member_fingerprint: memberInput.fingerprint,
+        status: existingIdx >= 0 ? 'updated' : 'added',
+    });
     return c.json({ status: existingIdx >= 0 ? 'updated' : 'added', member_count: team.members.length, member });
 });
 
@@ -114,6 +122,12 @@ teamRoutes.delete('/:team/members/:user', async (c) => {
 
     team.members = team.members.filter((member) => member.username !== username);
     await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
+    logRelayEvent('team.member_removed', {
+        request_id: c.get('requestId' as never),
+        team_id: teamId,
+        actor_fingerprint: actorFingerprint,
+        member_fingerprint: target.fingerprint,
+    });
 
     return c.json({ status: 'removed', member_count: team.members.length });
 });
@@ -139,6 +153,12 @@ teamRoutes.delete('/:team/members/by-fingerprint/:fingerprint', async (c) => {
 
     team.members = team.members.filter((member) => member.fingerprint !== targetFingerprint);
     await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
+    logRelayEvent('team.member_removed', {
+        request_id: c.get('requestId' as never),
+        team_id: teamId,
+        actor_fingerprint: actorFingerprint,
+        member_fingerprint: targetFingerprint,
+    });
 
     return c.json({ status: 'removed', member_count: team.members.length });
 });
@@ -203,6 +223,12 @@ teamRoutes.post('/:team/rotate-self', async (c) => {
     await c.env.ENVSYNC_DATA.put(`team:${teamId}`, JSON.stringify(team));
     await c.env.ENVSYNC_DATA.put(`pubkey:${memberInput.fingerprint}`, memberInput.public_key);
     await c.env.ENVSYNC_DATA.delete(`pubkey:${actorFingerprint}`);
+    logRelayEvent('team.member_rotated', {
+        request_id: c.get('requestId' as never),
+        team_id: teamId,
+        actor_fingerprint: actorFingerprint,
+        replacement_fingerprint: memberInput.fingerprint,
+    });
 
     return c.json({ status: 'rotated', fingerprint: memberInput.fingerprint, member_count: team.members.length });
 });

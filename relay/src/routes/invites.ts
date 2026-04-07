@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, Invite, Team, TeamMember, TeamMemberInput } from '../types';
 import { computeIdentityFingerprint, computeTransportFingerprint, decodeBase64 } from '../middleware/auth';
+import { logRelayEvent } from '../middleware/observability';
 
 export const inviteRoutes = new Hono<{ Bindings: Env }>();
 
@@ -57,6 +58,14 @@ inviteRoutes.post('/', async (c) => {
         JSON.stringify(invite),
         { expirationTtl: ttlHours * 3600 },
     );
+
+    logRelayEvent('invite.created', {
+        request_id: c.get('requestId' as never),
+        team_id: body.team_id,
+        actor_fingerprint: actorFingerprint,
+        invite_hash: body.token_hash,
+        invitee: body.invitee,
+    });
 
     return c.json({ status: 'created', expires_at: invite.expires_at }, 201);
 });
@@ -167,6 +176,13 @@ inviteRoutes.post('/:hash/join', async (c) => {
         JSON.stringify(invite),
         { expirationTtl: 60 },
     );
+
+    logRelayEvent('invite.joined', {
+        request_id: c.get('requestId' as never),
+        team_id: invite.team_id,
+        actor_fingerprint: joinerFingerprint,
+        invite_hash: hash,
+    });
 
     return c.json({
         status: 'joined',
