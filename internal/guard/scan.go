@@ -297,7 +297,7 @@ func severityRank(severity Severity) int {
 }
 
 func defaultScanPaths() []string {
-	return []string{"AGENTS.md", ".github/copilot-instructions.md", ".cursor", ".claude", ".vscode/mcp.json", "mcp.json", ".envsync/generated", "prompts", "prompt", "logs"}
+	return []string{"hi.md", ".github/copilot-instructions.md", ".cursor", ".claude", ".vscode/mcp.json", "mcp.json", ".envsync/generated", "prompts", "prompt", "logs"}
 }
 
 func contractScanPaths(spec *contract.Contract) []string {
@@ -351,7 +351,7 @@ func shouldScanFile(path string) bool {
 	}
 	base := strings.ToLower(filepath.Base(path))
 	switch base {
-	case "agents.md", "mcp.json", "copilot-instructions.md":
+	case "hi.md", "mcp.json", "copilot-instructions.md":
 		return true
 	}
 	return ext == "" && strings.HasPrefix(base, ".env")

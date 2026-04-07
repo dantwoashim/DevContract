@@ -415,10 +415,10 @@ func (c *Contract) Validate() *ValidationReport {
 			report.AddError("bootstrap output %q uses unsupported mode %q", output.Path, output.Mode)
 		}
 	}
-	validAgents := map[string]struct{}{"copilot": {}, "codex": {}, "cursor": {}, "claude": {}}
+	validAgents := map[string]struct{}{"copilot": {}, "assistant": {}, "cursor": {}, "claude": {}}
 	for name, target := range c.Agents {
 		if _, ok := validAgents[name]; !ok {
-			report.AddWarning("agent target %q is not one of copilot/codex/cursor/claude", name)
+			report.AddWarning("agent target %q is not one of copilot/assistant/cursor/claude", name)
 		}
 		if strings.TrimSpace(target.Output) == "" {
 			report.AddError("agent %q is missing an output path", name)
@@ -510,8 +510,8 @@ func defaultAgentOutput(name string) string {
 	switch name {
 	case "copilot":
 		return ".github/copilot-instructions.md"
-	case "codex":
-		return "AGENTS.md"
+	case "assistant":
+		return "hi.md"
 	case "cursor":
 		return filepath.Join(".cursor", "rules", "envsync.mdc")
 	case "claude":
@@ -525,8 +525,8 @@ func defaultMCPOutput(name string) string {
 	switch name {
 	case "copilot":
 		return filepath.Join(".vscode", "mcp.json")
-	case "codex":
-		return filepath.Join(".envsync", "generated", "codex.mcp.json")
+	case "assistant":
+		return filepath.Join(".envsync", "generated", "assistant.mcp.json")
 	case "cursor":
 		return filepath.Join(".cursor", "mcp.json")
 	case "claude":

@@ -10,7 +10,7 @@ import (
 
 func TestScanContractAwareFindsSecrets(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "AGENTS.md")
+	path := filepath.Join(dir, "hi.md")
 	if err := os.WriteFile(path, []byte("Never paste sk-proj-supersecretkey1234567890 into docs."), 0644); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
@@ -18,7 +18,7 @@ func TestScanContractAwareFindsSecrets(t *testing.T) {
 	spec := &contract.Contract{
 		Version: 1,
 		Policies: contract.Policies{
-			RedactPaths: []string{"AGENTS.md"},
+			RedactPaths: []string{"hi.md"},
 		},
 	}
 	report, err := ScanContractAware(dir, spec, nil)

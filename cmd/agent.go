@@ -74,7 +74,7 @@ func runAgentInstall(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	agentInstallCmd.Flags().StringVar(&agentName, "agent", "all", "Agent target: copilot, codex, cursor, claude, or all")
+	agentInstallCmd.Flags().StringVar(&agentName, "agent", "all", "Agent target: copilot, assistant, cursor, claude, or all")
 	agentInstallCmd.Flags().BoolVar(&agentAll, "all", false, "Generate files for every configured agent")
 	agentCmd.AddCommand(agentInstallCmd)
 	rootCmd.AddCommand(agentCmd)

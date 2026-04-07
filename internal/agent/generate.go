@@ -88,7 +88,7 @@ func renderInstructions(spec *contract.Contract, agentName string, target contra
 	b.WriteString("\n## Secret Safety\n\n")
 	b.WriteString("- Never inline secrets in markdown instructions, JSON config, or logs.\n")
 	b.WriteString("- Use environment variables only when configuring tools or MCP servers.\n")
-	b.WriteString("- If you touch `.env`, `AGENTS.md`, `.github/copilot-instructions.md`, `.cursor/`, `.claude/`, or MCP config, run `envsync guard scan`.\n")
+	b.WriteString("- If you touch `.env`, `hi.md`, `.github/copilot-instructions.md`, `.cursor/`, `.claude/`, or MCP config, run `envsync guard scan`.\n")
 
 	if envNames := spec.AllEnvNames(); len(envNames) > 0 {
 		b.WriteString("\n## Environment Variables\n\n")

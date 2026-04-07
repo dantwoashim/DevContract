@@ -24,7 +24,7 @@
   "activationEvents": [
     "onStartupFinished",
     "workspaceContains:.envsync/contract.yaml",
-    "workspaceContains:AGENTS.md"
+    "workspaceContains:hi.md"
   ],
   "files": [
     "out/**/*",

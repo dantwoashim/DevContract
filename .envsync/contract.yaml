@@ -40,10 +40,10 @@ bootstrap:
       gitignore: true
       header: Agent/session-local overrides for this repo.
 agents:
-  codex:
-    output: AGENTS.md
+  assistant:
+    output: hi.md
     mcp_output: mcp.json
-    header: Codex instructions for EnvSync
+    header: Workspace instructions for EnvSync
     instructions:
       - Treat this repo as a Go CLI with relay and extension support code.
       - Run go test ./... after changing contract, guard, sync, or crypto code.
@@ -71,7 +71,7 @@ mcp:
       description: Placeholder MCP docs server definition for local agent tooling.
 policies:
   redact_paths:
-    - AGENTS.md
+    - hi.md
     - .github/copilot-instructions.md
     - .cursor
     - .claude
