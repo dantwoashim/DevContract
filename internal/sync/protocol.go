@@ -9,7 +9,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/envsync/envsync/internal/crypto"
+	"github.com/dantwoashim/Env_sync/internal/crypto"
 )
 
 // MessageType identifies the type of wire protocol message.
@@ -114,9 +114,11 @@ func EncodeEnvPayload(p EnvPayload) ([]byte, error) {
 	// Timestamp
 	buf = binary.BigEndian.AppendUint64(buf, uint64(p.Timestamp))
 	// BaseRevisionID
+	// #nosec G115 -- length is bounded by the check above.
 	buf = binary.BigEndian.AppendUint16(buf, uint16(len(baseRevisionBytes)))
 	buf = append(buf, baseRevisionBytes...)
 	// RevisionID
+	// #nosec G115 -- length is bounded by the check above.
 	buf = binary.BigEndian.AppendUint16(buf, uint16(len(revisionBytes)))
 	buf = append(buf, revisionBytes...)
 	// FileName
