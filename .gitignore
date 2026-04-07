@@ -1,38 +1,35 @@
-# EnvSync build artifacts
-envsync
-envsync.exe
+# Build and release outputs
+/envsync
+/envsync.exe
 *.exe
 *.dll
 *.so
 *.dylib
-
-# Test binary
 *.test
 *.out
+dist/
+build/
+tmp/
 
-# Go workspace
-go.work
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Coverage
+# Coverage and profiling
 coverage.out
 coverage.html
+*.coverprofile
+*.prof
 
-# Temporary
-tmp/
-dist/
+# Go
+go.work
 .gocache/
+
+# Local repo state
+.env
+.env.local
+.env.agent
+.envsync.toml
+.envsync-service-key
+.envsync/
+
+# JavaScript and extension artifacts
 extension/node_modules/
 extension/out/
 extension/*.vsix
@@ -41,11 +38,19 @@ relay/.wrangler/
 relay/src/**/*.js
 relay/src/**/*.js.map
 
-# Agent-safe local repo onboarding outputs
-.env.local
-.env.agent
-.envsync-service-key
-.envsync/generated/
-.vscode/mcp.json
-.cursor/mcp.json
-.claude/mcp.json
+# Editor and machine-specific config
+.idea/
+.vscode/
+!.vscode/extensions.json
+.cursor/
+.claude/
+mcp.json
+WORKSPACE.md
+*.swp
+*.swo
+*~
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
