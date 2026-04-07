@@ -131,6 +131,26 @@ jobs:
             exit 1
           fi
 
+  source-bundle:
+    name: Source Bundle Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build source archives
+        run: bash ./scripts/package_source.sh "$RUNNER_TEMP/source-bundle"
+
+      - name: Validate source archive contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAR_FILE="$(ls "$RUNNER_TEMP/source-bundle"/*.tar.gz)"
+          tar -tf "$TAR_FILE" > "$RUNNER_TEMP/source-contents.txt"
+          if grep -E '(^|/)(\.env(\.|$)|envsync\.exe|node_modules/|extension/out/|relay/\.wrangler/|\.gocache/|.*\.vsix$)' "$RUNNER_TEMP/source-contents.txt"; then
+            echo "unexpected files detected in source archive"
+            exit 1
+          fi
+
   action-smoke:
     name: Action Smoke Test
     runs-on: ubuntu-latest
@@ -211,6 +231,56 @@ jobs:
           test "${{ steps.action.outputs.env_count }}" = "2"
           test "${API_KEY}" = "abc123"
           test "${MULTILINE}" = $'line1\nline2'
+
+      - name: Run local action again to verify no-op cleanup
+        id: action_noop
+        uses: ./action
+        with:
+          service_key: ${{ env.SMOKE_SERVICE_KEY_B64 }}
+          team_id: smoke-team
+          env_file: .env.test
+          relay_url: http://127.0.0.1:8787
+          mask_values: false
+
+      - name: Verify no-op action outputs
+        shell: bash
+        run: |
+          test "${{ steps.action_noop.outputs.pull_method }}" = "none"
+          test "${{ steps.action_noop.outputs.env_count }}" = "0"
+
+      - name: Invalid service key should fail clearly
+        id: action_bad_key
+        continue-on-error: true
+        uses: ./action
+        with:
+          service_key: not-base64
+          team_id: smoke-team
+          env_file: .env.test
+          relay_url: http://127.0.0.1:8787
+
+      - name: Verify invalid key failure
+        shell: bash
+        run: test "${{ steps.action_bad_key.outcome }}" = "failure"
+
+      - name: Relay outage should soft-fail
+        id: action_relay_softfail
+        uses: ./action
+        with:
+          service_key: ${{ env.SMOKE_SERVICE_KEY_B64 }}
+          team_id: smoke-team
+          env_file: .env.test
+          relay_url: http://127.0.0.1:9999
+          soft_fail: true
+
+      - name: Wrong project should soft-fail
+        id: action_wrong_project
+        uses: ./action
+        with:
+          service_key: ${{ env.SMOKE_SERVICE_KEY_B64 }}
+          team_id: missing-team
+          env_file: .env.test
+          relay_url: http://127.0.0.1:8787
+          soft_fail: true
 
       - name: Stop relay
         if: always()
