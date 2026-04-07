@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env, Invite, Team, TeamMember, TeamMemberInput } from '../types';
 import { computeIdentityFingerprint, computeTransportFingerprint, decodeBase64 } from '../middleware/auth';
 import { logRelayEvent } from '../middleware/observability';
+import { recordTeamEvent } from '../lib/teamCoordinator';
 
 export const inviteRoutes = new Hono<{ Bindings: Env }>();
 
@@ -59,6 +60,7 @@ inviteRoutes.post('/', async (c) => {
         { expirationTtl: ttlHours * 3600 },
     );
 
+    await recordTeamEvent(c.env, body.team_id, 'invite.created');
     logRelayEvent('invite.created', {
         request_id: c.get('requestId' as never),
         team_id: body.team_id,
@@ -133,6 +135,7 @@ inviteRoutes.post('/:hash/join', async (c) => {
     }
 
     if (invite.invitee && invite.invitee !== username) {
+        await recordTeamEvent(c.env, invite.team_id, 'invite.join_failed');
         return c.json({
             error: 'invite_mismatch',
             message: `Invite was issued for ${invite.invitee}, not ${username}`,
@@ -147,6 +150,7 @@ inviteRoutes.post('/:hash/join', async (c) => {
     const team: Team = JSON.parse(teamData);
     const usernameConflict = team.members.find((member) => member.username === username && member.fingerprint !== body.fingerprint);
     if (usernameConflict) {
+        await recordTeamEvent(c.env, invite.team_id, 'invite.join_failed');
         return c.json({ error: 'duplicate_username', message: `Member label ${username} is already used by another fingerprint` }, 409);
     }
 
@@ -177,6 +181,7 @@ inviteRoutes.post('/:hash/join', async (c) => {
         { expirationTtl: 60 },
     );
 
+    await recordTeamEvent(c.env, invite.team_id, 'invite.joined');
     logRelayEvent('invite.joined', {
         request_id: c.get('requestId' as never),
         team_id: invite.team_id,
@@ -223,6 +228,7 @@ async function consumeInvite(c: any) {
         { expirationTtl: 60 },
     );
 
+    await recordTeamEvent(c.env, invite.team_id, 'invite.consumed');
     return c.json({
         status: 'consumed',
         team_id: invite.team_id,

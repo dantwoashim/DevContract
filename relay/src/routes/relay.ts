@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env, BlobMetadata, Team } from '../types';
 import { getBlobTtl, getTeamLimits, limitMessage } from '../middleware/tiers';
 import { logRelayEvent } from '../middleware/observability';
+import { recordTeamEvent } from '../lib/teamCoordinator';
 
 export const relayRoutes = new Hono<{ Bindings: Env }>();
 
@@ -66,6 +67,7 @@ relayRoutes.put('/:team/:blob', async (c) => {
     await c.env.ENVSYNC_DATA.put(`blob:${teamId}:${blobId}:meta`, JSON.stringify(metadata), { expirationTtl: ttlSeconds });
 
     await enqueuePending(c.env, teamId, recipientFingerprint, blobId);
+    await recordTeamEvent(c.env, teamId, 'relay.blob_stored');
     logRelayEvent('relay.blob_stored', {
         request_id: c.get('requestId' as never),
         team_id: teamId,
@@ -99,6 +101,7 @@ relayRoutes.get('/:team/pending', async (c) => {
             blobs.push(JSON.parse(metaData));
         } else {
             await removePending(c.env, teamId, requestedFingerprint, blobId);
+            await recordTeamEvent(c.env, teamId, 'relay.pending_reconciled');
         }
     }
 
@@ -124,6 +127,8 @@ relayRoutes.get('/:team/:blob', async (c) => {
     if (!data) {
         return c.json({ error: 'not_found', message: 'Blob data not found' }, 404);
     }
+
+    await recordTeamEvent(c.env, teamId, 'relay.blob_downloaded');
 
     return new Response(data, {
         headers: {
@@ -156,6 +161,7 @@ relayRoutes.delete('/:team/:blob', async (c) => {
     await c.env.ENVSYNC_DATA.delete(`blob:${teamId}:${blobId}:meta`);
 
     await removePending(c.env, teamId, actorFingerprint, blobId);
+    await recordTeamEvent(c.env, teamId, 'relay.blob_deleted');
     logRelayEvent('relay.blob_deleted', {
         request_id: c.get('requestId' as never),
         team_id: teamId,
