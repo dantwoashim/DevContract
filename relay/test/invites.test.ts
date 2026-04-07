@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { UnstableDevWorker } from 'wrangler';
-import { createIdentity, registerMember, signedFetch, startTestWorker, transportKey } from './helpers';
+import { createIdentity, registerMember, signedFetch, startTestWorker, transportFingerprint, transportKey } from './helpers';
 
 let worker: UnstableDevWorker;
 
@@ -50,14 +50,24 @@ describe('Invite Flow', () => {
         expect(data.inviter).toBe('alice');
     });
 
-    it('should consume the invite', async () => {
-        const res = await signedFetch(worker, joiner, `/invites/${tokenHash}`, {
-            method: 'DELETE',
+    it('should join the team in one flow', async () => {
+        const joinTransport = transportKey(7);
+        const res = await signedFetch(worker, joiner, `/invites/${tokenHash}/join`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: 'bob',
+                fingerprint: joiner.fingerprint,
+                public_key: joiner.publicKeyB64,
+                transport_public_key: joinTransport,
+                transport_fingerprint: transportFingerprint(joinTransport),
+            }),
         });
         expect(res.status).toBe(200);
         const data = await res.json() as any;
         expect(data.team_id).toBe(teamId);
         expect(data.inviter_fingerprint).toBe(owner.fingerprint);
+        expect(data.members.some((member: any) => member.fingerprint === joiner.fingerprint)).toBe(true);
     });
 
     it('should reject already-consumed invite', async () => {
@@ -102,15 +112,33 @@ describe('Invite joiner validation', () => {
     });
 
     it('rejects consume when joiner label does not match invite target', async () => {
-        const res = await signedFetch(worker, joiner, `/invites/${tokenHash}?joiner=${encodeURIComponent('mallory')}`, {
-            method: 'DELETE',
+        const joinTransport = transportKey(9);
+        const res = await signedFetch(worker, joiner, `/invites/${tokenHash}/join`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: 'mallory',
+                fingerprint: joiner.fingerprint,
+                public_key: joiner.publicKeyB64,
+                transport_public_key: joinTransport,
+                transport_fingerprint: transportFingerprint(joinTransport),
+            }),
         });
         expect(res.status).toBe(409);
     });
 
     it('keeps the invite usable after a mismatch', async () => {
-        const res = await signedFetch(worker, joiner, `/invites/${tokenHash}?joiner=${encodeURIComponent('bob')}`, {
-            method: 'DELETE',
+        const joinTransport = transportKey(10);
+        const res = await signedFetch(worker, joiner, `/invites/${tokenHash}/join`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: 'bob',
+                fingerprint: joiner.fingerprint,
+                public_key: joiner.publicKeyB64,
+                transport_public_key: joinTransport,
+                transport_fingerprint: transportFingerprint(joinTransport),
+            }),
         });
         expect(res.status).toBe(200);
     });
