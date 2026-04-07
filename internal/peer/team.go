@@ -4,12 +4,9 @@ package peer
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"os"
-	"path/filepath"
-	"time"
 
 	"github.com/envsync/envsync/internal/config"
 	"github.com/envsync/envsync/internal/fsutil"
@@ -21,16 +18,6 @@ const (
 	defaultSyncStrategy = "interactive"
 )
 
-// GenerateTeamID creates a deterministic legacy team ID from creator fingerprint + name.
-// New projects should prefer GenerateProjectID and persist it in .envsync.toml.
-func GenerateTeamID(creatorFingerprint, name string) string {
-	h := sha256.New()
-	h.Write([]byte(creatorFingerprint))
-	h.Write([]byte(":"))
-	h.Write([]byte(name))
-	return fmt.Sprintf("%x", h.Sum(nil))[:16]
-}
-
 // GenerateProjectID creates a stable random project identifier for a repository.
 func GenerateProjectID() (string, error) {
 	secret := make([]byte, 16)
@@ -38,66 +25,6 @@ func GenerateProjectID() (string, error) {
 		return "", fmt.Errorf("generating project ID: %w", err)
 	}
 	return hex.EncodeToString(secret), nil
-}
-
-// CreateTeam creates a new team and saves it.
-func CreateTeam(name, creatorFingerprint string) (*Team, error) {
-	team := &Team{
-		ID:        GenerateTeamID(creatorFingerprint, name),
-		Name:      name,
-		CreatedBy: creatorFingerprint,
-		CreatedAt: time.Now(),
-		Members:   []string{creatorFingerprint},
-	}
-
-	if err := SaveTeam(team); err != nil {
-		return nil, err
-	}
-
-	return team, nil
-}
-
-// SaveTeam writes team metadata to disk.
-func SaveTeam(team *Team) error {
-	path, err := config.TeamFilePath(team.ID)
-	if err != nil {
-		return err
-	}
-
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("creating team directory: %w", err)
-	}
-
-	data, err := toml.Marshal(team)
-	if err != nil {
-		return fmt.Errorf("encoding team: %w", err)
-	}
-
-	return os.WriteFile(path, data, 0600)
-}
-
-// LoadTeam reads team metadata from disk.
-func LoadTeam(teamID string) (*Team, error) {
-	path, err := config.TeamFilePath(teamID)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("team %s not found", teamID)
-		}
-		return nil, fmt.Errorf("reading team: %w", err)
-	}
-
-	var team Team
-	if err := toml.Unmarshal(data, &team); err != nil {
-		return nil, fmt.Errorf("parsing team: %w", err)
-	}
-
-	return &team, nil
 }
 
 // AddMember adds a fingerprint to the team's member list.
