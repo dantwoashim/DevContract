@@ -2,11 +2,11 @@
 
 ## Reporting Vulnerabilities
 
-Report security vulnerabilities to: **security@envsync.dev**
+Please do not open public issues for security vulnerabilities.
 
-We aim to acknowledge reports within 48 hours and provide a remediation plan quickly for confirmed issues.
+Use GitHub's private vulnerability reporting for this repository if it is enabled. If private reporting is not available, email the maintainer at **twodan033@gmail.com**.
 
-Do not open public GitHub issues for security vulnerabilities.
+The current repository is open source code, not a managed security service. Operational response times and hosted-service guarantees are not implied by the code alone.
 
 ## Cryptographic Design
 

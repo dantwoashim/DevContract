@@ -1,45 +1,49 @@
 # Contributing to EnvSync
 
-Thank you for your interest in contributing!
+Thanks for contributing.
 
 ## Development Setup
 
 ```bash
-# Clone
 git clone https://github.com/dantwoashim/Env_sync.git
-cd envsync
+cd Env_sync
 
-# Build
-go build -o envsync .
+go build -o envsync ./
+go test ./...
+```
 
-# Test
-go test ./... -race -count=1
+Relay and extension work use their own package managers:
 
-# Lint (install golangci-lint first)
-golangci-lint run ./...
+```bash
+cd relay && npm ci && npm test
+cd ../extension && npm ci && npm run compile
 ```
 
 ## Code Style
 
-- Run `gofmt` on all Go files
-- Follow [Effective Go](https://go.dev/doc/effective_go) conventions
-- Use `go vet ./...` before committing
-- All exported functions must have doc comments
+- keep changes small and reviewable
+- add or update tests when behavior changes
+- run `gofmt` on Go changes
+- run `go vet ./...` for Go changes
+- run `scripts/check_repo_hygiene.sh` before sending a cleanup or packaging PR
 
-## PR Process
+## Public Repo Hygiene
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feat/my-feature`)
-3. Write tests for new functionality
-4. Ensure all tests pass (`go test ./... -race`)
-5. Submit a pull request with a clear description
+Do not commit:
 
-## Test Requirements
+- local `.env` files
+- `.envsync.toml`
+- `.envsync/`
+- editor or assistant-specific generated outputs
+- `node_modules`, `.wrangler`, `.gocache`, extension build output, or binaries
 
-- All new code must have corresponding tests
-- Tests must pass on Linux, macOS, and Windows
-- Use `t.TempDir()` for temporary files (auto-cleaned)
-- Mock external services (relay, GitHub API)
+This repository intentionally stays source-only.
+
+## Pull Requests
+
+- describe the change clearly
+- list the validation you ran
+- call out any behavior changes or follow-up work
 
 ## Security
 
@@ -47,4 +51,4 @@ If you discover a security vulnerability, please follow the process in [SECURITY
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE).

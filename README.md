@@ -1,48 +1,43 @@
 # EnvSync
 
-EnvSync is a developer tool for one of the messiest parts of software work: getting a repository into a usable state without passing secrets around by hand.
+EnvSync is an open-source tool for reproducible local development setup, encrypted `.env` sharing, and safer repository onboarding.
 
-Most teams still do this with a mix of chat threads, stale setup notes, copied `.env` files, and tribal memory. It works until it doesn't. New teammates lose time. Old teammates become the source of truth by accident. Sensitive values end up in the wrong places.
+It is for teams that still pass local config through chat threads, stale setup docs, copied `.env` files, and tribal knowledge. EnvSync gives the repository a setup contract, keeps sync history locally encrypted, and uses direct peer delivery with a relay fallback when needed.
 
-EnvSync gives the repository a contract for local setup and a secure path for sharing development secrets. The contract lives in the repo. Identity comes from existing SSH keys. Shared values are encrypted end to end.
+## What It Does Today
 
-Bootstrap and run targets are a trust boundary. If a repository contract defines shell commands, EnvSync will show them, require an explicit trust decision, and let you use restricted mode when you only want outputs and checks without executing repo-defined commands.
+- bootstrap a repository-defined local setup flow
+- validate runtimes, services, contract health, and sensitive text surfaces
+- invite and join trusted project members
+- sync `.env` changes between trusted machines
+- keep encrypted local revision and backup history
+- support scoped relay pull workflows for CI or service principals
 
-## What EnvSync Does
+## What Is Still Experimental
 
-- Syncs project `.env` files between trusted developers
-- Uses SSH keys for identity and project membership
-- Stores setup expectations in a repo-owned contract at `.envsync/contract.yaml`
-- Bootstraps local development with repeatable setup steps
-- Runs health checks for runtimes, services, project metadata, and secret safety
-- Creates encrypted local backups before changes are applied
-- Supports optional generated instruction files and JSON config for editor and tool integrations
+- generated assistant/editor instruction files and MCP config
+- some extension surfaces
+- entitlement and upgrade messaging
 
-## What EnvSync Is For
-
-EnvSync is built for development environments.
-
-It is a good fit when:
-
-- a repository depends on shared local environment variables
-- onboarding requires more than "copy this file and hope for the best"
-- teams want setup steps, required services, and environment expectations versioned with the code
-- you want peer-to-peer trust and encrypted relay fallback without introducing a full secrets platform
-
-It is not a production secret injector, a hosted vault, or a replacement for infrastructure-focused systems such as Vault, Infisical, or cloud-native secret managers.
-
-## How It Works
-
-1. `envsync init` reads your SSH Ed25519 key, creates local EnvSync config, and scaffolds a starter project contract.
-2. `envsync bootstrap` prepares local files, verifies runtimes, and runs the repository's setup steps.
-3. `envsync invite` and `envsync join` establish project membership between developers.
-4. `envsync push` and `envsync pull` exchange encrypted `.env` changes over LAN when possible and fall back to the relay when needed.
-
-The relay never stores plaintext values. Shared blobs are encrypted client-side for the intended recipient before upload.
+EnvSync is for development environments. It is not a production secrets manager or a hosted control plane by itself.
 
 ## Quick Start
 
-Build from source:
+### Install from GitHub Releases
+
+macOS and Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dantwoashim/Env_sync/main/scripts/install.sh | bash
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/dantwoashim/Env_sync/main/scripts/install.ps1 | iex
+```
+
+### Build from Source
 
 ```bash
 git clone https://github.com/dantwoashim/Env_sync.git
@@ -50,152 +45,83 @@ cd Env_sync
 go build -o envsync ./
 ```
 
-Initialize the current repository:
+### First Run
+
+In your own repository:
 
 ```bash
-./envsync init
+envsync init
+envsync bootstrap
+envsync doctor
 ```
 
-Review the generated contract:
+Invite a teammate:
 
 ```bash
-cat .envsync/contract.yaml
+envsync invite teammate
 ```
 
-Bootstrap local setup:
+Sync changes:
 
 ```bash
-./envsync bootstrap
-```
-
-Run health checks:
-
-```bash
-./envsync doctor
-./envsync guard scan
-```
-
-Invite another developer:
-
-```bash
-./envsync invite project-member
-```
-
-Share updates:
-
-```bash
-./envsync push
-./envsync pull
+envsync push
+envsync pull
 ```
 
 ## Core Commands
 
-| Command | Purpose |
-| --- | --- |
-| `envsync init` | Initialize local identity and scaffold a starter project contract |
-| `envsync bootstrap` | Prepare local outputs and run the repository bootstrap workflow |
-| `envsync doctor` | Validate repository setup, local prerequisites, and EnvSync state |
-| `envsync guard scan` | Scan instruction files, JSON config, and other sensitive text surfaces for secrets |
-| `envsync run [target]` | Run a named workflow target from the contract |
-| `envsync invite <label>` | Create a join code for another developer |
-| `envsync join <code>` | Join an existing project |
-| `envsync push` | Encrypt and send local `.env` updates |
-| `envsync pull` | Receive pending updates from trusted project members |
-| `envsync backup` | Create an encrypted local backup |
-| `envsync restore` | Restore a previous backup |
-| `envsync status` | Show current project sync status |
-| `envsync service-key ...` | Manage service keys for CI and automation |
+- `envsync init`: create local identity state and scaffold a starter contract in your repository
+- `envsync bootstrap`: run the repository setup contract after trust review
+- `envsync doctor`: check local prerequisites and repository health
+- `envsync guard scan`: scan repo text surfaces for likely secret leaks
+- `envsync invite` / `envsync join`: manage human project membership
+- `envsync service-key`: register scoped relay machine identities
+- `envsync push` / `envsync pull`: exchange encrypted `.env` state
+- `envsync backup`, `restore`, `rollback`: inspect and recover local history
 
-## The Project Contract
+## How It Works
 
-Every repository can define its local setup contract in `.envsync/contract.yaml`.
+- Each repository can define its local setup contract in `.envsync/contract.yaml`.
+- Human identity comes from an Ed25519 SSH key.
+- LAN sync uses direct peer transport when a trusted peer is reachable.
+- Relay sync uploads a per-recipient encrypted blob when direct delivery is unavailable.
+- Revision and backup history stays local and encrypted at rest.
 
-That contract can describe:
+More detail:
 
-- required and optional environment variables
-- expected runtimes
-- local services
-- bootstrap steps
-- files bootstrap may create
-- custom doctor checks
-- named workflow targets
-- optional generated tool configuration files
-- secret scanning policy
+- [Architecture](docs/ARCHITECTURE.md)
+- [Contract Reference](docs/CONTRACT.md)
+- [Threat Model](docs/THREAT_MODEL.md)
+- [Self-Hosting](docs/SELF_HOSTING.md)
+- [FAQ](docs/FAQ.md)
+- [OSS Scope](docs/OSS_SCOPE.md)
+- [Operations](docs/OPERATIONS.md)
+- [Releases](docs/RELEASES.md)
 
-Minimal example:
+## Security Summary
 
-```yaml
-version: 1
-project:
-  slug: payments-api
-  name: Payments API
-env:
-  required:
-    - name: DATABASE_URL
-      source: shared
-    - name: SESSION_SECRET
-      source: shared
-  public:
-    - PORT
-runtimes:
-  - go
-  - node
-services:
-  - name: api
-    host: 127.0.0.1
-    port: 8080
-    start: make dev
-bootstrap:
-  steps:
-    - make setup
-  outputs:
-    - path: .env.local
-      kind: env
-      gitignore: true
-run:
-  default: dev
-  targets:
-    dev:
-      command: make dev
-```
+- request authentication uses Ed25519 signatures
+- peer-to-peer sync uses a secure transport
+- relay payloads are encrypted before upload
+- relay metadata is still visible to the relay operator
+- local machine compromise still defeats local secrecy
 
-The full reference is in [docs/CONTRACT.md](docs/CONTRACT.md).
+See [SECURITY.md](SECURITY.md) for reporting guidance and the current security model.
 
-Operator-facing deployment, observability, and recovery guidance lives in [docs/OPERATIONS.md](docs/OPERATIONS.md). Release packaging and reproducibility notes live in [docs/RELEASES.md](docs/RELEASES.md).
+## Relay and Self-Hosting
 
-## Example Contracts
+The repository includes the relay source in [relay](relay). You can self-host it on Cloudflare Workers or point the CLI at your own relay deployment. The default public relay URL in the codebase is just a default endpoint, not a promise of hosted service guarantees.
 
-Starter contracts live in [examples/contracts](examples/contracts):
+## VS Code Extension
 
-- `nextjs-web-app.yaml`
-- `fastapi-service.yaml`
-- `pnpm-web-app.yaml`
-- `python-worker.yaml`
+The VS Code extension lives in [extension](extension). It shells out to the CLI and is best treated as a companion interface, not a separate implementation.
 
-## Security Model
+## Examples
 
-- Identity is derived from existing SSH Ed25519 keys
-- Project membership is explicit
-- Local backups are encrypted at rest
-- Relay uploads are encrypted before they leave the client
-- Guard scans help catch secrets in instruction files, JSON config, logs, and other text surfaces before they leak
-
-For the full security policy, see [SECURITY.md](SECURITY.md).
-
-## Current Notes
-
-- `envsync init` and other identity-based commands support passphrase-protected Ed25519 keys. In non-interactive environments, provide the passphrase with `ENVSYNC_SSH_KEY_PASSPHRASE`.
-- `envsync upgrade` reports entitlement state only; managed checkout and hosted billing are disabled in this build.
-- The optional GitHub Action, relay service, and VS Code extension live in this repository alongside the CLI.
-
-## Repository Layout
-
-- [cmd](cmd): CLI commands
-- [internal](internal): core packages
-- [relay](relay): relay service
-- [extension](extension): VS Code extension
-- [action](action): GitHub Action
+- [examples/envsync.example.toml](examples/envsync.example.toml)
+- [examples/demo/.env.example](examples/demo/.env.example)
+- [examples/contracts](examples/contracts)
 
 ## License
 
-MIT
+[MIT](LICENSE)
