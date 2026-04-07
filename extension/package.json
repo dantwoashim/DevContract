@@ -59,6 +59,10 @@
       {
         "command": "envsync.status",
         "title": "EnvSync: Status"
+      },
+      {
+        "command": "envsync.installHelp",
+        "title": "EnvSync: Install CLI Help"
       }
     ],
     "viewsContainers": {

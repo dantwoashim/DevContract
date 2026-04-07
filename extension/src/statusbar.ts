@@ -4,6 +4,7 @@ type StatusBarState = {
     icon: 'check' | 'warning';
     text: string;
     tooltip: string;
+    command?: string;
 };
 
 export function createStatusBar(context: vscode.ExtensionContext): vscode.StatusBarItem {
@@ -29,6 +30,7 @@ export function setStatusBarState(item: vscode.StatusBarItem, state: StatusBarSt
     item.text = `$(${state.icon}) EnvSync ${state.text}`;
     item.tooltip = state.tooltip;
     item.color = state.icon === 'check' ? '#10B981' : '#F59E0B';
+    item.command = state.command || 'envsync.showQuickPick';
 }
 
 async function showQuickPick() {

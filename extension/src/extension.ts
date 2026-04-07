@@ -27,12 +27,14 @@ export async function activate(context: vscode.ExtensionContext) {
                 icon: 'check',
                 text: 'Ready',
                 tooltip: 'EnvSync CLI detected. Open the EnvSync activity view for onboarding actions.',
+                command: 'envsync.showQuickPick',
             });
         } catch (error) {
             setStatusBarState(statusBarItem, {
                 icon: 'warning',
                 text: 'CLI Missing',
-                tooltip: `EnvSync CLI not available: ${error instanceof Error ? error.message : String(error)}`,
+                tooltip: `EnvSync CLI not available: ${error instanceof Error ? error.message : String(error)}. Click for install guidance.`,
+                command: 'envsync.installHelp',
             });
         }
     };
