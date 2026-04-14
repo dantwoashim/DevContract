@@ -34,6 +34,7 @@ CI validates the source bundle contents so release packaging does not silently d
 Current release expectations:
 
 - source archives are built from the tagged commit
+- `scripts/check_repo_hygiene.sh` passes before packaging
 - the bundle contains tracked source only
 - Go tests pass before release packaging
 

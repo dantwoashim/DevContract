@@ -1,0 +1,11 @@
+# Example local project config for EnvSync.
+# Copy to .envsync.toml in your own repository and adjust values.
+
+config_version = 1
+project_id = "replace-with-your-project-id"
+name = "Example Project"
+default_file = ".env"
+sync_strategy = "three-way"
+
+# Optional relay override:
+# relay_url = "https://your-relay.example.com"

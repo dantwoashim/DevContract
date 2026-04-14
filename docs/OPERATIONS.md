@@ -4,10 +4,9 @@ EnvSync's relay is designed for small-team supportability. This guide documents 
 
 ## What the Relay Stores
 
-- Team membership documents in Workers KV
-- Invite documents in Workers KV
 - Encrypted relay blobs and blob metadata in Workers KV
-- Pending-queue coordination and per-team counters in Durable Objects
+- Invite lookup cache entries in Workers KV
+- Team membership, invite lifecycle, relay audit history, pending queues, and per-team counters in Durable Objects
 - Rate-limit counters in a dedicated Durable Object
 
 The relay is not the source of truth for plaintext secrets. It stores only encrypted blob payloads and metadata needed to deliver them.
@@ -104,8 +103,8 @@ Be explicit about the relay's recovery model:
 Recovery checklist:
 
 1. Restore the Worker and bindings.
-2. Restore KV namespaces containing team, invite, and blob metadata.
-3. Bring Durable Objects back online.
+2. Restore KV namespaces containing blob metadata and invite lookup cache entries.
+3. Bring Durable Objects back online so team and invite state can be served authoritatively.
 4. Verify `/health/ready`.
 5. Inspect `/teams/:team/metrics` for queue depth and recent activity.
 6. Ask affected users to re-push if pending delivery state was lost.
