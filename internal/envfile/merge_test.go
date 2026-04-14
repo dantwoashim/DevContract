@@ -91,7 +91,7 @@ func TestThreeWayMergeAdditions(t *testing.T) {
 
 func TestThreeWayMergeDeletion(t *testing.T) {
 	base, _ := Parse("KEEP=yes\nDELETE=me\n")
-	ours, _ := Parse("KEEP=yes\n")           // we deleted DELETE
+	ours, _ := Parse("KEEP=yes\n")              // we deleted DELETE
 	theirs, _ := Parse("KEEP=yes\nDELETE=me\n") // they kept it unchanged
 
 	result := ThreeWayMerge(base, ours, theirs)
@@ -103,5 +103,22 @@ func TestThreeWayMergeDeletion(t *testing.T) {
 	m := envToMap(result.Merged)
 	if _, exists := m["DELETE"]; exists {
 		t.Error("DELETE should have been removed")
+	}
+}
+
+func TestThreeWayMergePreservesLocalCommentsAndOrder(t *testing.T) {
+	base, _ := Parse("# shared comment\nA=1\nB=2\n")
+	ours, _ := Parse("# local comment\nA=1\nB=2\nLOCAL=keep\n")
+	theirs, _ := Parse("# shared comment\nA=1\nB=3\nREMOTE=new\n")
+
+	result := ThreeWayMerge(base, ours, theirs)
+	if result.HasConflicts() {
+		t.Fatalf("expected no conflicts, got %d", len(result.Conflicts))
+	}
+
+	rendered := Write(result.Merged)
+	expected := "# local comment\nA=1\nB=3\nLOCAL=keep\nREMOTE=new"
+	if rendered != expected {
+		t.Fatalf("rendered merge:\n%s\nwant:\n%s", rendered, expected)
 	}
 }
