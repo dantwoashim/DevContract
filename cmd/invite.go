@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/dantwoashim/Env_sync/internal/crypto"
 	"github.com/dantwoashim/Env_sync/internal/peer"
 	"github.com/dantwoashim/Env_sync/internal/relay"
+	"github.com/dantwoashim/Env_sync/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -129,6 +131,21 @@ var joinCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE:  runJoin,
 }
+
+var inviteListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List relay invites for the current project",
+	RunE:  runInviteList,
+}
+
+var inviteRevokeCmd = &cobra.Command{
+	Use:   "revoke <code-or-token-hash>",
+	Short: "Revoke a pending relay invite",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runInviteRevoke,
+}
+
+var inviteRevokeReason string
 
 func runJoin(cmd *cobra.Command, args []string) error {
 	token := args[0]
@@ -296,6 +313,9 @@ func projectRelayURL(project *projectContext, cfg *config.Config) string {
 }
 
 func init() {
+	inviteRevokeCmd.Flags().StringVar(&inviteRevokeReason, "reason", "", "Optional operator note for the revocation")
+	inviteCmd.AddCommand(inviteListCmd)
+	inviteCmd.AddCommand(inviteRevokeCmd)
 	rootCmd.AddCommand(inviteCmd)
 	rootCmd.AddCommand(joinCmd)
 }
@@ -319,4 +339,124 @@ func tokenNonce() string {
 		return fmt.Sprintf("envsync-%d", time.Now().UnixNano())
 	}
 	return fmt.Sprintf("%x:%s", random, filepath.Base(mustGetwd()))
+}
+
+func runInviteList(cmd *cobra.Command, args []string) error {
+	kp, err := loadIdentity()
+	if err != nil {
+		return err
+	}
+
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
+	project, err := requireProjectContext()
+	if err != nil {
+		return err
+	}
+
+	client := relay.NewClient(projectRelayURL(project, cfg), kp)
+	invites, err := client.ListTeamInvites(project.ProjectID)
+	if err != nil {
+		return fmt.Errorf("listing invites: %w", err)
+	}
+
+	ui.Header("Relay Invites")
+	if len(invites) == 0 {
+		ui.Line("No relay invites found.")
+		ui.Blank()
+		return nil
+	}
+
+	table := ui.NewTable("Token", "Invitee", "Status", "Created", "Expires", "Actor")
+	for _, invite := range invites {
+		actor := invite.Inviter
+		if invite.Status == "consumed" && invite.ConsumedByFingerprint != "" {
+			actor = invite.ConsumedByFingerprint
+		}
+		if invite.Status == "revoked" && invite.RevokedByFingerprint != "" {
+			actor = invite.RevokedByFingerprint
+		}
+		if actor == "" {
+			actor = "-"
+		}
+		table.AddRow(
+			shortTokenHash(invite.TokenHash),
+			blankOrDash(invite.Invitee),
+			blankOrDash(invite.Status),
+			formatUnixDay(invite.CreatedAt),
+			formatUnixDay(invite.ExpiresAt),
+			actor,
+		)
+	}
+	fmt.Print(table.Render())
+	ui.Blank()
+	return nil
+}
+
+func runInviteRevoke(cmd *cobra.Command, args []string) error {
+	kp, err := loadIdentity()
+	if err != nil {
+		return err
+	}
+
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
+	project, err := requireProjectContext()
+	if err != nil {
+		return err
+	}
+
+	client := relay.NewClient(projectRelayURL(project, cfg), kp)
+	tokenHash := inviteSelectorHash(args[0])
+	if err := client.RevokeInvite(project.ProjectID, tokenHash, inviteRevokeReason); err != nil {
+		return fmt.Errorf("revoking invite: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Printf("  + Revoked invite %s\n", shortTokenHash(tokenHash))
+	if inviteRevokeReason != "" {
+		fmt.Printf("  - Reason: %s\n", inviteRevokeReason)
+	}
+	fmt.Println()
+	return nil
+}
+
+func inviteSelectorHash(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if isTokenHash(trimmed) {
+		return strings.ToLower(trimmed)
+	}
+	return relay.HashToken(trimmed)
+}
+
+func isTokenHash(value string) bool {
+	matched, _ := regexp.MatchString("^[a-fA-F0-9]{64}$", value)
+	return matched
+}
+
+func shortTokenHash(tokenHash string) string {
+	if len(tokenHash) <= 12 {
+		return tokenHash
+	}
+	return tokenHash[:12]
+}
+
+func formatUnixDay(unixSeconds int64) string {
+	if unixSeconds <= 0 {
+		return "-"
+	}
+	return time.Unix(unixSeconds, 0).UTC().Format("2006-01-02")
+}
+
+func blankOrDash(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "-"
+	}
+	return value
 }

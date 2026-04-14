@@ -50,6 +50,38 @@ type TeamMetrics struct {
 	RecordedAt         string         `json:"recorded_at"`
 }
 
+type TeamInvite struct {
+	TokenHash             string `json:"token_hash"`
+	TeamID                string `json:"team_id"`
+	Inviter               string `json:"inviter"`
+	InviterFingerprint    string `json:"inviter_fingerprint"`
+	Invitee               string `json:"invitee"`
+	CreatedAt             int64  `json:"created_at"`
+	ExpiresAt             int64  `json:"expires_at"`
+	Consumed              bool   `json:"consumed"`
+	ConsumedAt            int64  `json:"consumed_at,omitempty"`
+	ConsumedByFingerprint string `json:"consumed_by_fingerprint,omitempty"`
+	RevokedAt             int64  `json:"revoked_at,omitempty"`
+	RevokedByFingerprint  string `json:"revoked_by_fingerprint,omitempty"`
+	RevokeReason          string `json:"revoke_reason,omitempty"`
+	Status                string `json:"status,omitempty"`
+}
+
+type TeamAuditEvent struct {
+	ID                 string   `json:"id"`
+	TeamID             string   `json:"team_id"`
+	Action             string   `json:"action"`
+	ActorFingerprint   string   `json:"actor_fingerprint,omitempty"`
+	ActorPrincipalType string   `json:"actor_principal_type,omitempty"`
+	ActorScopes        []string `json:"actor_scopes,omitempty"`
+	TargetFingerprint  string   `json:"target_fingerprint,omitempty"`
+	InviteHash         string   `json:"invite_hash,omitempty"`
+	BlobID             string   `json:"blob_id,omitempty"`
+	Result             string   `json:"result"`
+	Details            string   `json:"details,omitempty"`
+	CreatedAt          int64    `json:"created_at"`
+}
+
 // NewClient creates a new relay client.
 func NewClient(baseURL string, kp *crypto.KeyPair) *Client {
 	return &Client{
@@ -637,6 +669,73 @@ func (c *Client) GetTeamMetrics(teamID string) (*TeamMetrics, error) {
 		return nil, err
 	}
 	return &result, nil
+}
+
+// ListTeamInvites returns relay-side invite lifecycle data for project administrators.
+func (c *Client) ListTeamInvites(teamID string) ([]TeamInvite, error) {
+	path := fmt.Sprintf("/teams/%s/invites", teamID)
+	resp, err := c.doRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, readError(resp)
+	}
+
+	var result struct {
+		Invites []TeamInvite `json:"invites"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.Invites, nil
+}
+
+// RevokeInvite retires a relay invite before it is consumed.
+func (c *Client) RevokeInvite(teamID, tokenHash, reason string) error {
+	body, err := json.Marshal(map[string]string{"reason": reason})
+	if err != nil {
+		return err
+	}
+
+	path := fmt.Sprintf("/teams/%s/invites/%s/revoke", teamID, url.PathEscape(tokenHash))
+	resp, err := c.doRequest("POST", path, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return readError(resp)
+	}
+	return nil
+}
+
+// ListTeamAudit returns relay-side administrative history for the current project.
+func (c *Client) ListTeamAudit(teamID string, limit int) ([]TeamAuditEvent, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	path := fmt.Sprintf("/teams/%s/audit?limit=%d", teamID, limit)
+	resp, err := c.doRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, readError(resp)
+	}
+
+	var result struct {
+		Events []TeamAuditEvent `json:"events"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.Events, nil
 }
 
 func readError(resp *http.Response) error {
