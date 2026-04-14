@@ -14,22 +14,24 @@ import (
 	"github.com/dantwoashim/Env_sync/internal/discovery"
 	"github.com/dantwoashim/Env_sync/internal/peer"
 	"github.com/dantwoashim/Env_sync/internal/relay"
+	"github.com/dantwoashim/Env_sync/internal/revision"
 	"github.com/dantwoashim/Env_sync/internal/transport"
 	"github.com/flynn/noise"
 )
 
 // OrchestratorOptions configures the sync orchestrator.
 type OrchestratorOptions struct {
-	EnvFilePath    string
-	TeamID         string
-	KeyPair        *crypto.KeyPair
-	NoiseKeypair   noise.DHKey
-	RelayClient    *relay.Client
-	RelayURL       string
-	Sequence       int64
-	BaseRevisionID string
-	RevisionID     string
-	OnStatus       func(status string)
+	EnvFilePath         string
+	TeamID              string
+	KeyPair             *crypto.KeyPair
+	NoiseKeypair        noise.DHKey
+	RelayClient         *relay.Client
+	RelayURL            string
+	Sequence            int64
+	BaseRevisionID      string
+	RevisionID          string
+	AncestorRevisionIDs []string
+	OnStatus            func(status string)
 }
 
 // OrchestratorResult summarizes the sync.
@@ -68,6 +70,7 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 
 	registryPeers := trustedRelayPeers(opts.TeamID, opts.KeyPair)
 	result.PeerCount = len(registryPeers)
+	peerAckBase := loadPeerAckBase(opts.TeamID)
 
 	report("Scanning LAN for peers...")
 	lanCtx, lanCancel := context.WithTimeout(ctx, 2*time.Second)
@@ -99,7 +102,8 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 		}
 
 		for _, discoveredPeer := range filtered {
-			if _, trusted := transportIndex[discoveredPeer.Fingerprint]; !trusted {
+			matchedPeer, trusted := transportIndex[discoveredPeer.Fingerprint]
+			if !trusted {
 				report(fmt.Sprintf("Skipping untrusted LAN peer %s", discoveredPeer.Fingerprint))
 				continue
 			}
@@ -115,7 +119,7 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 				continue
 			}
 
-			payload := NewEnvPayload(fileName, data, opts.Sequence, opts.BaseRevisionID, opts.RevisionID)
+			payload := NewEnvPayloadWithAncestors(fileName, data, opts.Sequence, peerBaseRevisionID(opts, peerAckBase, matchedPeer.Fingerprint), opts.RevisionID, opts.AncestorRevisionIDs)
 			encodedPayload, encodeErr := EncodeEnvPayload(payload)
 			if encodeErr != nil {
 				_ = conn.Close()
@@ -144,12 +148,9 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 			}
 
 			result.DeliveredCount++
-			if matchedPeer, ok := transportIndex[discoveredPeer.Fingerprint]; ok {
-				deliveredFingerprints[matchedPeer.Fingerprint] = struct{}{}
-				report(fmt.Sprintf("+ Delivered to %s via LAN", peerLabel(matchedPeer)))
-			} else {
-				report(fmt.Sprintf("+ Delivered to %s via LAN", discoveredPeer.Fingerprint))
-			}
+			deliveredFingerprints[matchedPeer.Fingerprint] = struct{}{}
+			recordPeerAck(opts.TeamID, matchedPeer.Fingerprint, opts.RevisionID)
+			report(fmt.Sprintf("+ Delivered to %s via LAN", peerLabel(matchedPeer)))
 		}
 	}
 
@@ -173,7 +174,7 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 			var recipientPub [32]byte
 			copy(recipientPub[:], recipientPubBytes)
 
-			payload := NewEnvPayload(fileName, data, opts.Sequence, opts.BaseRevisionID, opts.RevisionID)
+			payload := NewEnvPayloadWithAncestors(fileName, data, opts.Sequence, peerBaseRevisionID(opts, peerAckBase, trustedPeer.Fingerprint), opts.RevisionID, opts.AncestorRevisionIDs)
 			encodedPayload, encodeErr := EncodeEnvPayload(payload)
 			if encodeErr != nil {
 				report(fmt.Sprintf("Relay payload encode failed for %s: %s", peerLabel(trustedPeer), encodeErr))
@@ -234,6 +235,44 @@ func Orchestrate(ctx context.Context, opts OrchestratorOptions) *OrchestratorRes
 	}
 
 	return result
+}
+
+func loadPeerAckBase(teamID string) map[string]string {
+	if teamID == "" {
+		return nil
+	}
+
+	revStore, err := revision.New()
+	if err != nil {
+		return nil
+	}
+	acks, err := revStore.LoadPeerAcks(teamID)
+	if err != nil {
+		return nil
+	}
+	base := make(map[string]string, len(acks))
+	for fingerprint, ack := range acks {
+		base[fingerprint] = ack.RevisionID
+	}
+	return base
+}
+
+func peerBaseRevisionID(opts OrchestratorOptions, peerAckBase map[string]string, fingerprint string) string {
+	if ackRevisionID, ok := peerAckBase[fingerprint]; ok && ackRevisionID != "" {
+		return ackRevisionID
+	}
+	return opts.BaseRevisionID
+}
+
+func recordPeerAck(teamID, fingerprint, revisionID string) {
+	if teamID == "" || fingerprint == "" || revisionID == "" {
+		return
+	}
+	revStore, err := revision.New()
+	if err != nil {
+		return
+	}
+	_ = revStore.MarkPeerAck(teamID, fingerprint, revisionID)
 }
 
 // readEnvFile reads the target .env file.

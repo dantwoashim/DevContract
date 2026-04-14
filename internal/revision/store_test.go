@@ -60,4 +60,56 @@ func TestSyncCurrentTracksParentRevision(t *testing.T) {
 	if second.ParentID != first.ID {
 		t.Fatalf("parent = %q, want %q", second.ParentID, first.ID)
 	}
+	if len(second.ParentIDs) != 1 || second.ParentIDs[0] != first.ID {
+		t.Fatalf("parent_ids = %v, want [%q]", second.ParentIDs, first.ID)
+	}
+}
+
+func TestNearestCommonAncestorFollowsRemoteCandidateOrder(t *testing.T) {
+	s := newTestStore(t)
+	key := testKey(t)
+
+	rootData := []byte("ONE=1\n")
+	rootID := RevisionID(rootData)
+	if _, err := s.SaveRevision("project", rootID, "", rootData, key); err != nil {
+		t.Fatalf("save root: %v", err)
+	}
+
+	secondData := []byte("ONE=2\n")
+	secondID := RevisionID(secondData)
+	if _, err := s.SaveRevision("project", secondID, rootID, secondData, key); err != nil {
+		t.Fatalf("save second: %v", err)
+	}
+
+	thirdData := []byte("ONE=3\n")
+	thirdID := RevisionID(thirdData)
+	if _, err := s.SaveRevision("project", thirdID, secondID, thirdData, key); err != nil {
+		t.Fatalf("save third: %v", err)
+	}
+
+	ancestorID, err := s.NearestCommonAncestor("project", thirdID, []string{"missing", secondID, rootID})
+	if err != nil {
+		t.Fatalf("nearest common ancestor: %v", err)
+	}
+	if ancestorID != secondID {
+		t.Fatalf("nearest common ancestor = %q, want %q", ancestorID, secondID)
+	}
+}
+
+func TestMarkPeerAckPersistsAcknowledgement(t *testing.T) {
+	s := newTestStore(t)
+	if err := s.MarkPeerAck("project", "peer-fp", "rev-123"); err != nil {
+		t.Fatalf("mark peer ack: %v", err)
+	}
+
+	ack, err := s.PeerAck("project", "peer-fp")
+	if err != nil {
+		t.Fatalf("load peer ack: %v", err)
+	}
+	if ack == nil {
+		t.Fatal("expected peer ack")
+	}
+	if ack.RevisionID != "rev-123" {
+		t.Fatalf("revision_id = %q, want %q", ack.RevisionID, "rev-123")
+	}
 }

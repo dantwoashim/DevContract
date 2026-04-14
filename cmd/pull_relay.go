@@ -96,17 +96,18 @@ func pullPendingRelay(projectID, relayURL, targetFile string, cfg *config.Config
 		}
 
 		applyResult, applyErr := apply.Apply(apply.Options{
-			ProjectID:      projectID,
-			TargetFile:     targetFile,
-			IncomingFile:   payload.FileName,
-			IncomingData:   payload.Data,
-			BaseRevisionID: payload.BaseRevisionID,
-			NewRevisionID:  payload.RevisionID,
-			Policy:         opts.Policy,
-			Interactive:    opts.Interactive,
-			BackupEnabled:  cfg.Sync.AutoBackup,
-			BackupKey:      opts.BackupKey,
-			MaxVersions:    cfg.Sync.MaxVersions,
+			ProjectID:           projectID,
+			TargetFile:          targetFile,
+			IncomingFile:        payload.FileName,
+			IncomingData:        payload.Data,
+			BaseRevisionID:      payload.BaseRevisionID,
+			AncestorRevisionIDs: payload.AncestorRevisionIDs,
+			NewRevisionID:       payload.RevisionID,
+			Policy:              opts.Policy,
+			Interactive:         opts.Interactive,
+			BackupEnabled:       cfg.Sync.AutoBackup,
+			BackupKey:           opts.BackupKey,
+			MaxVersions:         cfg.Sync.MaxVersions,
 			ConfirmApply: func(diff *envfile.DiffResult) bool {
 				if diff == nil {
 					return true
