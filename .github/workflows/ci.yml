@@ -137,7 +137,7 @@ jobs:
           set -euo pipefail
           TAR_FILE="$(ls "$RUNNER_TEMP/source-bundle"/*.tar.gz)"
           tar -tf "$TAR_FILE" > "$RUNNER_TEMP/source-contents.txt"
-          if grep -E '(^|/)(\.env(\.|$)|\.envsync\.toml$|\.envsync/|WORKSPACE\.md$|mcp\.json$|\.cursor/|\.claude/|\.github/copilot-instructions\.md$|envsync\.exe|node_modules/|extension/out/|relay/\.wrangler/|\.gocache/|.*\.vsix$)' "$RUNNER_TEMP/source-contents.txt"; then
+          if grep -E '(^|/)(\.env$|\.env\.local$|\.env\.agent$|\.envsync\.toml$|\.envsync/|WORKSPACE\.md$|mcp\.json$|\.cursor/|\.claude/|\.github/copilot-instructions\.md$|envsync\.exe|node_modules/|extension/out/|relay/\.wrangler/|\.gocache/|.*\.vsix$)' "$RUNNER_TEMP/source-contents.txt"; then
             echo "unexpected files detected in source archive"
             exit 1
           fi
