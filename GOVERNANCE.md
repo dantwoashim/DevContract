@@ -10,7 +10,7 @@ EnvSync follows a **Benevolent Dictator For Life (BDFL)** governance model.
 
 1. **Features and Architecture:** Proposed via GitHub Issues. The maintainer reviews, discusses, and makes final decisions.
 2. **Bug Fixes:** Submitted via Pull Requests. All PRs require at least one review before merging.
-3. **Security Issues:** Reported privately via `security@envsync.dev`. Handled with priority by the maintainer.
+3. **Security Issues:** Report them through GitHub's private vulnerability reporting if it is enabled for the repository. If not, email `twodan033@gmail.com`. Handled with priority by the maintainer.
 
 ## Contribution Process
 
