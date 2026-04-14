@@ -23,6 +23,9 @@ jobs:
       - name: Run tests
         run: go test ./... -v -count=1
 
+      - name: Check repo hygiene
+        run: bash ./scripts/check_repo_hygiene.sh
+
       - name: Build source archives
         run: bash ./scripts/package_source.sh dist/source "${GITHUB_REF_NAME}"
 
