@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { getTeamTierStatus } from '../middleware/tiers';
 import { loadTeamStats } from '../lib/teamCoordinator';
-import { canReadMetrics, normalizeTeam } from '../lib/principals';
+import { loadTeamState } from '../lib/teamState';
+import { canReadMetrics } from '../lib/principals';
 
 export const billingRoutes = new Hono<{ Bindings: Env }>();
 
@@ -25,14 +26,13 @@ billingRoutes.get('/status/:team', async (c) => {
     const stripeSub = await c.env.ENVSYNC_DATA.get(`team:${teamId}:stripe_sub`) || '';
     const updatedAt = await c.env.ENVSYNC_DATA.get(`team:${teamId}:tier_updated_at`) || '';
 
-    const teamData = await c.env.ENVSYNC_DATA.get(`team:${teamId}`);
-    if (!teamData) {
+    const team = await loadTeamState(c.env, teamId);
+    if (!team) {
         return c.json({
             error: 'not_found',
             message: 'Team not found',
         }, 404);
     }
-    const team = normalizeTeam(JSON.parse(teamData));
     const actor = team.members.find((member) => member.fingerprint === actorFingerprint);
     if (!actor || !canReadMetrics(actor)) {
         return c.json({

@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
-import type { Env, BlobMetadata, Team } from '../types';
+import type { Env, BlobMetadata } from '../types';
 import { getBlobTtl, getTeamLimits, limitMessage } from '../middleware/tiers';
 import { logRelayEvent } from '../middleware/observability';
 import { recordTeamEvent } from '../lib/teamCoordinator';
-import { canAdminMembers, canRelayPull, canRelayPush, normalizeTeam } from '../lib/principals';
+import { appendTeamAuditEvent, loadTeamState } from '../lib/teamState';
+import { canAdminMembers, canRelayPull, canRelayPush } from '../lib/principals';
 
 export const relayRoutes = new Hono<{ Bindings: Env }>();
 
@@ -13,7 +14,7 @@ relayRoutes.put('/:team/:blob', async (c) => {
     const actorFingerprint = c.get('fingerprint' as never) as string;
     const maxSize = parseInt(c.env.MAX_BLOB_SIZE || '65536', 10);
 
-    const team = await loadTeam(c.env, teamId);
+    const team = await loadTeamState(c.env, teamId);
     if (!team) {
         return c.json({ error: 'not_found', message: 'Team not found' }, 404);
     }
@@ -71,6 +72,16 @@ relayRoutes.put('/:team/:blob', async (c) => {
 
     await enqueuePending(c.env, teamId, recipientFingerprint, blobId);
     await recordTeamEvent(c.env, teamId, 'relay.blob_stored');
+    await appendTeamAuditEvent(c.env, teamId, {
+        action: 'relay.blob_stored',
+        actor_fingerprint: actorFingerprint,
+        actor_principal_type: actor.principal_type,
+        actor_scopes: actor.scopes,
+        target_fingerprint: recipientFingerprint,
+        blob_id: blobId,
+        result: 'succeeded',
+        details: metadata.filename,
+    }).catch(() => undefined);
     logRelayEvent('relay.blob_stored', {
         request_id: c.get('requestId' as never),
         team_id: teamId,
@@ -90,7 +101,7 @@ relayRoutes.get('/:team/pending', async (c) => {
         return c.json({ error: 'forbidden', message: 'Can only list pending blobs for the authenticated fingerprint' }, 403);
     }
 
-    const team = await loadTeam(c.env, teamId);
+    const team = await loadTeamState(c.env, teamId);
     const actor = team?.members.find((member) => member.fingerprint === actorFingerprint);
     if (!team || !actor || !canRelayPull(actor)) {
         return c.json({ error: 'forbidden', message: 'Only team members can list pending blobs' }, 403);
@@ -121,7 +132,7 @@ relayRoutes.get('/:team/rejected', async (c) => {
     const teamId = c.req.param('team');
     const actorFingerprint = c.get('fingerprint' as never) as string;
 
-    const team = await loadTeam(c.env, teamId);
+    const team = await loadTeamState(c.env, teamId);
     const actor = team?.members.find((member) => member.fingerprint === actorFingerprint);
     if (!team || !actor || !canAdminMembers(actor)) {
         return c.json({ error: 'forbidden', message: 'Only project administrators can view rejected relay blobs' }, 403);
@@ -160,7 +171,7 @@ relayRoutes.get('/:team/:blob', async (c) => {
     if (metadata.recipient_fingerprint !== actorFingerprint) {
         return c.json({ error: 'forbidden', message: 'Only the intended recipient may download this blob' }, 403);
     }
-    const team = await loadTeam(c.env, teamId);
+    const team = await loadTeamState(c.env, teamId);
     const actor = team?.members.find((member) => member.fingerprint === actorFingerprint);
     if (!actor || !canRelayPull(actor)) {
         return c.json({ error: 'forbidden', message: 'This principal may not download relay blobs' }, 403);
@@ -175,6 +186,15 @@ relayRoutes.get('/:team/:blob', async (c) => {
     }
 
     await recordTeamEvent(c.env, teamId, 'relay.blob_downloaded');
+    await appendTeamAuditEvent(c.env, teamId, {
+        action: 'relay.blob_downloaded',
+        actor_fingerprint: actorFingerprint,
+        actor_principal_type: actor.principal_type,
+        actor_scopes: actor.scopes,
+        blob_id: blobId,
+        result: 'succeeded',
+        details: metadata.filename,
+    }).catch(() => undefined);
 
     return new Response(data, {
         headers: {
@@ -202,7 +222,7 @@ relayRoutes.delete('/:team/:blob', async (c) => {
     if (metadata.recipient_fingerprint !== actorFingerprint) {
         return c.json({ error: 'forbidden', message: 'Only the intended recipient may delete this blob' }, 403);
     }
-    const team = await loadTeam(c.env, teamId);
+    const team = await loadTeamState(c.env, teamId);
     const actor = team?.members.find((member) => member.fingerprint === actorFingerprint);
     if (!actor || !canRelayPull(actor)) {
         return c.json({ error: 'forbidden', message: 'This principal may not delete relay blobs' }, 403);
@@ -213,6 +233,15 @@ relayRoutes.delete('/:team/:blob', async (c) => {
 
     await removePending(c.env, teamId, actorFingerprint, blobId);
     await recordTeamEvent(c.env, teamId, 'relay.blob_deleted');
+    await appendTeamAuditEvent(c.env, teamId, {
+        action: 'relay.blob_deleted',
+        actor_fingerprint: actorFingerprint,
+        actor_principal_type: actor.principal_type,
+        actor_scopes: actor.scopes,
+        blob_id: blobId,
+        result: 'succeeded',
+        details: metadata.filename,
+    }).catch(() => undefined);
     logRelayEvent('relay.blob_deleted', {
         request_id: c.get('requestId' as never),
         team_id: teamId,
@@ -239,7 +268,7 @@ relayRoutes.post('/:team/:blob/reject', async (c) => {
         return c.json({ error: 'forbidden', message: 'Only the intended recipient may reject this blob' }, 403);
     }
 
-    const team = await loadTeam(c.env, teamId);
+    const team = await loadTeamState(c.env, teamId);
     const actor = team?.members.find((member) => member.fingerprint === actorFingerprint);
     if (!actor || !canRelayPull(actor)) {
         return c.json({ error: 'forbidden', message: 'This principal may not reject relay blobs' }, 403);
@@ -252,6 +281,15 @@ relayRoutes.post('/:team/:blob/reject', async (c) => {
     await c.env.ENVSYNC_DATA.put(`blob:${teamId}:${blobId}:meta`, JSON.stringify(metadata), { expirationTtl: 7 * 24 * 3600 });
     await removePending(c.env, teamId, actorFingerprint, blobId);
     await recordTeamEvent(c.env, teamId, 'relay.blob_rejected');
+    await appendTeamAuditEvent(c.env, teamId, {
+        action: 'relay.blob_rejected',
+        actor_fingerprint: actorFingerprint,
+        actor_principal_type: actor.principal_type,
+        actor_scopes: actor.scopes,
+        blob_id: blobId,
+        result: 'succeeded',
+        details: metadata.failure_reason,
+    }).catch(() => undefined);
     logRelayEvent('relay.blob_rejected', {
         request_id: c.get('requestId' as never),
         team_id: teamId,
@@ -261,14 +299,6 @@ relayRoutes.post('/:team/:blob/reject', async (c) => {
     });
     return c.json({ status: metadata.status, blob_id: blobId });
 });
-
-async function loadTeam(env: Env, teamId: string): Promise<Team | null> {
-    const data = await env.ENVSYNC_DATA.get(`team:${teamId}`);
-    if (!data) {
-        return null;
-    }
-    return normalizeTeam(JSON.parse(data) as Team);
-}
 
 function dateKey(): string {
     return new Date().toISOString().split('T')[0];
