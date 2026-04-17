@@ -24,12 +24,38 @@ function Ensure-InstallDir {
     }
 }
 
+function Path-ContainsEntry {
+    param(
+        [string]$PathValue,
+        [string]$Entry
+    )
+
+    $NormalizedEntry = $Entry.Trim().TrimEnd('\')
+    if ([string]::IsNullOrWhiteSpace($NormalizedEntry)) {
+        return $false
+    }
+
+    foreach ($Candidate in ($PathValue -split ';')) {
+        $NormalizedCandidate = $Candidate.Trim().TrimEnd('\')
+        if ($NormalizedCandidate -and $NormalizedCandidate -ieq $NormalizedEntry) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
 function Add-InstallDirToPath {
+    if (-not (Path-ContainsEntry -PathValue $env:PATH -Entry $InstallDir)) {
+        $env:PATH = if ([string]::IsNullOrWhiteSpace($env:PATH)) { $InstallDir } else { "$InstallDir;$env:PATH" }
+        Write-Host "Added $InstallDir to the current PowerShell session"
+    }
+
     $UserPath = [Environment]::GetEnvironmentVariable("PATH", "User")
-    if ($UserPath -notlike "*$InstallDir*") {
+    if (-not (Path-ContainsEntry -PathValue $UserPath -Entry $InstallDir)) {
         $NewPath = if ([string]::IsNullOrWhiteSpace($UserPath)) { $InstallDir } else { "$UserPath;$InstallDir" }
         [Environment]::SetEnvironmentVariable("PATH", $NewPath, "User")
-        Write-Host "Added $InstallDir to PATH"
+        Write-Host "Added $InstallDir to PATH for future PowerShell windows"
     }
 }
 
