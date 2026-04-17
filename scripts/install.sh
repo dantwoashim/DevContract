@@ -6,7 +6,8 @@
 
 set -euo pipefail
 
-REPO="${DEVCONTRACT_INSTALL_REPO:-dantwoashim/devcontract}"
+REPO="${DEVCONTRACT_INSTALL_REPO:-dantwoashim/DevContract}"
+MODULE_PATH="${DEVCONTRACT_INSTALL_MODULE:-github.com/dantwoashim/devcontract}"
 INSTALL_DIR="${DEVCONTRACT_INSTALL_DIR:-/usr/local/bin}"
 VERSION="${DEVCONTRACT_VERSION:-latest}"
 
@@ -48,9 +49,61 @@ esac
 echo "Installing DevContract for ${OS}/${ARCH}"
 
 api_url="https://api.github.com/repos/${REPO}/releases"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+install_binary() {
+  local source_path="$1"
+  mkdir -p "$INSTALL_DIR"
+  local target="${INSTALL_DIR}/devcontract"
+  if [[ -w "$INSTALL_DIR" ]]; then
+    mv "$source_path" "$target"
+  else
+    echo "Installing to ${INSTALL_DIR} requires sudo"
+    sudo mv "$source_path" "$target"
+  fi
+  chmod +x "$target"
+  echo "Installed devcontract to ${target}"
+}
+
+install_from_source() {
+  if ! command -v go >/dev/null 2>&1; then
+    echo "No published DevContract release exists yet, and Go is not installed. Install Go from https://go.dev/dl or publish a GitHub release first." >&2
+    exit 1
+  fi
+
+  local gobin="${tmp}/gobin"
+  mkdir -p "$gobin"
+  echo "No published release found. Falling back to source install from ${MODULE_PATH}"
+  GOBIN="$gobin" go install "${MODULE_PATH}@latest"
+
+  if [[ ! -f "${gobin}/devcontract" ]]; then
+    echo "go install completed but the devcontract binary was not produced" >&2
+    exit 1
+  fi
+
+  install_binary "${gobin}/devcontract"
+}
+
 if [[ "$VERSION" == "latest" ]]; then
-  release_json="$(curl -fsSL "${api_url}/latest")"
-  VERSION="v$(printf '%s' "$release_json" | python -c "import json,sys; print(json.load(sys.stdin)['tag_name'].lstrip('v'))")"
+  release_status="$(curl -sSL -o "${tmp}/release.json" -w '%{http_code}' "${api_url}/latest")"
+  case "$release_status" in
+    200)
+      release_json="$(cat "${tmp}/release.json")"
+      VERSION="v$(printf '%s' "$release_json" | python -c "import json,sys; print(json.load(sys.stdin)['tag_name'].lstrip('v'))")"
+      ;;
+    404)
+      install_from_source
+      exit 0
+      ;;
+    *)
+      echo "Failed to determine the latest release version (HTTP ${release_status})." >&2
+      exit 1
+      ;;
+  esac
+elif [[ "$VERSION" == "source" || "$VERSION" == "main" ]]; then
+  install_from_source
+  exit 0
 else
   VERSION="v${VERSION#v}"
 fi
@@ -60,9 +113,6 @@ echo "Version: ${VERSION}"
 archive="devcontract_${VERSION#v}_${OS}_${ARCH}.tar.gz"
 archive_url="https://github.com/${REPO}/releases/download/${VERSION}/${archive}"
 checksums_url="https://github.com/${REPO}/releases/download/${VERSION}/checksums.txt"
-
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
 
 echo "Downloading ${archive}"
 curl -fsSL "$archive_url" -o "${tmp}/${archive}"
@@ -93,14 +143,4 @@ fi
 echo "Checksum verified"
 tar -xzf "${tmp}/${archive}" -C "$tmp"
 
-mkdir -p "$INSTALL_DIR"
-target="${INSTALL_DIR}/devcontract"
-if [[ -w "$INSTALL_DIR" ]]; then
-  mv "${tmp}/devcontract" "$target"
-else
-  echo "Installing to ${INSTALL_DIR} requires sudo"
-  sudo mv "${tmp}/devcontract" "$target"
-fi
-chmod +x "$target"
-
-echo "Installed devcontract ${VERSION} to ${target}"
+install_binary "${tmp}/devcontract"

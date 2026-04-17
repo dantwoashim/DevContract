@@ -60,20 +60,22 @@ DevContract is for development environments. It is not a production secrets mana
 macOS and Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dantwoashim/devcontract/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dantwoashim/DevContract/main/scripts/install.sh | bash
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/dantwoashim/devcontract/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/dantwoashim/DevContract/main/scripts/install.ps1 | iex
 ```
+
+If a binary release has not been published yet, the installer falls back to building from source when Go is installed.
 
 ### Build from Source
 
 ```bash
-git clone https://github.com/dantwoashim/devcontract.git
-cd devcontract
+git clone https://github.com/dantwoashim/DevContract.git
+cd DevContract
 go build -o devcontract ./
 ```
 

@@ -28,7 +28,7 @@ Use [`git filter-repo`](https://github.com/newren/git-filter-repo) on a fresh cl
 ## Example
 
 ```bash
-git clone --mirror https://github.com/dantwoashim/devcontract.git devcontract-history-clean.git
+git clone --mirror https://github.com/dantwoashim/DevContract.git devcontract-history-clean.git
 cd devcontract-history-clean.git
 
 git filter-repo \

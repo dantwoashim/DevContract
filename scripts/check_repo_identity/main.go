@@ -14,7 +14,7 @@ import (
 const (
 	canonicalModule = "github.com/dantwoashim/devcontract"
 	legacyModule    = "github.com/devcontract/devcontract"
-	repoSlug        = "dantwoashim/devcontract"
+	repoSlug        = "dantwoashim/DevContract"
 )
 
 func main() {

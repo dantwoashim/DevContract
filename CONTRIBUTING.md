@@ -18,8 +18,8 @@ Supported local toolchain outside the devcontainer:
 - Bash-compatible shell for repo hygiene and packaging scripts
 
 ```bash
-git clone https://github.com/dantwoashim/devcontract.git
-cd devcontract
+git clone https://github.com/dantwoashim/DevContract.git
+cd DevContract
 
 go build -o devcontract ./
 go test ./...

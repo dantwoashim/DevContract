@@ -38,6 +38,6 @@ async function showInstallHelp() {
         'Open README',
     );
     if (choice === 'Open README') {
-        await vscode.env.openExternal(vscode.Uri.parse('https://github.com/dantwoashim/devcontract#quick-start'));
+        await vscode.env.openExternal(vscode.Uri.parse('https://github.com/dantwoashim/DevContract#quick-start'));
     }
 }

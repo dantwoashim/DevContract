@@ -47,6 +47,6 @@ changelog:
 release:
   github:
     owner: dantwoashim
-    name: devcontract
+    name: DevContract
   draft: false
   prerelease: auto
