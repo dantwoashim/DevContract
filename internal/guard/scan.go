@@ -25,6 +25,7 @@ const (
 
 type Rule struct {
 	Name     string
+	Category string
 	Severity Severity
 	Message  string
 	Pattern  *regexp.Regexp
@@ -34,14 +35,24 @@ type Finding struct {
 	Path     string   `json:"path"`
 	Line     int      `json:"line"`
 	Rule     string   `json:"rule"`
+	Category string   `json:"category"`
 	Severity Severity `json:"severity"`
 	Message  string   `json:"message"`
 	Match    string   `json:"match,omitempty"`
 }
 
+type SkippedFile struct {
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
+}
+
 type Report struct {
-	FilesScanned int       `json:"files_scanned"`
-	Findings     []Finding `json:"findings"`
+	FilesScanned        int            `json:"files_scanned"`
+	FilesSkipped        int            `json:"files_skipped"`
+	FindingsByCategory  map[string]int `json:"findings_by_category,omitempty"`
+	SkippedByReason     map[string]int `json:"skipped_by_reason,omitempty"`
+	Findings            []Finding      `json:"findings"`
+	Skipped             []SkippedFile  `json:"skipped,omitempty"`
 }
 
 func (r Report) HasSeverity(min Severity) bool {
@@ -91,11 +102,14 @@ func Scan(opts Options) (Report, error) {
 
 	report := Report{FilesScanned: len(files), Findings: []Finding{}}
 	for _, filePath := range files {
-		findings, err := scanFile(filePath, opts.Root, rules)
+		findings, skipped, err := scanFile(filePath, opts.Root, rules)
 		if err != nil {
 			return report, err
 		}
 		report.Findings = append(report.Findings, findings...)
+		if skipped != nil {
+			report.Skipped = append(report.Skipped, *skipped)
+		}
 	}
 
 	sort.Slice(report.Findings, func(i, j int) bool {
@@ -104,6 +118,23 @@ func Scan(opts Options) (Report, error) {
 		}
 		return report.Findings[i].Path < report.Findings[j].Path
 	})
+	sort.Slice(report.Skipped, func(i, j int) bool {
+		return report.Skipped[i].Path < report.Skipped[j].Path
+	})
+
+	report.FilesSkipped = len(report.Skipped)
+	if len(report.Findings) > 0 {
+		report.FindingsByCategory = map[string]int{}
+		for _, finding := range report.Findings {
+			report.FindingsByCategory[finding.Category]++
+		}
+	}
+	if len(report.Skipped) > 0 {
+		report.SkippedByReason = map[string]int{}
+		for _, skipped := range report.Skipped {
+			report.SkippedByReason[skipped.Reason]++
+		}
+	}
 
 	return report, nil
 }
@@ -112,30 +143,42 @@ func compileRules(extraPatterns []string) ([]Rule, error) {
 	rules := []Rule{
 		{
 			Name:     "openai_api_key",
+			Category: "provider_key",
 			Severity: SeverityError,
 			Message:  "Provider-style API key found",
 			Pattern:  regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{20,}\b`),
 		},
 		{
 			Name:     "anthropic_api_key",
+			Category: "provider_key",
 			Severity: SeverityError,
 			Message:  "Provider API key found",
 			Pattern:  regexp.MustCompile(`\bsk-ant-[A-Za-z0-9_-]{10,}\b`),
 		},
 		{
 			Name:     "github_pat",
+			Category: "access_token",
 			Severity: SeverityError,
 			Message:  "GitHub personal access token found",
 			Pattern:  regexp.MustCompile(`\bgh[pousr]_[A-Za-z0-9_]{20,}\b`),
 		},
 		{
 			Name:     "bearer_token",
+			Category: "access_token",
 			Severity: SeverityError,
 			Message:  "Bearer token found",
 			Pattern:  regexp.MustCompile(`(?i)bearer\s+[A-Za-z0-9._-]{20,}`),
 		},
 		{
+			Name:     "pem_private_key",
+			Category: "private_key",
+			Severity: SeverityError,
+			Message:  "Private key material found",
+			Pattern:  regexp.MustCompile(`-----BEGIN (RSA|EC|OPENSSH|DSA|PRIVATE) KEY-----`),
+		},
+		{
 			Name:     "inline_secret_assignment",
+			Category: "inline_secret",
 			Severity: SeverityWarn,
 			Message:  "Suspicious inline credential assignment found in text content",
 			Pattern:  regexp.MustCompile(`(?i)(api[_ -]?key|token|secret|password)\s*[:=]\s*['"]?[A-Za-z0-9._/\-]{12,}`),
@@ -149,6 +192,7 @@ func compileRules(extraPatterns []string) ([]Rule, error) {
 		}
 		rules = append(rules, Rule{
 			Name:     fmt.Sprintf("custom_block_%d", idx+1),
+			Category: "custom_block",
 			Severity: SeverityError,
 			Message:  "Matched custom block pattern",
 			Pattern:  re,
@@ -239,23 +283,64 @@ func walkScanPath(path string, addFile func(string)) error {
 	})
 }
 
-func scanFile(path, root string, rules []Rule) ([]Finding, error) {
+func scanFile(path, root string, rules []Rule) ([]Finding, *SkippedFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
-	}
-	if len(data) > 1<<20 || !utf8.Valid(data) {
-		return nil, nil
+		return nil, nil, err
 	}
 
 	relPath, relErr := filepath.Rel(root, path)
 	if relErr != nil {
 		relPath = path
 	}
+	normalizedPath := filepath.ToSlash(relPath)
 
+	if !utf8.Valid(data) {
+		return nil, &SkippedFile{Path: normalizedPath, Reason: "binary_or_non_utf8"}, nil
+	}
+
+	segments := buildSegments(data)
 	var findings []Finding
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
-	lineNumber := 0
+	for _, segment := range segments {
+		segmentFindings, err := scanSegment(normalizedPath, segment.text, segment.startLine, rules)
+		if err != nil {
+			return nil, nil, err
+		}
+		findings = append(findings, segmentFindings...)
+	}
+	if len(data) > 1<<20 {
+		return findings, &SkippedFile{Path: normalizedPath, Reason: "large_text_scanned_in_chunks"}, nil
+	}
+	return findings, nil, nil
+}
+
+type scanSegmentText struct {
+	startLine int
+	text      string
+}
+
+func buildSegments(data []byte) []scanSegmentText {
+	if len(data) <= 1<<20 {
+		return []scanSegmentText{{startLine: 1, text: string(data)}}
+	}
+
+	const windowSize = 256 * 1024
+	headEnd := min(len(data), windowSize)
+	tailStart := max(0, len(data)-windowSize)
+	if tailStart <= headEnd {
+		return []scanSegmentText{{startLine: 1, text: string(data)}}
+	}
+
+	return []scanSegmentText{
+		{startLine: 1, text: string(data[:headEnd])},
+		{startLine: 1 + strings.Count(string(data[:tailStart]), "\n"), text: string(data[tailStart:])},
+	}
+}
+
+func scanSegment(path, text string, startLine int, rules []Rule) ([]Finding, error) {
+	var findings []Finding
+	scanner := bufio.NewScanner(strings.NewReader(text))
+	lineNumber := startLine - 1
 	for scanner.Scan() {
 		lineNumber++
 		line := scanner.Text()
@@ -265,9 +350,10 @@ func scanFile(path, root string, rules []Rule) ([]Finding, error) {
 				continue
 			}
 			findings = append(findings, Finding{
-				Path:     filepath.ToSlash(relPath),
+				Path:     path,
 				Line:     lineNumber,
 				Rule:     rule.Name,
+				Category: rule.Category,
 				Severity: rule.Severity,
 				Message:  rule.Message,
 				Match:    truncateMatch(match),
@@ -355,4 +441,18 @@ func shouldScanFile(path string) bool {
 		return true
 	}
 	return ext == "" && strings.HasPrefix(base, ".env")
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

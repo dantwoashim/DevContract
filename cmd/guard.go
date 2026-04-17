@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/dantwoashim/Env_sync/internal/config"
@@ -72,11 +73,18 @@ func runGuardScan(cmd *cobra.Command, args []string) error {
 	} else {
 		ui.Header("EnvSync Guard")
 		ui.Line(fmt.Sprintf("  Files scanned: %d", report.FilesScanned))
+		ui.Line(fmt.Sprintf("  Files skipped: %d", report.FilesSkipped))
+		if len(report.FindingsByCategory) > 0 {
+			ui.Line(fmt.Sprintf("  Categories: %s", formatGuardCategoryCounts(report.FindingsByCategory)))
+		}
+		if len(report.SkippedByReason) > 0 {
+			ui.Line(fmt.Sprintf("  Skipped reasons: %s", formatGuardCategoryCounts(report.SkippedByReason)))
+		}
 		if len(report.Findings) == 0 {
 			ui.Success("No unsafe secrets or inline credentials detected")
 		} else {
 			for _, finding := range report.Findings {
-				ui.Line(fmt.Sprintf("  [%s] %s:%d %s (%s)", finding.Severity, finding.Path, finding.Line, finding.Message, finding.Match))
+				ui.Line(fmt.Sprintf("  [%s/%s] %s:%d %s (%s)", finding.Severity, finding.Category, finding.Path, finding.Line, finding.Message, finding.Match))
 			}
 		}
 		ui.Blank()
@@ -94,6 +102,15 @@ func runGuardScan(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func formatGuardCategoryCounts(counts map[string]int) string {
+	parts := make([]string, 0, len(counts))
+	for key, value := range counts {
+		parts = append(parts, fmt.Sprintf("%s=%d", key, value))
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ", ")
 }
 
 func runGuardHookInstall(cmd *cobra.Command, args []string) error {
