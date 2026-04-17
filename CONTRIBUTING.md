@@ -4,6 +4,19 @@ Thanks for contributing.
 
 ## Development Setup
 
+Recommended:
+
+- open the repo in the included devcontainer
+- run `make verify`
+
+Supported local toolchain outside the devcontainer:
+
+- Go `1.25.8`
+- Node.js `22.x`
+- npm `10+`
+- GNU `make`
+- Bash-compatible shell for repo hygiene and packaging scripts
+
 ```bash
 git clone https://github.com/dantwoashim/Env_sync.git
 cd Env_sync
@@ -16,7 +29,13 @@ Relay and extension work use their own package managers:
 
 ```bash
 cd relay && npm ci && npm test
-cd ../extension && npm ci && npm run compile
+cd ../extension && npm ci && npm test
+```
+
+Canonical full-suite verification:
+
+```bash
+make verify
 ```
 
 ## Code Style

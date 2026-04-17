@@ -1,4 +1,4 @@
-.PHONY: build test test-race test-relay test-extension lint vet cover repo-hygiene release-snapshot clean
+.PHONY: build test test-race test-relay test-extension verify verify-go lint vet cover repo-hygiene release-snapshot clean
 
 BINARY=envsync
 
@@ -18,9 +18,17 @@ test-race:
 test-relay:
 	cd relay && npm ci && npm test
 
-## Compile extension
+## Run extension tests
 test-extension:
-	cd extension && npm ci && npm run compile
+	cd extension && npm ci && npm test
+
+## Run Go verification checks
+verify-go: test vet
+
+## Run the canonical local verification suite
+verify: repo-hygiene verify-go test-relay test-extension
+	go run ./scripts/check_repo_identity
+	node ./scripts/mcp-docs.js --self-check
 
 ## Run go vet
 vet:
@@ -59,7 +67,9 @@ help:
 	@echo "  test             Run all tests"
 	@echo "  test-race        Run tests with race detector"
 	@echo "  test-relay       Install and test the relay"
-	@echo "  test-extension   Install and compile the VS Code extension"
+	@echo "  test-extension   Install and test the VS Code extension"
+	@echo "  verify-go        Run the canonical Go verification checks"
+	@echo "  verify           Run the canonical local verification suite"
 	@echo "  vet              Run go vet"
 	@echo "  lint             Run golangci-lint"
 	@echo "  cover            Generate test coverage report"

@@ -45,6 +45,8 @@ cd Env_sync
 go build -o envsync ./
 ```
 
+For contributors and auditors, the repository includes a devcontainer and a canonical `make verify` path using Go `1.25.8` and Node `22`.
+
 ### First Run
 
 In your own repository:

@@ -1,0 +1,22 @@
+{
+  "name": "EnvSync",
+  "image": "mcr.microsoft.com/devcontainers/go:1-1.25-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    }
+  },
+  "postCreateCommand": "go version && node --version && npm --version && make help",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "go.toolsManagement.checkForUpdates": "local",
+        "terminal.integrated.defaultProfile.linux": "bash"
+      },
+      "extensions": [
+        "golang.Go",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  }
+}

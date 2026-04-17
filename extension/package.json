@@ -88,8 +88,8 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "compile": "node ./node_modules/typescript/bin/tsc -p ./",
+    "watch": "node ./node_modules/typescript/bin/tsc -watch -p ./",
     "test": "npm run compile && node --test out/test/*.test.js",
     "package": "vsce package"
   },
