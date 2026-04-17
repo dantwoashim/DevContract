@@ -513,7 +513,8 @@ func scanZipArchive(reportPath string, data []byte, rules []Rule) ([]Finding, bo
 			partial = true
 			continue
 		}
-		if totalBytes+int64(file.UncompressedSize64) > archiveReadLimit {
+		remainingBudget := uint64(archiveReadLimit - totalBytes)
+		if file.UncompressedSize64 > remainingBudget {
 			partial = true
 			break
 		}

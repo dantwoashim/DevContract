@@ -56,27 +56,28 @@ func main() {
 	}
 
 	ownerClient := relay.NewClient(relayURL, ownerKP)
-	if err := ownerClient.AddTeamMember(
-		projectID,
-		"owner",
-		ownerKP.Fingerprint,
-		base64.StdEncoding.EncodeToString(ownerKP.Ed25519Public),
-		base64.StdEncoding.EncodeToString(ownerKP.X25519Public[:]),
-		crypto.ComputeFingerprint(ownerKP.X25519Public),
-		"owner",
-	); err != nil {
+	if err := ownerClient.BootstrapTeam(projectID, relay.BootstrapTeamRequest{
+		Username:             "owner",
+		Fingerprint:          ownerKP.Fingerprint,
+		PublicKey:            base64.StdEncoding.EncodeToString(ownerKP.Ed25519Public),
+		TransportPublicKey:   base64.StdEncoding.EncodeToString(ownerKP.X25519Public[:]),
+		TransportFingerprint: crypto.ComputeFingerprint(ownerKP.X25519Public),
+		TeamName:             projectID,
+		BootstrapNonce:       fmt.Sprintf("action-smoke-%d", time.Now().UnixNano()),
+	}); err != nil {
 		exitf("bootstrap owner: %v", err)
 	}
 
-	if err := ownerClient.AddTeamMember(
-		projectID,
-		"ci",
-		serviceKP.Fingerprint,
-		base64.StdEncoding.EncodeToString(serviceKP.Ed25519Public),
-		base64.StdEncoding.EncodeToString(serviceKP.X25519Public[:]),
-		crypto.ComputeFingerprint(serviceKP.X25519Public),
-		"member",
-	); err != nil {
+	if err := ownerClient.UpsertTeamMember(projectID, relay.UpsertTeamMemberRequest{
+		Username:             "ci",
+		Fingerprint:          serviceKP.Fingerprint,
+		PublicKey:            base64.StdEncoding.EncodeToString(serviceKP.Ed25519Public),
+		TransportPublicKey:   base64.StdEncoding.EncodeToString(serviceKP.X25519Public[:]),
+		TransportFingerprint: crypto.ComputeFingerprint(serviceKP.X25519Public),
+		Role:                 "member",
+		PrincipalType:        "service_principal",
+		Scopes:               []string{"relay.pull", "member.read"},
+	}); err != nil {
 		exitf("register service key: %v", err)
 	}
 

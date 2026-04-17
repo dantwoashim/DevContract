@@ -122,7 +122,7 @@ try {
     Invoke-WebRequest -Uri $ChecksumsUrl -OutFile $ChecksumsPath
 
     $Expected = Select-String -Path $ChecksumsPath -Pattern ([regex]::Escape($Filename) + '$') |
-        ForEach-Object { ($_ -split '\s+')[0] } |
+        ForEach-Object { ($_.Line -split '\s+')[0] } |
         Select-Object -First 1
     if (-not $Expected) {
         throw "Checksum for $Filename not found in checksums.txt"
