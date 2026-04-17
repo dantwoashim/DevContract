@@ -11,6 +11,9 @@ export async function rateLimitMiddleware(c: Context<{ Bindings: Env }>, next: N
 
     const key = `ratelimit:${ip}:${Math.floor(Date.now() / 60000)}:${limit}`;
     try {
+        if (shouldInjectRateLimitFailure(c, 'global')) {
+            throw new Error('forced rate limit coordinator failure');
+        }
         const result = await checkRateLimit(c.env, key, limit, 120);
 
         c.header('X-RateLimit-Limit', String(limit));
@@ -29,7 +32,10 @@ export async function rateLimitMiddleware(c: Context<{ Bindings: Env }>, next: N
             method: c.req.method,
             message: error instanceof Error ? error.message : String(error),
         });
-        c.header('X-RateLimit-Bypass', 'backend-unavailable');
+        return c.json({
+            error: 'service_unavailable',
+            message: 'Request rate limiting is temporarily unavailable. Try again shortly.',
+        }, 503);
     }
 
     await next();
@@ -49,6 +55,14 @@ export async function teamRateLimitMiddleware(teamID: string, c: Context<{ Bindi
         });
         return { limited: false, count: 0, limit: 0, degraded: true };
     }
+}
+
+export function shouldInjectRateLimitFailure(c: Context<{ Bindings: Env }>, scope: 'global' | 'team'): boolean {
+    if (c.env.ENVIRONMENT !== 'test') {
+        return false;
+    }
+    const header = (c.req.header('X-EnvSync-Test-RateLimit-Failure') || '').toLowerCase();
+    return header === scope || header === 'all';
 }
 
 async function checkRateLimit(env: Env, key: string, limit: number, ttlSeconds: number): Promise<{ allowed: boolean; count: number; retryAfter: number }> {

@@ -16,7 +16,9 @@ export async function startTestWorker(): Promise<UnstableDevWorker> {
             testMode: true,
             watch: false,
         },
-        vars: {},
+        vars: {
+            ENVIRONMENT: 'test',
+        },
     });
 }
 

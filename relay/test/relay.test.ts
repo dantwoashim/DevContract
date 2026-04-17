@@ -110,12 +110,12 @@ describe('Relay Blob Operations', () => {
         expect(data.event_totals['relay.blob_deleted']).toBeGreaterThanOrEqual(1);
     });
 
-    it('should report truthful billing usage from coordinator-backed metrics', async () => {
-        const res = await signedFetch(worker, sender, `/billing/status/${TEAM_ID}`);
+    it('should report truthful relay limits and usage from coordinator-backed metrics', async () => {
+        const res = await signedFetch(worker, sender, `/teams/${TEAM_ID}/limits`);
         expect(res.status).toBe(200);
         const data = await res.json() as {
-            billing_enabled: boolean;
             metering_source: string;
+            tier: string;
             usage: {
                 member_records: number;
                 human_members: number;
@@ -123,8 +123,8 @@ describe('Relay Blob Operations', () => {
                 blobs_today: number;
             };
         };
-        expect(data.billing_enabled).toBe(false);
         expect(data.metering_source).toBe('team_coordinator');
+        expect(data.tier).toBe('free');
         expect(data.usage.member_records).toBe(3);
         expect(data.usage.human_members).toBe(2);
         expect(data.usage.service_principals).toBe(1);
@@ -181,5 +181,36 @@ describe('Relay Blob Operations', () => {
             body: Buffer.from('SERVICE_PRINCIPAL_UPLOAD'),
         });
         expect(res.status).toBe(403);
+    });
+
+    it('should fail closed when the global rate-limit coordinator is unavailable', async () => {
+        const res = await signedFetch(worker, sender, `/relay/${TEAM_ID}/pending?for=${encodeURIComponent(sender.fingerprint)}`, {
+            headers: {
+                'X-EnvSync-Test-RateLimit-Failure': 'global',
+            },
+        });
+        expect(res.status).toBe(503);
+        const data = await res.json() as { error: string };
+        expect(data.error).toBe('service_unavailable');
+    });
+
+    it('should fail closed when the upload quota coordinator is unavailable', async () => {
+        const blobId = `blob-degraded-${Date.now()}`;
+        const res = await signedFetch(worker, sender, `/relay/${TEAM_ID}/${blobId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/octet-stream',
+                'X-EnvSync-Sender': sender.fingerprint,
+                'X-EnvSync-Recipient': recipient.fingerprint,
+                'X-EnvSync-EphemeralKey': transportKey(77),
+                'X-EnvSync-Filename': '.env',
+                'X-EnvSync-Signature': Buffer.from('test-signature').toString('base64'),
+                'X-EnvSync-Test-RateLimit-Failure': 'team',
+            },
+            body: Buffer.from('FAIL_CLOSED_UPLOAD'),
+        });
+        expect(res.status).toBe(503);
+        const data = await res.json() as { error: string };
+        expect(data.error).toBe('service_unavailable');
     });
 });

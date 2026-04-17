@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import type { Env, BlobMetadata } from '../types';
+import { shouldInjectRateLimitFailure } from '../middleware/ratelimit';
 import { getBlobTtl, getTeamLimits, limitMessage } from '../middleware/tiers';
-import { logRelayEvent } from '../middleware/observability';
+import { logRelayError, logRelayEvent } from '../middleware/observability';
 import { recordTeamEvent } from '../lib/teamCoordinator';
 import { appendTeamAuditEvent, loadTeamState } from '../lib/teamState';
 import { canAdminMembers, canRelayPull, canRelayPush } from '../lib/principals';
@@ -43,7 +44,13 @@ relayRoutes.put('/:team/:blob', async (c) => {
         return c.json({ error: 'forbidden', message: 'Recipient is not a team member' }, 403);
     }
 
-    const blobLimit = await reserveBlobSlot(c.env, teamId);
+    const blobLimit = await reserveBlobSlot(c, c.env, teamId);
+    if (blobLimit.degraded) {
+        return c.json({
+            error: 'service_unavailable',
+            message: 'Relay upload quota checks are temporarily unavailable. Try again shortly.',
+        }, 503);
+    }
     if (!blobLimit.allowed) {
         return c.json({
             error: 'rate_limited',
@@ -304,20 +311,38 @@ function dateKey(): string {
     return new Date().toISOString().split('T')[0];
 }
 
-async function reserveBlobSlot(env: Env, teamId: string): Promise<{ allowed: boolean; count: number }> {
-    const limits = await getTeamLimits(env, teamId);
-    const limit = limits.maxBlobsPerDay < 0 ? 1000000 : limits.maxBlobsPerDay;
-    const id = env.TEAM_COORDINATOR.idFromName(teamId);
-    const stub = env.TEAM_COORDINATOR.get(id);
-    const response = await stub.fetch('https://team/reserve-upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            date_key: dateKey(),
-            limit,
-        }),
-    });
-    return response.json<{ allowed: boolean; count: number }>();
+async function reserveBlobSlot(c: any, env: Env, teamId: string): Promise<{ allowed: boolean; count: number; degraded: boolean }> {
+    try {
+        if (shouldInjectRateLimitFailure(c, 'team')) {
+            throw new Error('forced team quota coordinator failure');
+        }
+        const limits = await getTeamLimits(env, teamId);
+        const limit = limits.maxBlobsPerDay < 0 ? 1000000 : limits.maxBlobsPerDay;
+        const id = env.TEAM_COORDINATOR.idFromName(teamId);
+        const stub = env.TEAM_COORDINATOR.get(id);
+        const response = await stub.fetch('https://team/reserve-upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                date_key: dateKey(),
+                limit,
+            }),
+        });
+        if (!response.ok) {
+            throw new Error(`team coordinator returned HTTP ${response.status}`);
+        }
+        const payload = await response.json<{ allowed: boolean; count: number }>();
+        return { ...payload, degraded: false };
+    } catch (error) {
+        logRelayError('relay.upload_quota_unavailable', {
+            request_id: c.get('requestId' as never),
+            team_id: teamId,
+            path: c.req.path,
+            method: c.req.method,
+            message: error instanceof Error ? error.message : String(error),
+        });
+        return { allowed: false, count: 0, degraded: true };
+    }
 }
 
 async function enqueuePending(env: Env, teamId: string, recipientFingerprint: string, blobId: string): Promise<void> {
