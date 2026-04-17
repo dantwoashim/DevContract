@@ -1,6 +1,6 @@
 module github.com/dantwoashim/devcontract
 
-go 1.25.8
+go 1.25.9
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
