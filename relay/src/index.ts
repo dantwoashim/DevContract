@@ -71,6 +71,8 @@ async function authMiddleware(c: any, next: any) {
         return c.json({ error: 'unauthorized', message: 'Request timestamp too old (5min window)' }, 401);
     }
 
+    const requestPath = new URL(c.req.url).pathname;
+
     try {
         const bodyClone = await c.req.raw.clone().arrayBuffer();
         const bodyHash = await hashBody(bodyClone);
@@ -82,7 +84,7 @@ async function authMiddleware(c: any, next: any) {
             const sigBytes = decodeBase64(parsed.signature, 'signature');
             const valid = await verifySignature(
                 c.req.method,
-                new URL(c.req.url).pathname,
+                requestPath,
                 parsed.timestamp,
                 bodyHash,
                 sigBytes,
@@ -101,7 +103,7 @@ async function authMiddleware(c: any, next: any) {
             const sigBytes = decodeBase64(parsed.signature, 'signature');
             const valid = await verifySignature(
                 c.req.method,
-                new URL(c.req.url).pathname,
+                requestPath,
                 parsed.timestamp,
                 bodyHash,
                 sigBytes,
@@ -110,14 +112,25 @@ async function authMiddleware(c: any, next: any) {
             if (!valid) {
                 return c.json({ error: 'unauthorized', message: 'Invalid signature on first contact' }, 401);
             }
-            await kv.put(`pubkey:${computedFingerprint}`, parsed.publicKey);
+
+            if (!allowFirstContactEnrollment(c.req.method, requestPath)) {
+                return c.json({
+                    error: 'registration_required',
+                    message: 'Unknown fingerprint. Bootstrap the project or join with a valid invite before using this route.',
+                }, 401);
+            }
+
+            c.set('firstContact' as never, true);
         } else {
-            return c.json({ error: 'unauthorized', message: 'Unknown fingerprint. Include public key for first-contact registration.' }, 401);
+            return c.json({
+                error: 'registration_required',
+                message: 'Unknown fingerprint. Bootstrap the project or join with a valid invite before using this route.',
+            }, 401);
         }
     } catch (error) {
         logRelayError('auth.verification_failed', {
             request_id: c.get('requestId' as never),
-            path: c.req.path,
+            path: requestPath,
             method: c.req.method,
             fingerprint: parsed.fingerprint,
             message: error instanceof Error ? error.message : String(error),
@@ -129,6 +142,16 @@ async function authMiddleware(c: any, next: any) {
     c.set('authTimestamp', parsed.timestamp);
 
     await next();
+}
+
+function allowFirstContactEnrollment(method: string, path: string): boolean {
+    if (method === 'POST' && /^\/teams\/[^/]+\/bootstrap$/.test(path)) {
+        return true;
+    }
+    if (method === 'POST' && /^\/invites\/[^/]+\/join$/.test(path)) {
+        return true;
+    }
+    return false;
 }
 
 app.onError((err, c) => {

@@ -31,13 +31,13 @@ EnvSync is designed for development-time environment sharing and onboarding. It 
 
 ## TOFU Caveats
 
-EnvSync uses trust-on-first-use in a few places:
+EnvSync still uses trust-on-first-use in a few places, but the relay no longer treats any valid signed first-contact request as automatic enrollment.
 
 - repository contracts require an explicit local trust decision
-- first-contact public key registration on the relay is bound to a signed request
+- relay membership enrollment is limited to explicit project bootstrap and invite-bound join flows
 - locally imported peers from the relay can remain pending until the operator verifies them
 
-That means the first trust decision still matters. If a user trusts the wrong repository or wrong identity, EnvSync cannot fully undo that mistake.
+That means the first trust decision still matters. If a user trusts the wrong repository, accepts the wrong invite, or approves the wrong identity, EnvSync cannot fully undo that mistake.
 
 ## Local Machine Caveat
 

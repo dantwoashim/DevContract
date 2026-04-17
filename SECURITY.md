@@ -25,7 +25,8 @@ EnvSync relies on audited libraries from `golang.org/x/crypto` and `github.com/f
 ## Trust Model
 
 - Identity comes from an Ed25519 SSH key and a derived X25519 transport key.
-- The relay computes the claimed identity fingerprint from the submitted public key on first contact and rejects mismatches.
+- The relay verifies the claimed identity fingerprint from the submitted public key during explicit enrollment flows and rejects mismatches.
+- Unknown fingerprints cannot silently self-register on arbitrary relay routes; they must bootstrap a new project or join through a valid invite.
 - Local peer state is stored in the registry with explicit trust transitions.
 - Members imported from the relay are not automatically treated as fully trusted peers.
 - Trust states are `unknown`, `pending`, `trusted`, and `revoked`.

@@ -70,17 +70,66 @@ describe('Auth Middleware', () => {
 
     it('should reject first-contact registration when the claimed fingerprint does not match the provided public key', async () => {
         const actor = await createIdentity('mismatch');
-        const res = await signedFetch(worker, actor, '/teams/test-auth-fingerprint/members/alice', {
-            method: 'PUT',
+        const teamId = `test-auth-fingerprint-${Date.now()}`;
+        const res = await signedFetch(worker, actor, `/teams/${teamId}/bootstrap`, {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                username: 'alice',
                 fingerprint: 'SHA256:not-the-real-fingerprint',
                 public_key: actor.publicKeyB64,
                 transport_public_key: transportKey(9),
                 transport_fingerprint: transportFingerprint(transportKey(9)),
                 role: 'owner',
+                team_name: teamId,
+                bootstrap_nonce: `nonce-${teamId}`,
             }),
         });
         expect(res.status).toBe(400);
+        const data = await res.json() as { error: string };
+        expect(data.error).toBe('invalid_member_keys');
+    });
+
+    it('should reject unknown fingerprints on protected routes outside bootstrap or invite join', async () => {
+        const actor = await createIdentity('unknown-member');
+        const res = await signedFetch(worker, actor, '/teams/test-auth-enrollment/members/alice', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                fingerprint: actor.fingerprint,
+                public_key: actor.publicKeyB64,
+                transport_public_key: transportKey(10),
+                transport_fingerprint: transportFingerprint(transportKey(10)),
+                role: 'member',
+            }),
+        });
+
+        expect(res.status).toBe(401);
+        const data = await res.json() as { error: string };
+        expect(data.error).toBe('registration_required');
+    });
+
+    it('should allow first-contact bootstrap without pre-registering the public key', async () => {
+        const founder = await createIdentity('bootstrap-founder');
+        const teamId = `test-auth-bootstrap-${Date.now()}`;
+
+        const bootstrapRes = await signedFetch(worker, founder, `/teams/${teamId}/bootstrap`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: 'founder',
+                fingerprint: founder.fingerprint,
+                public_key: founder.publicKeyB64,
+                transport_public_key: transportKey(11),
+                transport_fingerprint: transportFingerprint(transportKey(11)),
+                role: 'owner',
+                team_name: teamId,
+                bootstrap_nonce: `nonce-${teamId}`,
+            }),
+        });
+        expect(bootstrapRes.status).toBe(200);
+
+        const membersRes = await signedFetch(worker, founder, `/teams/${teamId}/members`);
+        expect(membersRes.status).toBe(200);
     });
 });
