@@ -112,64 +112,20 @@ In a typical repo, you can:
 4. run `devcontract doctor`
 5. share `.env` updates with `devcontract push` and `devcontract pull`
 
-## Quick Tour
+## Example Workflow
 
-If you do not want to make a demo video yet, use 3 screenshots and this short flow:
+Here is a simple example of the intended flow:
 
-1. a screenshot of the repo README and problem statement
-2. a screenshot of `devcontract init` and the generated `.devcontract/contract.yaml`
-3. a screenshot of `devcontract doctor` or `devcontract push` / `devcontract pull`
+```bash
+devcontract init
+devcontract bootstrap
+devcontract doctor
+devcontract invite teammate
+devcontract push
+devcontract pull
+```
 
-That is enough for an early post, GitHub share, or feedback request.
-
-## Screenshot Checklist
-
-Use fake values only. Do not show real secrets, tokens, emails, private repo names, or machine-specific paths.
-
-Recommended screenshots:
-
-1. README top section
-What to show:
-- project name
-- tagline
-- Why It Exists
-- What Makes It Different
-
-2. Contract screenshot
-What to show:
-- `.devcontract/contract.yaml`
-- a few required env vars
-- runtimes or services
-- one bootstrap step
-
-3. CLI health screenshot
-What to show:
-- `devcontract init`
-- `devcontract bootstrap`
-- `devcontract doctor`
-
-Optional 4th screenshot:
-
-4. Sync screenshot
-What to show:
-- `devcontract push`
-- `devcontract pull`
-- fake `.env` values only
-
-## Copy For A Post
-
-Use this short version if you are posting without a video:
-
-`DevContract is an open-source repo-first tool for developer onboarding, local setup contracts, and encrypted .env sharing. I built it to replace stale setup docs, copied env files, and tribal onboarding. I would love blunt feedback on whether this workflow is actually useful.`
-
-## What To Link
-
-If you are sharing DevContract publicly without a video, link these:
-
-- the GitHub repo
-- the README
-- 3 screenshots
-- one short text explanation of the workflow
+The goal is to make local setup repeatable, easier to audit, and less dependent on ad hoc handoffs.
 
 ## Core Commands
 
