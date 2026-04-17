@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, TeamMemberInput, TeamMetrics } from '../types';
 import { computeIdentityFingerprint, computeTransportFingerprint, decodeBase64 } from '../middleware/auth';
-import { getTeamLimits } from '../middleware/tiers';
+import { getTeamLimits, getTeamTierStatus } from '../middleware/tiers';
 import { logRelayEvent } from '../middleware/observability';
 import { loadTeamStats } from '../lib/teamCoordinator';
 import { bootstrapTeamState, listTeamAudit, listTeamInvites, loadTeamState, removeTeamMemberState, revokeInviteState, rotateSelfState, transferOwnershipState, upsertTeamMemberState } from '../lib/teamState';
@@ -88,6 +88,52 @@ teamRoutes.get('/:team/metrics', async (c) => {
         recorded_at: new Date().toISOString(),
     };
     return c.json(payload);
+});
+
+teamRoutes.get('/:team/limits', async (c) => {
+    const teamId = c.req.param('team');
+    const actorFingerprint = c.get('fingerprint' as never) as string;
+    const { tier, limits } = await getTeamTierStatus(c.env, teamId);
+
+    const team = await loadTeamState(c.env, teamId);
+    if (!team) {
+        return c.json({
+            error: 'not_found',
+            message: 'Team not found',
+        }, 404);
+    }
+
+    const actor = team.members.find((member) => member.fingerprint === actorFingerprint);
+    if (!actor || !canReadMetrics(actor)) {
+        return c.json({
+            error: 'forbidden',
+            message: 'Only authorized project principals can view relay limits',
+        }, 403);
+    }
+
+    const stats = await loadTeamStats(c.env, teamId);
+    const humanMembers = team.members.filter((member) => member.principal_type !== 'service_principal').length;
+    const servicePrincipals = team.members.length - humanMembers;
+    const updatedAt = await c.env.ENVSYNC_DATA.get(`team:${teamId}:tier_updated_at`) || '';
+
+    return c.json({
+        team_id: teamId,
+        metering_source: 'team_coordinator',
+        tier,
+        updated_at: updatedAt ? parseInt(updatedAt, 10) : null,
+        usage: {
+            member_records: team.members.length,
+            human_members: humanMembers,
+            service_principals: servicePrincipals,
+            blobs_today: stats.uploads_today,
+            pending_blobs: stats.pending_count,
+        },
+        limits: {
+            members: limits.maxMembers,
+            blobs_per_day: limits.maxBlobsPerDay,
+            history_days: limits.historyDays,
+        },
+    });
 });
 
 teamRoutes.put('/:team/members/:user', async (c) => {

@@ -31,6 +31,12 @@ Authenticated team members can inspect relay-side counters at:
 GET /teams/:team/metrics
 ```
 
+Authenticated team members can inspect the current relay limits and usage view at:
+
+```text
+GET /teams/:team/limits
+```
+
 The response includes:
 
 - `member_count`
@@ -76,6 +82,7 @@ Lifecycle events also emit structured JSON entries with team and actor fields. S
 - `request.unhandled_error`
 - `auth.verification_failed`
 - `rate_limit.backend_unavailable`
+- `relay.upload_quota_unavailable`
 
 ## Alerting Recommendations
 
@@ -89,6 +96,7 @@ Recommended alerts:
 - repeated `team.rotate_failed`
 - `pending_count` growth without matching `relay.blob_deleted`
 - repeated `rate_limit.backend_unavailable`
+- repeated `relay.upload_quota_unavailable`
 - readiness failures on `/health/ready`
 
 ## Backup and Recovery Expectations

@@ -12,8 +12,8 @@ import (
 
 var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
-	Short: "Show current relay entitlement status",
-	Long:  "Managed checkout is disabled in this build. This command only shows the current relay tier and usage.",
+	Short: "Show current relay limits",
+	Long:  "Shows the relay tier and usage reported by the current deployment.",
 	RunE:  runUpgrade,
 }
 
@@ -42,7 +42,7 @@ func runUpgrade(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ui.Header("EnvSync Plan")
+	ui.Header("EnvSync Relay Limits")
 
 	table := ui.NewTable("", "Current", "Team", "Enterprise")
 	table.AddRow("Members", fmtUsage(status.Usage.Members, status.Limits.Members), "unlimited", "custom")
@@ -52,8 +52,7 @@ func runUpgrade(cmd *cobra.Command, args []string) error {
 	ui.Blank()
 
 	ui.Line(fmt.Sprintf("Current tier: %s", ui.StyleBold.Render(status.Tier)))
-	ui.Warning("Managed billing and hosted checkout are disabled in this build.")
-	ui.Line("Contact the relay administrator or configure entitlements directly on the relay deployment if you need a different tier.")
+	ui.Line("This reflects the relay entitlements configured on the current deployment.")
 	return nil
 }
 
@@ -65,6 +64,6 @@ func fmtUsage(current, limit int) string {
 }
 
 func init() {
-	upgradeCmd.Flags().StringVar(&upgradePlan, "plan", "team", "Retained for compatibility; managed checkout is disabled")
+	upgradeCmd.Flags().StringVar(&upgradePlan, "plan", "team", "Retained for compatibility; relay entitlements are configured by the deployment")
 	rootCmd.AddCommand(upgradeCmd)
 }

@@ -8,7 +8,6 @@ export interface Env {
     MAX_BLOB_SIZE: string;
     INVITE_TTL_HOURS: string;
     BLOB_TTL_HOURS: string;
-    BILLING_ENABLED?: string;
     CORS_ALLOW_ORIGIN?: string;
 }
 

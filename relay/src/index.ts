@@ -5,7 +5,6 @@ import { healthRoutes } from './routes/health';
 import { inviteRoutes } from './routes/invites';
 import { relayRoutes } from './routes/relay';
 import { teamRoutes } from './routes/teams';
-import { billingRoutes } from './routes/billing';
 import { computeIdentityFingerprint, decodeBase64, parseAuthHeader, verifySignature, hashBody } from './middleware/auth';
 import { allowedOrigin } from './middleware/cors';
 import { logRelayError, requestIdMiddleware } from './middleware/observability';
@@ -39,7 +38,6 @@ app.use('*', cors({
         'X-Request-ID',
         'X-RateLimit-Limit',
         'X-RateLimit-Remaining',
-        'X-RateLimit-Bypass',
     ],
 }));
 
@@ -53,7 +51,6 @@ app.use('/invites/*', async (c, next) => {
 });
 app.use('/relay/*', authMiddleware);
 app.use('/teams/*', authMiddleware);
-app.use('/billing/*', authMiddleware);
 
 async function authMiddleware(c: any, next: any) {
     const authHeader = c.req.header('Authorization');
@@ -171,7 +168,6 @@ app.route('/health', healthRoutes);
 app.route('/invites', inviteRoutes);
 app.route('/relay', relayRoutes);
 app.route('/teams', teamRoutes);
-app.route('/billing', billingRoutes);
 
 app.notFound((c) => {
     return c.json({

@@ -69,5 +69,5 @@ export async function getBlobTtl(env: Env, teamId: string): Promise<number> {
 }
 
 export function limitMessage(limit: string): string {
-    return `${limit}. Managed billing is disabled on this relay deployment. Contact the relay administrator to change entitlements.`;
+    return `${limit}. Contact the relay administrator or update the relay deployment entitlements to change this limit.`;
 }

@@ -29,9 +29,9 @@ type TierLimits struct {
 	HistoryDays int `json:"history_days"`
 }
 
-// GetTierStatus retrieves the current tier and usage for a team.
+// GetTierStatus retrieves the current relay tier and usage for a team.
 func (c *Client) GetTierStatus(teamID string) (*TierStatus, error) {
-	path := fmt.Sprintf("/billing/status/%s", teamID)
+	path := fmt.Sprintf("/teams/%s/limits", teamID)
 	resp, err := c.doRequest("GET", path, nil)
 	if err != nil {
 		return nil, err

@@ -46,7 +46,6 @@ From `relay/wrangler.toml`:
 - `INVITE_TTL_HOURS`
 - `BLOB_TTL_HOURS`
 - optional `CORS_ALLOW_ORIGIN`
-- optional `BILLING_ENABLED`
 
 ## Deploy
 
