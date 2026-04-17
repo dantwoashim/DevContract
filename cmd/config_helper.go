@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -8,9 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dantwoashim/Env_sync/internal/config"
-	"github.com/dantwoashim/Env_sync/internal/crypto"
-	"github.com/dantwoashim/Env_sync/internal/fsutil"
+	"github.com/dantwoashim/devcontract/internal/config"
+	"github.com/dantwoashim/devcontract/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/fsutil"
 )
 
 // loadConfig reads the config file from the standard location and applies migrations.
@@ -47,12 +47,12 @@ func loadIdentity() (*crypto.KeyPair, error) {
 
 	kp, err := loadSSHKeyWithPrompt(keyPath)
 	if err != nil {
-		return nil, fmt.Errorf("loading identity: %w\n\n  Run 'envsync init' first", err)
+		return nil, fmt.Errorf("loading identity: %w\n\n  Run 'devcontract init' first", err)
 	}
 	return kp, nil
 }
 
-// loadIdentityFromServiceKey loads an EnvSync service key and derives the full identity bundle from it.
+// loadIdentityFromServiceKey loads an DevContract service key and derives the full identity bundle from it.
 func loadIdentityFromServiceKey(path string) (*crypto.KeyPair, error) {
 	sk, err := crypto.LoadServiceKeyFromFile(path)
 	if err != nil {

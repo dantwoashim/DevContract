@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package revision
 
@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/crypto"
 )
 
 func newTestStore(t *testing.T) *Store {

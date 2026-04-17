@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package sync_test
 
@@ -6,7 +6,7 @@ import (
 	"crypto/sha256"
 	"testing"
 
-	"github.com/dantwoashim/Env_sync/internal/sync"
+	"github.com/dantwoashim/devcontract/internal/sync"
 )
 
 // TestProtocolRoundTripIntegration tests the wire protocol encode/decode with realistic data.

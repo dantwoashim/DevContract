@@ -57,7 +57,7 @@ export async function signedFetch(
     const bodyBytes = normalizeBody(init.body);
     const timestamp = Math.floor(Date.now() / 1000);
     const bodyHash = createHash('sha256').update(bodyBytes).digest('hex');
-    const pathname = new URL(`https://envsync.test${path}`).pathname;
+    const pathname = new URL(`https://devcontract.test${path}`).pathname;
     const payload = Buffer.from(`${method}\n${pathname}\n${timestamp}\n${bodyHash}`);
     const signature = Buffer.from(await webcrypto.subtle.sign('Ed25519', identity.privateKey, payload));
 

@@ -1,15 +1,15 @@
 version: 2
 
-project_name: envsync
+project_name: devcontract
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - id: envsync
+  - id: devcontract
     main: .
-    binary: envsync
+    binary: devcontract
     env:
       - CGO_ENABLED=0
     goos:
@@ -21,9 +21,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/dantwoashim/Env_sync/cmd.Version={{.Version}}
-      - -X github.com/dantwoashim/Env_sync/cmd.GitCommit={{.ShortCommit}}
-      - -X github.com/dantwoashim/Env_sync/cmd.BuildDate={{.Date}}
+      - -X github.com/dantwoashim/devcontract/cmd.Version={{.Version}}
+      - -X github.com/dantwoashim/devcontract/cmd.GitCommit={{.ShortCommit}}
+      - -X github.com/dantwoashim/devcontract/cmd.BuildDate={{.Date}}
 
 archives:
   - id: default
@@ -47,6 +47,6 @@ changelog:
 release:
   github:
     owner: dantwoashim
-    name: Env_sync
+    name: devcontract
   draft: false
   prerelease: auto

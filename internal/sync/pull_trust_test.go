@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package sync
 
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dantwoashim/Env_sync/internal/peer"
+	"github.com/dantwoashim/devcontract/internal/peer"
 )
 
 type stubPullRegistry struct {

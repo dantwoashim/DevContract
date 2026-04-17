@@ -1,6 +1,6 @@
 # Build and release outputs
-/envsync
-/envsync.exe
+/devcontract
+/devcontract.exe
 *.exe
 *.dll
 *.so
@@ -25,9 +25,9 @@ go.work
 .env
 .env.local
 .env.agent
-.envsync.toml
-.envsync-service-key
-.envsync/
+.devcontract.toml
+.devcontract-service-key
+.devcontract/
 
 # JavaScript and extension artifacts
 extension/node_modules/

@@ -1,11 +1,11 @@
-# EnvSync installer for Windows (PowerShell)
-# Usage: irm https://envsync.dev/install.ps1 | iex
+# DevContract installer for Windows (PowerShell)
+# Usage: irm https://devcontract.dev/install.ps1 | iex
 
 $ErrorActionPreference = 'Stop'
 
-$Repo = if ($env:ENVSYNC_INSTALL_REPO) { $env:ENVSYNC_INSTALL_REPO } else { "dantwoashim/Env_sync" }
-$InstallDir = if ($env:ENVSYNC_INSTALL_DIR) { $env:ENVSYNC_INSTALL_DIR } else { "$env:LOCALAPPDATA\EnvSync\bin" }
-$Version = if ($env:ENVSYNC_VERSION) { $env:ENVSYNC_VERSION } else { "latest" }
+$Repo = if ($env:DEVCONTRACT_INSTALL_REPO) { $env:DEVCONTRACT_INSTALL_REPO } else { "dantwoashim/devcontract" }
+$InstallDir = if ($env:DEVCONTRACT_INSTALL_DIR) { $env:DEVCONTRACT_INSTALL_DIR } else { "$env:LOCALAPPDATA\DevContract\bin" }
+$Version = if ($env:DEVCONTRACT_VERSION) { $env:DEVCONTRACT_VERSION } else { "latest" }
 
 if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
     $Arch = "arm64"
@@ -15,7 +15,7 @@ if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
     throw "Unsupported architecture: only amd64 and arm64 Windows builds are published."
 }
 
-Write-Host "Installing EnvSync for windows/$Arch"
+Write-Host "Installing DevContract for windows/$Arch"
 
 try {
     if ($Version -eq "latest") {
@@ -30,10 +30,10 @@ try {
 
 Write-Host "Version: v$Version"
 
-$Filename = "envsync_${Version}_windows_${Arch}.zip"
+$Filename = "devcontract_${Version}_windows_${Arch}.zip"
 $ArchiveUrl = "https://github.com/$Repo/releases/download/v$Version/$Filename"
 $ChecksumsUrl = "https://github.com/$Repo/releases/download/v$Version/checksums.txt"
-$TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("envsync-install-" + [guid]::NewGuid().ToString("N"))
+$TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("devcontract-install-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 
 try {
@@ -63,7 +63,7 @@ try {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
 
-    Move-Item (Join-Path $TempDir "envsync.exe") (Join-Path $InstallDir "envsync.exe") -Force
+    Move-Item (Join-Path $TempDir "devcontract.exe") (Join-Path $InstallDir "devcontract.exe") -Force
 
     $UserPath = [Environment]::GetEnvironmentVariable("PATH", "User")
     if ($UserPath -notlike "*$InstallDir*") {
@@ -72,10 +72,10 @@ try {
         Write-Host "Added $InstallDir to PATH"
     }
 
-    Write-Host "Installed envsync v$Version to $InstallDir\envsync.exe"
+    Write-Host "Installed devcontract v$Version to $InstallDir\devcontract.exe"
     Write-Host ""
     Write-Host "Get started:"
-    Write-Host "  envsync init"
+    Write-Host "  devcontract init"
 } finally {
     if (Test-Path $TempDir) {
         Remove-Item $TempDir -Recurse -Force

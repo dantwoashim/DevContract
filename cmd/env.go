@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dantwoashim/Env_sync/internal/envfile"
+	"github.com/dantwoashim/devcontract/internal/envfile"
 	"github.com/spf13/cobra"
 )
 
@@ -119,7 +119,7 @@ func renderGitHubEnv(keys []string, values map[string]string) string {
 }
 
 func githubDelimiter(value string) string {
-	delimiter := "ENVSYNC_EOF"
+	delimiter := "DEVCONTRACT_EOF"
 	for strings.Contains(value, delimiter) {
 		delimiter += "_X"
 	}

@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/config"
-	"github.com/dantwoashim/Env_sync/internal/fsutil"
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/config"
+	"github.com/dantwoashim/devcontract/internal/fsutil"
+	"github.com/dantwoashim/devcontract/internal/ui"
 )
 
 type contractTrustEntry struct {

@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package config
 
@@ -19,10 +19,10 @@ func Save(cfg *Config) error {
 	return SaveConfig(cfg)
 }
 
-// DefaultPort is the default TCP port for EnvSync connections.
+// DefaultPort is the default TCP port for DevContract connections.
 const DefaultPort = 7733
 
-// Config represents the global EnvSync configuration.
+// Config represents the global DevContract configuration.
 type Config struct {
 	Identity  IdentityConfig  `toml:"identity"`
 	Relay     RelayConfig     `toml:"relay"`
@@ -69,7 +69,7 @@ type NetworkConfig struct {
 	MDNSTimeoutMs      int  `toml:"mdns_timeout_ms"`
 	HolePunchTimeoutMs int  `toml:"holepunch_timeout_ms"`
 	// HolePunchEnabled is retained for compatibility with older configs.
-	// Production EnvSync uses LAN direct plus encrypted relay fallback.
+	// Production DevContract uses LAN direct plus encrypted relay fallback.
 	HolePunchEnabled bool `toml:"holepunch_enabled"`
 }
 
@@ -100,7 +100,7 @@ func Default() *Config {
 			SSHKeyPath: defaultSSHKeyPath(),
 		},
 		Relay: RelayConfig{
-			URL:            "https://relay.envsync.dev",
+			URL:            "https://relay.devcontract.dev",
 			TimeoutSeconds: 10,
 		},
 		Network: NetworkConfig{
@@ -154,7 +154,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// ConfigDir returns the EnvSync config directory for the current platform.
+// ConfigDir returns the DevContract config directory for the current platform.
 func ConfigDir() (string, error) {
 	switch runtime.GOOS {
 	case "windows":
@@ -166,35 +166,35 @@ func ConfigDir() (string, error) {
 			}
 			appData = filepath.Join(home, "AppData", "Roaming")
 		}
-		return filepath.Join(appData, "envsync"), nil
+		return filepath.Join(appData, "devcontract"), nil
 
 	case "darwin":
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("cannot determine home directory: %w", err)
 		}
-		return filepath.Join(home, "Library", "Application Support", "envsync"), nil
+		return filepath.Join(home, "Library", "Application Support", "devcontract"), nil
 
 	default: // Linux and others
 		if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-			return filepath.Join(xdg, "envsync"), nil
+			return filepath.Join(xdg, "devcontract"), nil
 		}
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("cannot determine home directory: %w", err)
 		}
-		return filepath.Join(home, ".config", "envsync"), nil
+		return filepath.Join(home, ".config", "devcontract"), nil
 	}
 }
 
-// DataDir returns the EnvSync data directory (for store, audit logs, etc).
-// On all platforms, this is ~/.envsync/ for simplicity and discoverability.
+// DataDir returns the DevContract data directory (for store, audit logs, etc).
+// On all platforms, this is ~/.devcontract/ for simplicity and discoverability.
 func DataDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("cannot determine home directory: %w", err)
 	}
-	return filepath.Join(home, ".envsync"), nil
+	return filepath.Join(home, ".devcontract"), nil
 }
 
 // EnsureDirs creates the config and data directories if they don't exist.

@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package config
 
@@ -55,12 +55,12 @@ func AuditLogPath() (string, error) {
 
 // ProjectConfigPath returns the path to the per-project config file.
 func ProjectConfigPath() string {
-	return ".envsync.toml"
+	return ".devcontract.toml"
 }
 
 // ContractDirPath returns the path to the repo-owned contract directory.
 func ContractDirPath() string {
-	return ".envsync"
+	return ".devcontract"
 }
 
 // ContractFilePath returns the path to the repo-owned contract file.
@@ -90,20 +90,20 @@ func findUp(relativePath string) (string, error) {
 	return "", fmt.Errorf("%s not found", relativePath)
 }
 
-// FindProjectConfig searches up from cwd to find .envsync.toml.
+// FindProjectConfig searches up from cwd to find .devcontract.toml.
 func FindProjectConfig() (string, error) {
 	path, err := findUp(ProjectConfigPath())
 	if err != nil {
-		return "", fmt.Errorf(".envsync.toml not found (run 'envsync init' to create one)")
+		return "", fmt.Errorf(".devcontract.toml not found (run 'devcontract init' to create one)")
 	}
 	return path, nil
 }
 
-// FindContractFile searches up from cwd to find .envsync/contract.yaml.
+// FindContractFile searches up from cwd to find .devcontract/contract.yaml.
 func FindContractFile() (string, error) {
 	path, err := findUp(ContractFilePath())
 	if err != nil {
-		return "", fmt.Errorf("%s not found (run 'envsync init' to create one)", ContractFilePath())
+		return "", fmt.Errorf("%s not found (run 'devcontract init' to create one)", ContractFilePath())
 	}
 	return path, nil
 }

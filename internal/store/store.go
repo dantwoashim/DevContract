@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package store
 
@@ -14,9 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/config"
-	"github.com/dantwoashim/Env_sync/internal/crypto"
-	"github.com/dantwoashim/Env_sync/internal/fsutil"
+	"github.com/dantwoashim/devcontract/internal/config"
+	"github.com/dantwoashim/devcontract/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/fsutil"
 )
 
 const (

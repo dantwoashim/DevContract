@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package envfile
 
@@ -8,10 +8,10 @@ import (
 
 func TestParseBasicKeyValue(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
-		key     string
-		value   string
+		name  string
+		input string
+		key   string
+		value string
 	}{
 		{"simple", "KEY=value", "KEY", "value"},
 		{"spaces around equals", "KEY = value", "KEY", "value"},

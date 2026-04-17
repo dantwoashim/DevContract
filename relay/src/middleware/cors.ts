@@ -6,7 +6,7 @@ export function allowedOrigin(env: Env): string {
         return configured;
     }
     if ((env.ENVIRONMENT || '').toLowerCase() === 'production') {
-        return 'https://relay.envsync.dev';
+        return 'https://relay.devcontract.dev';
     }
     return '*';
 }

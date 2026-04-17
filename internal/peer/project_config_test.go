@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package peer
 
@@ -38,7 +38,7 @@ func TestSaveProjectConfigWritesNearestProjectFile(t *testing.T) {
 		_ = os.Chdir(originalWD)
 	})
 
-	rootConfigPath := filepath.Join(root, ".envsync.toml")
+	rootConfigPath := filepath.Join(root, ".devcontract.toml")
 	if err := os.WriteFile(rootConfigPath, []byte("project_id = \"root-project\"\n"), 0600); err != nil {
 		t.Fatalf("write root config: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestSaveProjectConfigWritesNearestProjectFile(t *testing.T) {
 
 	pc := &ProjectConfig{
 		ProjectID:    "root-project",
-		Name:         "envsync",
+		Name:         "devcontract",
 		DefaultFile:  ".env",
 		SyncStrategy: "three-way",
 	}
@@ -57,7 +57,7 @@ func TestSaveProjectConfigWritesNearestProjectFile(t *testing.T) {
 		t.Fatalf("save project config: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(subdir, ".envsync.toml")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(subdir, ".devcontract.toml")); !os.IsNotExist(err) {
 		t.Fatalf("expected no nested config file, got err=%v", err)
 	}
 
@@ -68,7 +68,7 @@ func TestSaveProjectConfigWritesNearestProjectFile(t *testing.T) {
 	if saved.ProjectID != "root-project" {
 		t.Fatalf("expected root config project ID to be preserved, got %q", saved.ProjectID)
 	}
-	if saved.Name != "envsync" {
+	if saved.Name != "devcontract" {
 		t.Fatalf("expected root config name to be updated, got %q", saved.Name)
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/config"
-	"github.com/dantwoashim/Env_sync/internal/contract"
-	"github.com/dantwoashim/Env_sync/internal/guard"
-	"github.com/dantwoashim/Env_sync/internal/peer"
-	"github.com/dantwoashim/Env_sync/internal/relay"
-	"github.com/dantwoashim/Env_sync/internal/store"
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/config"
+	"github.com/dantwoashim/devcontract/internal/contract"
+	"github.com/dantwoashim/devcontract/internal/guard"
+	"github.com/dantwoashim/devcontract/internal/peer"
+	"github.com/dantwoashim/devcontract/internal/relay"
+	"github.com/dantwoashim/devcontract/internal/store"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -48,8 +48,8 @@ var (
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
-	Short: "Run health checks for the current repo and EnvSync setup",
-	Long:  "Validates the repo contract, local environment, generated tool files, secret safety, EnvSync identity, project metadata, backups, and relay state.",
+	Short: "Run health checks for the current repo and DevContract setup",
+	Long:  "Validates the repo contract, local environment, generated tool files, secret safety, DevContract identity, project metadata, backups, and relay state.",
 	RunE:  runDoctor,
 }
 
@@ -90,11 +90,11 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		report.RelayURL = projectRelayURL(project, cfg)
 		addCheck("project", "pass", fmt.Sprintf("Project ID %s", project.ProjectID), false)
 	} else if errors.Is(projectErr, errProjectConfigMissingID) {
-		addCheck("project", "warn", "Project config exists but is missing project_id; run 'envsync init' to repair .envsync.toml", false)
+		addCheck("project", "warn", "Project config exists but is missing project_id; run 'devcontract init' to repair .devcontract.toml", false)
 	} else if projectErr != nil {
 		addCheck("project", "warn", fmt.Sprintf("Project config not loaded: %v", projectErr), false)
 	} else {
-		addCheck("project", "warn", "Project config not loaded; run 'envsync init' if this repo has not been initialized yet", false)
+		addCheck("project", "warn", "Project config not loaded; run 'devcontract init' if this repo has not been initialized yet", false)
 	}
 
 	repoRoot, rootErr := config.FindProjectRoot()
@@ -139,7 +139,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		addCheck("identity", "warn", fmt.Sprintf("Identity not available: %v", identityErr), false)
 	} else {
 		if cfg != nil && cfg.Identity.Fingerprint != "" && cfg.Identity.Fingerprint != kp.Fingerprint {
-			addCheck("identity", "fail", "Configured fingerprint does not match the active private key. Re-run 'envsync init'.", true)
+			addCheck("identity", "fail", "Configured fingerprint does not match the active private key. Re-run 'devcontract init'.", true)
 		} else {
 			kpDetail = fmt.Sprintf("Identity %s", shortenDoctor(kp.Fingerprint, 20))
 			addCheck("identity", "pass", kpDetail, false)
@@ -263,7 +263,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 			if _, err := os.Stat(outputPath); err == nil {
 				addCheck("agent:"+agentName, "pass", fmt.Sprintf("Tool instructions present at %s", filepath.ToSlash(target.Output)), false)
 			} else {
-				addCheck("agent:"+agentName, "warn", fmt.Sprintf("Tool instructions missing at %s; run 'envsync agent install --agent %s'", filepath.ToSlash(target.Output), agentName), false)
+				addCheck("agent:"+agentName, "warn", fmt.Sprintf("Tool instructions missing at %s; run 'devcontract agent install --agent %s'", filepath.ToSlash(target.Output), agentName), false)
 			}
 
 			if target.MCPOutput == "" {
@@ -276,7 +276,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 			}
 			data, err := os.ReadFile(mcpPath)
 			if err != nil {
-				addCheck("mcp:"+agentName, "warn", fmt.Sprintf("MCP config missing at %s; run 'envsync agent install --agent %s'", filepath.ToSlash(target.MCPOutput), agentName), false)
+				addCheck("mcp:"+agentName, "warn", fmt.Sprintf("MCP config missing at %s; run 'devcontract agent install --agent %s'", filepath.ToSlash(target.MCPOutput), agentName), false)
 				continue
 			}
 			if !json.Valid(data) {
@@ -300,7 +300,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 				highest = "fail"
 				blocking = true
 			}
-			addCheck("guard", highest, fmt.Sprintf("%d issue(s) found in generated instruction files or config; run 'envsync guard scan' for details", len(guardReport.Findings)), blocking)
+			addCheck("guard", highest, fmt.Sprintf("%d issue(s) found in generated instruction files or config; run 'devcontract guard scan' for details", len(guardReport.Findings)), blocking)
 		}
 	}
 
@@ -377,7 +377,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 						case len(localOnly) == 0 && len(relayOnly) == 0:
 							addCheck("membership:drift", "pass", "Local registry and relay membership agree", false)
 						default:
-							addCheck("membership:drift", "warn", fmt.Sprintf("Local-only=%d relay-only=%d; run 'envsync peers reconcile' for details", len(localOnly), len(relayOnly)), false)
+							addCheck("membership:drift", "warn", fmt.Sprintf("Local-only=%d relay-only=%d; run 'devcontract peers reconcile' for details", len(localOnly), len(relayOnly)), false)
 						}
 					}
 				}
@@ -402,7 +402,7 @@ func renderDoctor(report doctorReport) error {
 		}
 		fmt.Println(string(encoded))
 	} else {
-		ui.Header("EnvSync Doctor")
+		ui.Header("DevContract Doctor")
 		for _, check := range report.Checks {
 			label := "[ok]"
 			switch check.Status {

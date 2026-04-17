@@ -115,7 +115,7 @@ export async function computeTransportFingerprint(publicKey: Uint8Array): Promis
 }
 
 export async function getStoredPublicKey(env: Env, fingerprint: string): Promise<string | null> {
-    return env.ENVSYNC_DATA.get(`pubkey:${fingerprint}`);
+    return env.DEVCONTRACT_DATA.get(`pubkey:${fingerprint}`);
 }
 
 function base64Raw(data: Uint8Array): string {

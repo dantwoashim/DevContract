@@ -1,4 +1,4 @@
-module github.com/dantwoashim/Env_sync
+module github.com/dantwoashim/devcontract
 
 go 1.25.8
 

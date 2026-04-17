@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dantwoashim/Env_sync/internal/crypto"
-	"github.com/dantwoashim/Env_sync/internal/relay"
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/relay"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -52,7 +52,7 @@ func runServiceKeyGenerate(cmd *cobra.Command, args []string) error {
 
 	outPath := serviceKeyOutput
 	if outPath == "" {
-		outPath = ".envsync-service-key"
+		outPath = ".devcontract-service-key"
 	}
 
 	if err := sk.SaveToFile(outPath); err != nil {
@@ -64,13 +64,13 @@ func runServiceKeyGenerate(cmd *cobra.Command, args []string) error {
 	ui.Blank()
 	ui.Line("Add this to your GitHub Actions secrets:")
 	ui.Blank()
-	ui.Code(fmt.Sprintf("  ENVSYNC_SERVICE_KEY=%s", base64.StdEncoding.EncodeToString(sk.ExportPrivateKey())))
+	ui.Code(fmt.Sprintf("  DEVCONTRACT_SERVICE_KEY=%s", base64.StdEncoding.EncodeToString(sk.ExportPrivateKey())))
 	ui.Blank()
 	ui.Line("Public key (for project registration):")
 	ui.Code(fmt.Sprintf("  %s", base64.StdEncoding.EncodeToString(sk.PublicKey)))
 	ui.Blank()
 	ui.Warning("Keep the private key secret. Never commit it to git.")
-	ui.Line("Add '.envsync-service-key' to your .gitignore.")
+	ui.Line("Add '.devcontract-service-key' to your .gitignore.")
 
 	return nil
 }
@@ -78,7 +78,7 @@ func runServiceKeyGenerate(cmd *cobra.Command, args []string) error {
 func runServiceKeyExport(cmd *cobra.Command, args []string) error {
 	keyPath := serviceKeyOutput
 	if keyPath == "" {
-		keyPath = ".envsync-service-key"
+		keyPath = ".devcontract-service-key"
 	}
 
 	sk, err := crypto.LoadServiceKeyFromFile(keyPath)
@@ -87,7 +87,7 @@ func runServiceKeyExport(cmd *cobra.Command, args []string) error {
 			Category:   ui.ErrFile,
 			Message:    "Service key not found",
 			Cause:      fmt.Sprintf("Expected key at %s", keyPath),
-			Suggestion: "Run 'envsync service-key generate' first",
+			Suggestion: "Run 'devcontract service-key generate' first",
 		})
 		return err
 	}
@@ -116,7 +116,7 @@ func runServiceKeyRegister(cmd *cobra.Command, args []string) error {
 
 	keyPath := serviceKeyOutput
 	if keyPath == "" {
-		keyPath = ".envsync-service-key"
+		keyPath = ".devcontract-service-key"
 	}
 
 	serviceKP, err := loadIdentityFromServiceKey(keyPath)
@@ -163,7 +163,7 @@ func runServiceKeyRegister(cmd *cobra.Command, args []string) error {
 	ui.Code(fmt.Sprintf("  %s", strings.Join(scopes, ", ")))
 	ui.Blank()
 	ui.Line("This key can now authenticate relay pulls in CI with:")
-	ui.Code(fmt.Sprintf("  envsync pull --service-key %s --project %s", keyPath, targetProjectID))
+	ui.Code(fmt.Sprintf("  devcontract pull --service-key %s --project %s", keyPath, targetProjectID))
 	ui.Blank()
 
 	return nil

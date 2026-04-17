@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package sync
 
@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/crypto"
-	"github.com/dantwoashim/Env_sync/internal/discovery"
-	"github.com/dantwoashim/Env_sync/internal/envfile"
-	"github.com/dantwoashim/Env_sync/internal/transport"
+	"github.com/dantwoashim/devcontract/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/discovery"
+	"github.com/dantwoashim/devcontract/internal/envfile"
+	"github.com/dantwoashim/devcontract/internal/transport"
 	"github.com/flynn/noise"
 )
 
@@ -100,7 +100,7 @@ func Push(ctx context.Context, opts PushOptions) (*PushResult, error) {
 	result.PeersFound = len(peers)
 
 	if len(peers) == 0 {
-		return result, fmt.Errorf("no peers found on LAN. Ensure the recipient is running 'envsync pull'")
+		return result, fmt.Errorf("no peers found on LAN. Ensure the recipient is running 'devcontract pull'")
 	}
 
 	// Push to each peer

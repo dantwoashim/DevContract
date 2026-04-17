@@ -1,11 +1,11 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
 import (
 	"fmt"
 
-	"github.com/dantwoashim/Env_sync/internal/peer"
+	"github.com/dantwoashim/devcontract/internal/peer"
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +30,7 @@ func runPeers(cmd *cobra.Command, args []string) error {
 	if len(projects) == 0 {
 		fmt.Println()
 		fmt.Println("  No project members found. Start one with:")
-		fmt.Println("    envsync invite project-member")
+		fmt.Println("    devcontract invite project-member")
 		fmt.Println()
 		return nil
 	}

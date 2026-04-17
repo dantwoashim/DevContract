@@ -1,6 +1,6 @@
 # Roadmap
 
-This is the public roadmap for EnvSync. It focuses on the product work that is visible and useful to outside users.
+This is the public roadmap for DevContract. It focuses on the product work that is visible and useful to outside users.
 
 ## Now
 

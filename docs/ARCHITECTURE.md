@@ -1,6 +1,6 @@
 # Architecture
 
-EnvSync is a repository-centric developer environment tool. The repo contains four main product surfaces:
+DevContract is a repository-centric developer environment tool. The repo contains four main product surfaces:
 
 - `cmd/`: the CLI entrypoints and user-facing workflows.
 - `internal/`: the Go packages that implement contracts, identity, sync, merge, storage, backups, audit, and transport.
@@ -19,20 +19,20 @@ EnvSync is a repository-centric developer environment tool. The repo contains fo
 
 ### Local bootstrap
 
-1. `envsync init` creates local user state and a starter project contract in the caller's repository.
-2. `envsync bootstrap` reads the contract, creates allowed output files, checks runtimes and services, and runs bootstrap steps after trust review.
-3. `envsync doctor` and `envsync guard scan` validate the local machine, repository config, and sensitive text surfaces.
+1. `devcontract init` creates local user state and a starter project contract in the caller's repository.
+2. `devcontract bootstrap` reads the contract, creates allowed output files, checks runtimes and services, and runs bootstrap steps after trust review.
+3. `devcontract doctor` and `devcontract guard scan` validate the local machine, repository config, and sensitive text surfaces.
 
 ### Sync
 
-1. `envsync push` snapshots the current `.env`, resolves revision lineage, and prepares an encrypted payload.
-2. EnvSync first tries trusted LAN peers over Noise-secured transport.
+1. `devcontract push` snapshots the current `.env`, resolves revision lineage, and prepares an encrypted payload.
+2. DevContract first tries trusted LAN peers over Noise-secured transport.
 3. If LAN delivery is unavailable, the client uploads a per-recipient encrypted blob to the relay.
-4. `envsync pull` or the GitHub Action downloads pending relay blobs, verifies signatures, decrypts them locally, and applies the result with the configured merge policy.
+4. `devcontract pull` or the GitHub Action downloads pending relay blobs, verifies signatures, decrypts them locally, and applies the result with the configured merge policy.
 
 ### Revision and backup model
 
-- Local history is stored in the encrypted revision store under the user's EnvSync data directory.
+- Local history is stored in the encrypted revision store under the user's DevContract data directory.
 - Each revision records parent lineage so three-way merge can find a shared ancestor after divergence.
 - Per-peer acknowledgement metadata lets the sender choose a better merge base for each recipient.
 - Encrypted backups are created before apply operations when backup support is enabled.
@@ -57,7 +57,7 @@ The VS Code extension shells out to the CLI rather than re-implementing core log
 This repository intentionally does not commit:
 
 - local `.env` files
-- repo-local `.envsync.toml`
+- repo-local `.devcontract.toml`
 - generated assistant/editor outputs
 - package manager install artifacts
 - compiled binaries or editor build output

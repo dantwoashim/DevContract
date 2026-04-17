@@ -19,7 +19,7 @@ This document describes what this repository supports today and what should stil
 ## Experimental
 
 - generated assistant/editor instruction files and MCP config
-- entitlement and upgrade messaging
+- relay limits messaging
 - any hosted billing story
 
 ## Out of Scope

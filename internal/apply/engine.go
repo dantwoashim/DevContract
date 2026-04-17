@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package apply
 
@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dantwoashim/Env_sync/internal/envfile"
-	"github.com/dantwoashim/Env_sync/internal/fsutil"
-	"github.com/dantwoashim/Env_sync/internal/revision"
-	"github.com/dantwoashim/Env_sync/internal/store"
+	"github.com/dantwoashim/devcontract/internal/envfile"
+	"github.com/dantwoashim/devcontract/internal/fsutil"
+	"github.com/dantwoashim/devcontract/internal/revision"
+	"github.com/dantwoashim/devcontract/internal/store"
 )
 
 type Policy string

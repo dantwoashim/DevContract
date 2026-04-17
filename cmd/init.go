@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -8,15 +8,15 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dantwoashim/Env_sync/internal/config"
-	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/config"
+	"github.com/dantwoashim/devcontract/internal/crypto"
 	"github.com/spf13/cobra"
 )
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize EnvSync for the current project",
-	Long:  "Reads your SSH Ed25519 key, derives the EnvSync identity bundle, writes config, creates a stable project ID, and scaffolds a repo contract.",
+	Short: "Initialize DevContract for the current project",
+	Long:  "Reads your SSH Ed25519 key, derives the DevContract identity bundle, writes config, creates a stable project ID, and scaffolds a repo contract.",
 	RunE:  runInit,
 }
 
@@ -24,7 +24,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	cfg := config.Default()
 
 	fmt.Println()
-	fmt.Printf("  * EnvSync %s\n", Version)
+	fmt.Printf("  * DevContract %s\n", Version)
 	fmt.Println()
 
 	keyPath := cfg.Identity.SSHKeyPath
@@ -62,7 +62,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	cfg.Network.HolePunchEnabled = false
 
 	if err := config.EnsureDirs(); err != nil {
-		return fmt.Errorf("creating EnvSync directories: %w", err)
+		return fmt.Errorf("creating DevContract directories: %w", err)
 	}
 
 	if err := saveConfig(cfg); err != nil {
@@ -91,10 +91,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  - Store:       %s\n", filepath.Join(dataDir, "store"))
 	fmt.Println()
 	if createdContract {
-		fmt.Println("  - Created a starter project contract at .envsync/contract.yaml")
+		fmt.Println("  - Created a starter project contract at .devcontract/contract.yaml")
 	}
 	fmt.Println("  - Initialized with a starter contract.")
-	fmt.Println("  - Run 'envsync bootstrap' after reviewing the contract and replacing any placeholder commands.")
+	fmt.Println("  - Run 'devcontract bootstrap' after reviewing the contract and replacing any placeholder commands.")
 
 	return nil
 }

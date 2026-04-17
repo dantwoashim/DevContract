@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/dantwoashim/Env_sync/internal/apply"
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/apply"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -88,7 +88,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		case bootstrapDryRun:
 			report.Warnings = append(report.Warnings, "shared secret pull skipped in dry-run mode")
 		case cfgErr != nil || projectErr != nil || identityErr != nil:
-			report.Warnings = append(report.Warnings, "shared secret pull skipped because EnvSync identity/project setup is incomplete")
+			report.Warnings = append(report.Warnings, "shared secret pull skipped because DevContract identity/project setup is incomplete")
 		default:
 			backupKey, keyErr := atRestKey(kp)
 			if keyErr != nil {
@@ -119,7 +119,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	}
 
 	if !bootstrapJSON {
-		ui.Header("EnvSync Bootstrap")
+		ui.Header("DevContract Bootstrap")
 	}
 
 	blockingRuntimeMissing := false

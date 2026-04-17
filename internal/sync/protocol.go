@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package sync
 
@@ -9,7 +9,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/crypto"
 )
 
 // MessageType identifies the type of wire protocol message.

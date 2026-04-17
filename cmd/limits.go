@@ -1,25 +1,34 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
 import (
 	"fmt"
 
-	"github.com/dantwoashim/Env_sync/internal/relay"
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/relay"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	"github.com/spf13/cobra"
 )
 
-var upgradeCmd = &cobra.Command{
-	Use:   "upgrade",
+var limitsCmd = &cobra.Command{
+	Use:   "limits",
 	Short: "Show current relay limits",
-	Long:  "Shows the relay tier and usage reported by the current deployment.",
-	RunE:  runUpgrade,
+	Long:  "Shows the relay limits and usage reported by the current deployment.",
+	RunE:  runRelayLimits,
 }
 
 var upgradePlan string
 
-func runUpgrade(cmd *cobra.Command, args []string) error {
+var upgradeCmd = &cobra.Command{
+	Use:        "upgrade",
+	Short:      "Compatibility alias for relay limits",
+	Long:       "Compatibility alias retained for older automation. Use 'devcontract limits' for the truthful relay-limits view.",
+	Hidden:     true,
+	Deprecated: "use 'devcontract limits' instead",
+	RunE:       runRelayLimits,
+}
+
+func runRelayLimits(cmd *cobra.Command, args []string) error {
 	kp, err := loadIdentity()
 	if err != nil {
 		return err
@@ -36,13 +45,13 @@ func runUpgrade(cmd *cobra.Command, args []string) error {
 	}
 
 	client := relay.NewClient(projectRelayURL(project, cfg), kp)
-	status, err := client.GetTierStatus(project.ProjectID)
+	status, err := client.GetLimitsStatus(project.ProjectID)
 	if err != nil {
 		ui.RenderError(ui.ErrRelayUnavailable(err.Error()))
 		return err
 	}
 
-	ui.Header("EnvSync Relay Limits")
+	ui.Header("DevContract Relay Limits")
 
 	table := ui.NewTable("", "Current", "Team", "Enterprise")
 	table.AddRow("Members", fmtUsage(status.Usage.Members, status.Limits.Members), "unlimited", "custom")
@@ -52,7 +61,7 @@ func runUpgrade(cmd *cobra.Command, args []string) error {
 	ui.Blank()
 
 	ui.Line(fmt.Sprintf("Current tier: %s", ui.StyleBold.Render(status.Tier)))
-	ui.Line("This reflects the relay entitlements configured on the current deployment.")
+	ui.Line("This reflects the relay policy configured on the current deployment.")
 	return nil
 }
 
@@ -64,6 +73,8 @@ func fmtUsage(current, limit int) string {
 }
 
 func init() {
-	upgradeCmd.Flags().StringVar(&upgradePlan, "plan", "team", "Retained for compatibility; relay entitlements are configured by the deployment")
+	upgradeCmd.Flags().StringVar(&upgradePlan, "plan", "team", "Compatibility no-op flag retained for older automation")
+	_ = upgradeCmd.Flags().MarkHidden("plan")
+	rootCmd.AddCommand(limitsCmd)
 	rootCmd.AddCommand(upgradeCmd)
 }

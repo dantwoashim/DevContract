@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/peer"
-	"github.com/dantwoashim/Env_sync/internal/relay"
+	"github.com/dantwoashim/devcontract/internal/peer"
+	"github.com/dantwoashim/devcontract/internal/relay"
 	"github.com/spf13/cobra"
 )
 
@@ -116,7 +116,7 @@ func runPeersReconcile(cmd *cobra.Command, args []string) error {
 			fmt.Printf("  + Imported %d relay member(s) into the local registry as pending\n", imported)
 		} else {
 			fmt.Println()
-			fmt.Println("  Run 'envsync peers reconcile --import-pending' to import relay-only members locally as pending")
+			fmt.Println("  Run 'devcontract peers reconcile --import-pending' to import relay-only members locally as pending")
 		}
 		fmt.Println()
 	}

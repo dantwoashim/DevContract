@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -8,14 +8,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/devcontract/internal/config"
 )
 
 func TestEnsureProjectContextRepairsIncompleteConfig(t *testing.T) {
 	root := t.TempDir()
-	configPath := filepath.Join(root, ".envsync.toml")
+	configPath := filepath.Join(root, ".devcontract.toml")
 	initial := strings.Join([]string{
-		"name = \"EnvSync\"",
+		"name = \"DevContract\"",
 		"default_file = \".env\"",
 		"sync_strategy = \"three-way\"",
 		"",
@@ -48,7 +48,7 @@ func TestEnsureProjectContextRepairsIncompleteConfig(t *testing.T) {
 	if ctx.Config.SyncStrategy != "three-way" {
 		t.Fatalf("expected sync strategy to be preserved, got %q", ctx.Config.SyncStrategy)
 	}
-	if ctx.Config.Name != "EnvSync" {
+	if ctx.Config.Name != "DevContract" {
 		t.Fatalf("expected name to be preserved, got %q", ctx.Config.Name)
 	}
 	if ctx.Config.RelayURL != "https://relay.example.com" {
@@ -74,7 +74,7 @@ func TestEnsureProjectContextRepairsIncompleteConfig(t *testing.T) {
 
 func TestLoadProjectContextReportsMissingProjectID(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, ".envsync.toml"), []byte("name = \"EnvSync\"\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".devcontract.toml"), []byte("name = \"DevContract\"\n"), 0600); err != nil {
 		t.Fatalf("write project config: %v", err)
 	}
 

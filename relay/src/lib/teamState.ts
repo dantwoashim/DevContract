@@ -149,12 +149,12 @@ export async function appendTeamAuditEvent(env: Env, teamId: string, event: Audi
 
 export async function resolveInviteTeam(env: Env, tokenHash: string): Promise<string | null> {
     const cacheKey = inviteRefKey(tokenHash);
-    const cached = (await env.ENVSYNC_DATA.get(cacheKey)) || '';
+    const cached = (await env.DEVCONTRACT_DATA.get(cacheKey)) || '';
     if (cached) {
         return cached;
     }
 
-    const legacy = await env.ENVSYNC_DATA.get(`invite:${tokenHash}`);
+    const legacy = await env.DEVCONTRACT_DATA.get(`invite:${tokenHash}`);
     if (!legacy) {
         return null;
     }
@@ -166,7 +166,7 @@ export async function resolveInviteTeam(env: Env, tokenHash: string): Promise<st
     }
 
     const ttlSeconds = ttlFromUnix(parsed.expires_at || 0, 7 * 24 * 3600);
-    await env.ENVSYNC_DATA.put(cacheKey, teamId, { expirationTtl: ttlSeconds });
+    await env.DEVCONTRACT_DATA.put(cacheKey, teamId, { expirationTtl: ttlSeconds });
     return teamId;
 }
 
@@ -176,7 +176,7 @@ function controlPlane(env: Env, teamId: string): DurableObjectStub {
 }
 
 function teamHeaders(teamId: string): HeadersInit {
-    return { 'X-EnvSync-Team-ID': teamId };
+    return { 'X-DevContract-Team-ID': teamId };
 }
 
 function inviteRefKey(tokenHash: string): string {

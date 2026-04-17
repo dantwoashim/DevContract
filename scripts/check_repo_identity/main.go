@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package main
 
@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	canonicalModule = "github.com/dantwoashim/Env_sync"
-	legacyModule    = "github.com/envsync/envsync"
-	repoSlug        = "dantwoashim/Env_sync"
+	canonicalModule = "github.com/dantwoashim/devcontract"
+	legacyModule    = "github.com/devcontract/devcontract"
+	repoSlug        = "dantwoashim/devcontract"
 )
 
 func main() {
@@ -30,7 +30,7 @@ func main() {
 	assertContains(filepath.Join(root, "scripts", "install.ps1"), repoSlug)
 	assertContains(filepath.Join(root, "extension", "package.json"), "https://github.com/"+repoSlug)
 	assertContains(filepath.Join(root, ".goreleaser.yml"), "owner: dantwoashim")
-	assertContains(filepath.Join(root, ".goreleaser.yml"), "name: Env_sync")
+	assertContains(filepath.Join(root, ".goreleaser.yml"), "name: devcontract")
 
 	legacyHits := scanForLegacy(root)
 	if len(legacyHits) > 0 {
@@ -83,7 +83,7 @@ func scanForLegacy(root string) []string {
 		for scanner.Scan() {
 			line++
 			text := scanner.Text()
-			if strings.Contains(text, legacyModule) || strings.Contains(text, "envsync/envsync") {
+			if strings.Contains(text, legacyModule) || strings.Contains(text, "devcontract/devcontract") {
 				hits = append(hits, fmt.Sprintf("%s:%d", rel, line))
 			}
 		}

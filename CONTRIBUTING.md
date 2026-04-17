@@ -1,4 +1,4 @@
-# Contributing to EnvSync
+# Contributing to DevContract
 
 Thanks for contributing.
 
@@ -18,10 +18,10 @@ Supported local toolchain outside the devcontainer:
 - Bash-compatible shell for repo hygiene and packaging scripts
 
 ```bash
-git clone https://github.com/dantwoashim/Env_sync.git
-cd Env_sync
+git clone https://github.com/dantwoashim/devcontract.git
+cd devcontract
 
-go build -o envsync ./
+go build -o devcontract ./
 go test ./...
 ```
 
@@ -51,8 +51,8 @@ make verify
 Do not commit:
 
 - local `.env` files
-- `.envsync.toml`
-- `.envsync/`
+- `.devcontract.toml`
+- `.devcontract/`
 - editor or assistant-specific generated outputs
 - `node_modules`, `.wrangler`, `.gocache`, extension build output, or binaries
 

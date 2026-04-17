@@ -35,7 +35,7 @@ teamRoutes.post('/:team/bootstrap', async (c) => {
         contract_hash: (body.contract_hash || '').trim() || undefined,
     });
     if (response.ok) {
-        await c.env.ENVSYNC_DATA.put(`pubkey:${founderInput.fingerprint}`, founderInput.public_key);
+        await c.env.DEVCONTRACT_DATA.put(`pubkey:${founderInput.fingerprint}`, founderInput.public_key);
         logRelayEvent('team.bootstrapped', {
             request_id: c.get('requestId' as never),
             team_id: teamId,
@@ -114,7 +114,7 @@ teamRoutes.get('/:team/limits', async (c) => {
     const stats = await loadTeamStats(c.env, teamId);
     const humanMembers = team.members.filter((member) => member.principal_type !== 'service_principal').length;
     const servicePrincipals = team.members.length - humanMembers;
-    const updatedAt = await c.env.ENVSYNC_DATA.get(`team:${teamId}:tier_updated_at`) || '';
+    const updatedAt = await c.env.DEVCONTRACT_DATA.get(`team:${teamId}:tier_updated_at`) || '';
 
     return c.json({
         team_id: teamId,
@@ -153,7 +153,7 @@ teamRoutes.put('/:team/members/:user', async (c) => {
         member_limit: limits.maxMembers,
     });
     if (response.ok) {
-        await c.env.ENVSYNC_DATA.put(`pubkey:${memberInput.fingerprint}`, memberInput.public_key);
+        await c.env.DEVCONTRACT_DATA.put(`pubkey:${memberInput.fingerprint}`, memberInput.public_key);
         logRelayEvent('team.member_upserted', {
             request_id: c.get('requestId' as never),
             team_id: teamId,
@@ -244,9 +244,9 @@ teamRoutes.post('/:team/rotate-self', async (c) => {
         proof: body.proof,
     });
     if (response.ok) {
-        await c.env.ENVSYNC_DATA.put(`pubkey:${memberInput.fingerprint}`, memberInput.public_key);
+        await c.env.DEVCONTRACT_DATA.put(`pubkey:${memberInput.fingerprint}`, memberInput.public_key);
         if (actorFingerprint !== memberInput.fingerprint) {
-            await c.env.ENVSYNC_DATA.delete(`pubkey:${actorFingerprint}`);
+            await c.env.DEVCONTRACT_DATA.delete(`pubkey:${actorFingerprint}`);
         }
         logRelayEvent('team.member_rotated', {
             request_id: c.get('requestId' as never),

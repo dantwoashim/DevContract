@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package main
 
@@ -11,10 +11,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/crypto"
-	"github.com/dantwoashim/Env_sync/internal/relay"
-	"github.com/dantwoashim/Env_sync/internal/revision"
-	envsync "github.com/dantwoashim/Env_sync/internal/sync"
+	"github.com/dantwoashim/devcontract/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/relay"
+	"github.com/dantwoashim/devcontract/internal/revision"
+	devcontract "github.com/dantwoashim/devcontract/internal/sync"
 )
 
 func main() {
@@ -24,7 +24,7 @@ func main() {
 	var fileName string
 
 	flag.StringVar(&relayURL, "relay-url", "http://127.0.0.1:8787", "Relay base URL")
-	flag.StringVar(&serviceKeyPath, "service-key", "", "Path to the EnvSync service key")
+	flag.StringVar(&serviceKeyPath, "service-key", "", "Path to the DevContract service key")
 	flag.StringVar(&projectID, "project", "smoke-team", "Project ID to seed")
 	flag.StringVar(&fileName, "file", ".env.test", "Filename to attach to the relay blob")
 	flag.Parse()
@@ -81,8 +81,8 @@ func main() {
 	}
 
 	plaintext := []byte("API_KEY=abc123\nMULTILINE=\"line1\\nline2\"\n")
-	payload := envsync.NewEnvPayload(fileName, plaintext, time.Now().UnixMilli(), "", revision.RevisionID(plaintext))
-	encodedPayload, err := envsync.EncodeEnvPayload(payload)
+	payload := devcontract.NewEnvPayload(fileName, plaintext, time.Now().UnixMilli(), "", revision.RevisionID(plaintext))
+	encodedPayload, err := devcontract.EncodeEnvPayload(payload)
 	if err != nil {
 		exitf("encode payload: %v", err)
 	}

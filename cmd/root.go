@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -25,12 +25,15 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "envsync",
+	Use:   "devcontract",
 	Short: "Secure project environment sync and setup",
-	Long: `EnvSync helps developers share local .env files and standardize repository setup.
+	Long: `DevContract helps developers share local .env files and standardize repository setup.
 
 It uses existing SSH keys for identity, encrypts shared values end to end,
-and keeps local setup instructions in a repo-owned contract.`,
+and keeps local setup instructions in a repo-owned contract.
+
+DevContract is for development environments. It is not a production secrets manager
+or a hosted control plane by itself.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {

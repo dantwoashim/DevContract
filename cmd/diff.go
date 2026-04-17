@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dantwoashim/Env_sync/internal/envfile"
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/envfile"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -16,8 +16,8 @@ var diffCmd = &cobra.Command{
 	Short: "Show differences in .env files",
 	Long: `Compares the current .env file against the last synced version from the store.
 
-  envsync diff                  Diff current .env vs last backup
-  envsync diff --against other  Diff current .env vs another file`,
+  devcontract diff                  Diff current .env vs last backup
+  devcontract diff --against other  Diff current .env vs another file`,
 	RunE: runDiff,
 }
 
@@ -86,13 +86,13 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	ui.Header("EnvSync Diff")
+	ui.Header("DevContract Diff")
 
 	if compareEnv == nil {
 		ui.Line(fmt.Sprintf("  File: %s (%d variables)", targetFile, currentEnv.VariableCount()))
 		ui.Blank()
 		ui.Line(ui.StyleDim.Render("  No previous version to compare against."))
-		ui.Line(ui.StyleDim.Render("  Run 'envsync backup' to create a baseline."))
+		ui.Line(ui.StyleDim.Render("  Run 'devcontract backup' to create a baseline."))
 		ui.Blank()
 		return nil
 	}

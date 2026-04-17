@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
-const SERVER_NAME = 'envsync-repo-docs';
+const SERVER_NAME = 'devcontract-repo-docs';
 const SERVER_VERSION = '1.0.0';
 
 const DOCS = [
@@ -161,7 +161,7 @@ async function dispatch(method, params) {
                 tools: [
                     {
                         name: 'list_repo_docs',
-                        description: 'List the EnvSync repository documents exposed by this MCP server.',
+                        description: 'List the DevContract repository documents exposed by this MCP server.',
                         inputSchema: {
                             type: 'object',
                             properties: {},

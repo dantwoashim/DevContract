@@ -19,7 +19,7 @@ export const options = {
     },
 };
 
-const BASE_URL = __ENV.RELAY_URL || 'https://relay.envsync.dev';
+const BASE_URL = __ENV.RELAY_URL || 'https://relay.devcontract.dev';
 
 export default function () {
     const teamId = `load-test-team-${__VU}`;
@@ -40,10 +40,10 @@ export default function () {
         {
             headers: {
                 'Content-Type': 'application/octet-stream',
-                'X-EnvSync-Sender': `SHA256:sender-${__VU}`,
-                'X-EnvSync-Recipient': `SHA256:recipient-${__VU}`,
-                'X-EnvSync-EphemeralKey': 'dGVzdGtleQ==',
-                'X-EnvSync-Filename': '.env',
+                'X-DevContract-Sender': `SHA256:sender-${__VU}`,
+                'X-DevContract-Recipient': `SHA256:recipient-${__VU}`,
+                'X-DevContract-EphemeralKey': 'dGVzdGtleQ==',
+                'X-DevContract-Filename': '.env',
             },
         },
     );
@@ -79,7 +79,7 @@ export default function () {
 
     // 5. Delete blob
     http.del(`${BASE_URL}/relay/${teamId}/${blobId}`, null, {
-        headers: { 'X-EnvSync-Fingerprint': `SHA256:recipient-${__VU}` },
+        headers: { 'X-DevContract-Fingerprint': `SHA256:recipient-${__VU}` },
     });
 
     // 6. Team member CRUD

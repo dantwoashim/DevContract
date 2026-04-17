@@ -1,6 +1,6 @@
 # Release and Reproducibility Notes
 
-EnvSync ships source archives directly from git, not from an arbitrary working directory.
+DevContract ships source archives directly from git, not from an arbitrary working directory.
 
 ## Source Packaging
 
@@ -12,8 +12,8 @@ bash ./scripts/package_source.sh dist/source "${VERSION}"
 
 This script creates:
 
-- `envsync-${VERSION}-source.tar.gz`
-- `envsync-${VERSION}-source.zip`
+- `devcontract-${VERSION}-source.tar.gz`
+- `devcontract-${VERSION}-source.zip`
 
 Both archives are generated with `git archive`, which keeps the source bundle aligned to the tagged commit.
 

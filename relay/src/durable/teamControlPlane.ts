@@ -88,7 +88,7 @@ export async function handleTeamCoordinatorRequest(state: DurableObjectState, en
     }
 
     if (!teamId) {
-        return json({ error: 'missing_team_id', message: 'X-EnvSync-Team-ID header is required' }, 400);
+        return json({ error: 'missing_team_id', message: 'X-DevContract-Team-ID header is required' }, 400);
     }
 
     if (request.method === 'GET' && url.pathname === '/team') {
@@ -618,7 +618,7 @@ async function loadTeam(state: DurableObjectState, env: Env, teamId: string): Pr
         return normalizeTeam(existing);
     }
 
-    const legacy = await env.ENVSYNC_DATA.get(`team:${teamId}`);
+    const legacy = await env.DEVCONTRACT_DATA.get(`team:${teamId}`);
     if (!legacy) {
         return null;
     }
@@ -638,7 +638,7 @@ async function loadInvite(state: DurableObjectState, env: Env, teamId: string, t
         return normalizeInvite(existing);
     }
 
-    const legacy = await env.ENVSYNC_DATA.get(`invite:${tokenHash}`);
+    const legacy = await env.DEVCONTRACT_DATA.get(`invite:${tokenHash}`);
     if (!legacy) {
         return null;
     }
@@ -655,7 +655,7 @@ async function loadInvite(state: DurableObjectState, env: Env, teamId: string, t
 async function saveInvite(state: DurableObjectState, env: Env, teamId: string, invite: Invite): Promise<void> {
     const normalized = normalizeInvite(invite);
     await state.storage.put(inviteStorageKey(normalized.token_hash), normalized);
-    await env.ENVSYNC_DATA.put(inviteRefKey(normalized.token_hash), teamId, {
+    await env.DEVCONTRACT_DATA.put(inviteRefKey(normalized.token_hash), teamId, {
         expirationTtl: inviteRefTTL(normalized),
     });
 }
@@ -707,7 +707,7 @@ async function recordCounterEvent(state: DurableObjectState, event: string, delt
 }
 
 function resolveTeamID(request: Request, url: URL): string {
-    return (request.headers.get('X-EnvSync-Team-ID') || url.searchParams.get('team_id') || '').trim();
+    return (request.headers.get('X-DevContract-Team-ID') || url.searchParams.get('team_id') || '').trim();
 }
 
 function pendingKey(recipientFingerprint: string): string {

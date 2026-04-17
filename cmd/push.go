@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/audit"
-	"github.com/dantwoashim/Env_sync/internal/crypto"
-	"github.com/dantwoashim/Env_sync/internal/relay"
-	envsync "github.com/dantwoashim/Env_sync/internal/sync"
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/audit"
+	"github.com/dantwoashim/devcontract/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/relay"
+	devcontract "github.com/dantwoashim/devcontract/internal/sync"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -36,7 +36,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 			Category:   ui.ErrConfig,
 			Message:    "Config not found or corrupted",
 			Cause:      err.Error(),
-			Suggestion: "Run 'envsync init' first",
+			Suggestion: "Run 'devcontract init' first",
 		})
 		return fmt.Errorf("config: %w", err)
 	}
@@ -46,9 +46,9 @@ func runPush(cmd *cobra.Command, args []string) error {
 			Category:   ui.ErrConfig,
 			Message:    "Not initialized",
 			Cause:      "No identity configured",
-			Suggestion: "Run 'envsync init' to set up your identity",
+			Suggestion: "Run 'devcontract init' to set up your identity",
 		})
-		return fmt.Errorf("not initialized: run 'envsync init' first")
+		return fmt.Errorf("not initialized: run 'devcontract init' first")
 	}
 
 	project, err := requireProjectContext()
@@ -70,9 +70,9 @@ func runPush(cmd *cobra.Command, args []string) error {
 
 	relayClient := relay.NewClient(projectRelayURL(project, cfg), kp)
 
-	ui.Header("EnvSync Push")
+	ui.Header("DevContract Push")
 
-	result := envsync.Orchestrate(context.Background(), envsync.OrchestratorOptions{
+	result := devcontract.Orchestrate(context.Background(), devcontract.OrchestratorOptions{
 		EnvFilePath:         targetFile,
 		TeamID:              project.ProjectID,
 		KeyPair:             kp,

@@ -36,7 +36,7 @@ const TIER_CONFIG: Record<TierName, TierLimits> = {
 };
 
 export async function getTeamTier(env: Env, teamId: string): Promise<TierName> {
-    const tier = await env.ENVSYNC_DATA.get(`team:${teamId}:tier`);
+    const tier = await env.DEVCONTRACT_DATA.get(`team:${teamId}:tier`);
     if (tier === 'team' || tier === 'enterprise') {
         return tier;
     }

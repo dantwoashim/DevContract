@@ -1,7 +1,7 @@
-// EnvSync Relay — Shared Types
+// DevContract Relay — Shared Types
 
 export interface Env {
-    ENVSYNC_DATA: KVNamespace;
+    DEVCONTRACT_DATA: KVNamespace;
     TEAM_COORDINATOR: DurableObjectNamespace;
     RATE_LIMIT_COORDINATOR: DurableObjectNamespace;
     ENVIRONMENT: string;

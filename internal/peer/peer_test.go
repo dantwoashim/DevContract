@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package peer
 
@@ -132,7 +132,7 @@ func TestRegistryPersistence(t *testing.T) {
 }
 
 func TestRegistryNonexistent(t *testing.T) {
-	registry := &Registry{baseDir: filepath.Join(os.TempDir(), "envsync_test_nonexistent")}
+	registry := &Registry{baseDir: filepath.Join(os.TempDir(), "devcontract_test_nonexistent")}
 	defer os.RemoveAll(registry.baseDir)
 
 	_, err := registry.LoadTeam("no-such-team")

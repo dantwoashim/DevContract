@@ -1,12 +1,12 @@
 # FAQ
 
-## What problem does EnvSync solve?
+## What problem does DevContract solve?
 
 It makes local repository setup more reproducible and less dependent on copying `.env` files, chat messages, and tribal knowledge.
 
 ## When should I use it?
 
-Use EnvSync when:
+Use DevContract when:
 
 - a repository has shared local environment variables
 - onboarding takes too long
@@ -15,7 +15,7 @@ Use EnvSync when:
 
 ## When should I not use it?
 
-Do not use EnvSync as a replacement for a production-grade secrets manager, runtime secret injection platform, or infrastructure vault.
+Do not use DevContract as a replacement for a production-grade secrets manager, runtime secret injection platform, or infrastructure vault.
 
 ## Does the relay see plaintext values?
 
@@ -32,9 +32,9 @@ Human users authenticate with Ed25519 SSH keys. Transport identity is derived fr
 
 ## What happens on conflicts?
 
-EnvSync uses the local revision store and a three-way merge policy. If it cannot merge safely, it stops and asks for manual intervention instead of guessing.
+DevContract uses the local revision store and a three-way merge policy. If it cannot merge safely, it stops and asks for manual intervention instead of guessing.
 
-## Does EnvSync keep history?
+## Does DevContract keep history?
 
 Yes. Local revisions and backups are stored encrypted at rest so you can inspect history, roll back, or recover from bad syncs.
 

@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/config"
-	"github.com/dantwoashim/Env_sync/internal/crypto"
-	"github.com/dantwoashim/Env_sync/internal/peer"
+	"github.com/dantwoashim/devcontract/internal/config"
+	"github.com/dantwoashim/devcontract/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/peer"
 )
 
 type projectContext struct {
@@ -44,7 +44,7 @@ func requireProjectContext() (*projectContext, error) {
 	if err == nil {
 		return ctx, nil
 	}
-	return nil, fmt.Errorf("%w\n\n  Run 'envsync init' in the project root first", err)
+	return nil, fmt.Errorf("%w\n\n  Run 'devcontract init' in the project root first", err)
 }
 
 func ensureProjectContext(cfg *config.Config) (*projectContext, error) {
@@ -136,7 +136,7 @@ func displayMemberLabel(cfg *config.Config, kp *crypto.KeyPair) string {
 		}
 		return kp.Fingerprint
 	}
-	return "envsync-user"
+	return "devcontract-user"
 }
 
 func ed25519PublicKeyBase64(kp *crypto.KeyPair) string {
@@ -160,7 +160,7 @@ func defaultTeam(name, projectID, creatorFingerprint string) *peer.Team {
 func mustGetwd() string {
 	wd, err := os.Getwd()
 	if err != nil {
-		return "envsync-project"
+		return "devcontract-project"
 	}
 	return wd
 }

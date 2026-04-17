@@ -58,11 +58,11 @@ describe('Relay Blob Operations', () => {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/octet-stream',
-                'X-EnvSync-Sender': sender.fingerprint,
-                'X-EnvSync-Recipient': recipient.fingerprint,
-                'X-EnvSync-EphemeralKey': transportKey(33),
-                'X-EnvSync-Filename': '.env',
-                'X-EnvSync-Signature': Buffer.from('test-signature').toString('base64'),
+                'X-DevContract-Sender': sender.fingerprint,
+                'X-DevContract-Recipient': recipient.fingerprint,
+                'X-DevContract-EphemeralKey': transportKey(33),
+                'X-DevContract-Filename': '.env',
+                'X-DevContract-Signature': Buffer.from('test-signature').toString('base64'),
             },
             body: ENCRYPTED_BODY,
         });
@@ -80,7 +80,7 @@ describe('Relay Blob Operations', () => {
         const res = await signedFetch(worker, recipient, `/relay/${TEAM_ID}/${BLOB_ID}`);
         expect(res.status).toBe(200);
         expect(await res.text()).toBe(ENCRYPTED_BODY.toString());
-        expect(res.headers.get('X-EnvSync-Sender')).toBe(sender.fingerprint);
+        expect(res.headers.get('X-DevContract-Sender')).toBe(sender.fingerprint);
     });
 
     it('should delete a blob as the intended recipient', async () => {
@@ -137,11 +137,11 @@ describe('Relay Blob Operations', () => {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/octet-stream',
-                'X-EnvSync-Sender': sender.fingerprint,
-                'X-EnvSync-Recipient': recipient.fingerprint,
-                'X-EnvSync-EphemeralKey': transportKey(55),
-                'X-EnvSync-Filename': '.env',
-                'X-EnvSync-Signature': Buffer.from('test-signature').toString('base64'),
+                'X-DevContract-Sender': sender.fingerprint,
+                'X-DevContract-Recipient': recipient.fingerprint,
+                'X-DevContract-EphemeralKey': transportKey(55),
+                'X-DevContract-Filename': '.env',
+                'X-DevContract-Signature': Buffer.from('test-signature').toString('base64'),
             },
             body: Buffer.from('BROKEN_BLOB'),
         });
@@ -172,11 +172,11 @@ describe('Relay Blob Operations', () => {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/octet-stream',
-                'X-EnvSync-Sender': servicePrincipal.fingerprint,
-                'X-EnvSync-Recipient': recipient.fingerprint,
-                'X-EnvSync-EphemeralKey': transportKey(66),
-                'X-EnvSync-Filename': '.env',
-                'X-EnvSync-Signature': Buffer.from('test-signature').toString('base64'),
+                'X-DevContract-Sender': servicePrincipal.fingerprint,
+                'X-DevContract-Recipient': recipient.fingerprint,
+                'X-DevContract-EphemeralKey': transportKey(66),
+                'X-DevContract-Filename': '.env',
+                'X-DevContract-Signature': Buffer.from('test-signature').toString('base64'),
             },
             body: Buffer.from('SERVICE_PRINCIPAL_UPLOAD'),
         });
@@ -186,7 +186,7 @@ describe('Relay Blob Operations', () => {
     it('should fail closed when the global rate-limit coordinator is unavailable', async () => {
         const res = await signedFetch(worker, sender, `/relay/${TEAM_ID}/pending?for=${encodeURIComponent(sender.fingerprint)}`, {
             headers: {
-                'X-EnvSync-Test-RateLimit-Failure': 'global',
+                'X-DevContract-Test-RateLimit-Failure': 'global',
             },
         });
         expect(res.status).toBe(503);
@@ -200,12 +200,12 @@ describe('Relay Blob Operations', () => {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/octet-stream',
-                'X-EnvSync-Sender': sender.fingerprint,
-                'X-EnvSync-Recipient': recipient.fingerprint,
-                'X-EnvSync-EphemeralKey': transportKey(77),
-                'X-EnvSync-Filename': '.env',
-                'X-EnvSync-Signature': Buffer.from('test-signature').toString('base64'),
-                'X-EnvSync-Test-RateLimit-Failure': 'team',
+                'X-DevContract-Sender': sender.fingerprint,
+                'X-DevContract-Recipient': recipient.fingerprint,
+                'X-DevContract-EphemeralKey': transportKey(77),
+                'X-DevContract-Filename': '.env',
+                'X-DevContract-Signature': Buffer.from('test-signature').toString('base64'),
+                'X-DevContract-Test-RateLimit-Failure': 'team',
             },
             body: Buffer.from('FAIL_CLOSED_UPLOAD'),
         });

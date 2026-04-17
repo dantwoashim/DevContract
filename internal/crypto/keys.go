@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package crypto
 
@@ -113,7 +113,7 @@ func ParseSSHKeyWithPassphrase(data, passphrase []byte, keyPath string) (*KeyPai
 	// Extract Ed25519 key
 	ed25519Key, ok := rawKey.(*ed25519.PrivateKey)
 	if !ok {
-		return nil, fmt.Errorf("SSH key is not Ed25519 (got %T). EnvSync requires Ed25519 keys.\n"+
+		return nil, fmt.Errorf("SSH key is not Ed25519 (got %T). DevContract requires Ed25519 keys.\n"+
 			"  Generate one: ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519", rawKey)
 	}
 

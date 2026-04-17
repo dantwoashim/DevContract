@@ -12,11 +12,11 @@ export function getWorkspaceFolder(): string | undefined {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
-export async function execEnvSync(
+export async function execDevContract(
     args: string[],
     options: { cwd?: string; timeout?: number } = {},
 ): Promise<string> {
-    const result = await execEnvSyncCapture(args, options);
+    const result = await execDevContractCapture(args, options);
     if (result.exitCode === 0) {
         return (result.stdout || result.stderr).trim();
     }
@@ -25,10 +25,10 @@ export async function execEnvSync(
     if (detail) {
         throw new Error(detail);
     }
-    throw new Error(`envsync exited with status ${result.exitCode}`);
+    throw new Error(`devcontract exited with status ${result.exitCode}`);
 }
 
-export async function execEnvSyncCapture(
+export async function execDevContractCapture(
     args: string[],
     options: { cwd?: string; timeout?: number } = {},
 ): Promise<ExecCapture> {
@@ -38,7 +38,7 @@ export async function execEnvSyncCapture(
     }
 
     return new Promise<ExecCapture>((resolve, reject) => {
-        execFile('envsync', args, {
+        execFile('devcontract', args, {
             cwd,
             timeout: options.timeout ?? 15000,
             windowsHide: true,
@@ -69,7 +69,7 @@ export async function execEnvSyncCapture(
     });
 }
 
-export function createEnvSyncTerminal(name: string, args: string[], cwd: string) {
+export function createDevContractTerminal(name: string, args: string[], cwd: string) {
     const terminal = vscode.window.createTerminal({ name, cwd });
     terminal.show();
     terminal.sendText(renderCommand(args));

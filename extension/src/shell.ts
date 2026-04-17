@@ -1,5 +1,5 @@
 export function renderCommand(args: string[]): string {
-    return ['envsync', ...args.map(quoteArg)].join(' ');
+    return ['devcontract', ...args.map(quoteArg)].join(' ');
 }
 
 export function quoteArg(value: string): string {

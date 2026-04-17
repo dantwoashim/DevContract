@@ -1,10 +1,15 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package guard
 
 import (
+	"archive/tar"
+	"archive/zip"
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -13,7 +18,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/dantwoashim/Env_sync/internal/contract"
+	"github.com/dantwoashim/devcontract/internal/contract"
 )
 
 type Severity string
@@ -47,12 +52,12 @@ type SkippedFile struct {
 }
 
 type Report struct {
-	FilesScanned        int            `json:"files_scanned"`
-	FilesSkipped        int            `json:"files_skipped"`
-	FindingsByCategory  map[string]int `json:"findings_by_category,omitempty"`
-	SkippedByReason     map[string]int `json:"skipped_by_reason,omitempty"`
-	Findings            []Finding      `json:"findings"`
-	Skipped             []SkippedFile  `json:"skipped,omitempty"`
+	FilesScanned       int            `json:"files_scanned"`
+	FilesSkipped       int            `json:"files_skipped"`
+	FindingsByCategory map[string]int `json:"findings_by_category,omitempty"`
+	SkippedByReason    map[string]int `json:"skipped_by_reason,omitempty"`
+	Findings           []Finding      `json:"findings"`
+	Skipped            []SkippedFile  `json:"skipped,omitempty"`
 }
 
 func (r Report) HasSeverity(min Severity) bool {
@@ -69,6 +74,13 @@ type Options struct {
 	Paths         []string
 	BlockPatterns []string
 }
+
+const (
+	textChunkWindowBytes = 256 * 1024
+	archiveEntryLimit    = 128
+	archiveReadLimit     = 8 << 20
+	archiveEntryBytes    = 1 << 20
+)
 
 func ScanContractAware(root string, spec *contract.Contract, paths []string) (Report, error) {
 	opts := Options{Root: root, Paths: paths}
@@ -295,23 +307,7 @@ func scanFile(path, root string, rules []Rule) ([]Finding, *SkippedFile, error) 
 	}
 	normalizedPath := filepath.ToSlash(relPath)
 
-	if !utf8.Valid(data) {
-		return nil, &SkippedFile{Path: normalizedPath, Reason: "binary_or_non_utf8"}, nil
-	}
-
-	segments := buildSegments(data)
-	var findings []Finding
-	for _, segment := range segments {
-		segmentFindings, err := scanSegment(normalizedPath, segment.text, segment.startLine, rules)
-		if err != nil {
-			return nil, nil, err
-		}
-		findings = append(findings, segmentFindings...)
-	}
-	if len(data) > 1<<20 {
-		return findings, &SkippedFile{Path: normalizedPath, Reason: "large_text_scanned_in_chunks"}, nil
-	}
-	return findings, nil, nil
+	return scanContent(normalizedPath, path, data, rules, true)
 }
 
 type scanSegmentText struct {
@@ -324,9 +320,8 @@ func buildSegments(data []byte) []scanSegmentText {
 		return []scanSegmentText{{startLine: 1, text: string(data)}}
 	}
 
-	const windowSize = 256 * 1024
-	headEnd := min(len(data), windowSize)
-	tailStart := max(0, len(data)-windowSize)
+	headEnd := min(len(data), textChunkWindowBytes)
+	tailStart := max(0, len(data)-textChunkWindowBytes)
 	if tailStart <= headEnd {
 		return []scanSegmentText{{startLine: 1, text: string(data)}}
 	}
@@ -363,6 +358,299 @@ func scanSegment(path, text string, startLine int, rules []Rule) ([]Finding, err
 	return findings, scanner.Err()
 }
 
+func scanContent(reportPath, sourcePath string, data []byte, rules []Rule, allowArchive bool) ([]Finding, *SkippedFile, error) {
+	if utf8.Valid(data) {
+		findings, err := scanSegments(reportPath, buildSegments(data), rules)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(data) > 1<<20 {
+			return findings, &SkippedFile{Path: reportPath, Reason: "large_text_scanned_in_chunks"}, nil
+		}
+		return findings, nil, nil
+	}
+
+	if allowArchive {
+		if archiveKind := detectArchiveKind(sourcePath, data); archiveKind != "" {
+			findings, partial, err := scanArchive(reportPath, archiveKind, data, rules)
+			if err == nil {
+				findings = dedupeFindings(findings)
+				if partial {
+					return findings, &SkippedFile{Path: reportPath, Reason: "archive_partial_scan"}, nil
+				}
+				return findings, nil, nil
+			}
+		}
+	}
+
+	segments := buildBinarySegments(data)
+	if len(segments) == 0 {
+		return nil, &SkippedFile{Path: reportPath, Reason: "binary_or_non_utf8"}, nil
+	}
+
+	findings, err := scanSegments(reportPath, segments, rules)
+	if err != nil {
+		return nil, nil, err
+	}
+	return dedupeFindings(findings), &SkippedFile{Path: reportPath, Reason: "binary_scanned_with_heuristics"}, nil
+}
+
+func scanSegments(path string, segments []scanSegmentText, rules []Rule) ([]Finding, error) {
+	var findings []Finding
+	for _, segment := range segments {
+		segmentFindings, err := scanSegment(path, segment.text, segment.startLine, rules)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, segmentFindings...)
+	}
+	return dedupeFindings(findings), nil
+}
+
+func buildBinarySegments(data []byte) []scanSegmentText {
+	samples := buildBinarySamples(data)
+	segments := make([]scanSegmentText, 0, len(samples))
+	for _, sample := range samples {
+		text := strings.TrimSpace(binarySampleText(sample))
+		if text == "" {
+			continue
+		}
+		segments = append(segments, scanSegmentText{
+			startLine: 1,
+			text:      text,
+		})
+	}
+	return segments
+}
+
+func buildBinarySamples(data []byte) [][]byte {
+	if len(data) <= 1<<20 {
+		return [][]byte{data}
+	}
+	headEnd := min(len(data), textChunkWindowBytes)
+	tailStart := max(0, len(data)-textChunkWindowBytes)
+	if tailStart <= headEnd {
+		return [][]byte{data}
+	}
+	return [][]byte{
+		data[:headEnd],
+		data[tailStart:],
+	}
+}
+
+func binarySampleText(data []byte) string {
+	var builder strings.Builder
+	builder.Grow(len(data))
+	for _, b := range data {
+		switch {
+		case b == '\n' || b == '\r':
+			builder.WriteByte('\n')
+		case b == '\t':
+			builder.WriteByte(' ')
+		case b >= 32 && b <= 126:
+			builder.WriteByte(b)
+		default:
+			builder.WriteByte('\n')
+		}
+	}
+	return builder.String()
+}
+
+func detectArchiveKind(path string, data []byte) string {
+	lowerPath := strings.ToLower(filepath.Base(path))
+	switch {
+	case len(data) >= 4 && bytes.Equal(data[:4], []byte("PK\x03\x04")):
+		return "zip"
+	case strings.HasSuffix(lowerPath, ".zip"), strings.HasSuffix(lowerPath, ".jar"), strings.HasSuffix(lowerPath, ".vsix"):
+		return "zip"
+	case len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b:
+		return "gzip"
+	case strings.HasSuffix(lowerPath, ".tgz"), strings.HasSuffix(lowerPath, ".tar.gz"), strings.HasSuffix(lowerPath, ".gz"):
+		return "gzip"
+	case len(data) >= 262 && string(data[257:262]) == "ustar":
+		return "tar"
+	case strings.HasSuffix(lowerPath, ".tar"):
+		return "tar"
+	default:
+		return ""
+	}
+}
+
+func scanArchive(reportPath, kind string, data []byte, rules []Rule) ([]Finding, bool, error) {
+	switch kind {
+	case "zip":
+		return scanZipArchive(reportPath, data, rules)
+	case "gzip":
+		return scanGzipArchive(reportPath, data, rules)
+	case "tar":
+		return scanTarArchive(reportPath, bytes.NewReader(data), rules)
+	default:
+		return nil, false, fmt.Errorf("unsupported archive kind %q", kind)
+	}
+}
+
+func scanZipArchive(reportPath string, data []byte, rules []Rule) ([]Finding, bool, error) {
+	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil, false, err
+	}
+
+	var (
+		findings   []Finding
+		totalBytes int64
+		partial    bool
+	)
+
+	for index, file := range reader.File {
+		if index >= archiveEntryLimit {
+			partial = true
+			break
+		}
+		if file.FileInfo().IsDir() {
+			continue
+		}
+		if file.UncompressedSize64 > archiveEntryBytes {
+			partial = true
+			continue
+		}
+		if totalBytes+int64(file.UncompressedSize64) > archiveReadLimit {
+			partial = true
+			break
+		}
+
+		rc, err := file.Open()
+		if err != nil {
+			partial = true
+			continue
+		}
+		entryData, readErr := io.ReadAll(io.LimitReader(rc, archiveEntryBytes+1))
+		_ = rc.Close()
+		if readErr != nil {
+			partial = true
+			continue
+		}
+		if len(entryData) > archiveEntryBytes {
+			partial = true
+			continue
+		}
+		totalBytes += int64(len(entryData))
+
+		entryFindings, skipped, err := scanContent(reportPath+"!"+filepath.ToSlash(file.Name), file.Name, entryData, rules, false)
+		if err != nil {
+			return nil, false, err
+		}
+		findings = append(findings, entryFindings...)
+		if skipped != nil {
+			partial = true
+		}
+	}
+
+	return findings, partial, nil
+}
+
+func scanGzipArchive(reportPath string, data []byte, rules []Rule) ([]Finding, bool, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, false, err
+	}
+	defer reader.Close()
+
+	payload, err := io.ReadAll(io.LimitReader(reader, archiveReadLimit+1))
+	if err != nil {
+		return nil, false, err
+	}
+	if len(payload) > archiveReadLimit {
+		payload = payload[:archiveReadLimit]
+	}
+
+	if detectArchiveKind(strings.TrimSuffix(reportPath, filepath.Ext(reportPath)), payload) == "tar" {
+		findings, partial, err := scanTarArchive(reportPath, bytes.NewReader(payload), rules)
+		return findings, partial || len(payload) >= archiveReadLimit, err
+	}
+
+	findings, skipped, err := scanContent(strings.TrimSuffix(reportPath, ".gz"), strings.TrimSuffix(reportPath, ".gz"), payload, rules, false)
+	if err != nil {
+		return nil, false, err
+	}
+	return findings, skipped != nil || len(payload) >= archiveReadLimit, nil
+}
+
+func scanTarArchive(reportPath string, reader io.Reader, rules []Rule) ([]Finding, bool, error) {
+	tr := tar.NewReader(reader)
+	var (
+		findings   []Finding
+		totalBytes int64
+		entries    int
+		partial    bool
+	)
+
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		if header.Typeflag == tar.TypeDir {
+			continue
+		}
+		entries++
+		if entries > archiveEntryLimit {
+			partial = true
+			break
+		}
+		if header.Size > archiveEntryBytes {
+			partial = true
+			continue
+		}
+		if totalBytes+header.Size > archiveReadLimit {
+			partial = true
+			break
+		}
+
+		entryData, err := io.ReadAll(io.LimitReader(tr, archiveEntryBytes+1))
+		if err != nil {
+			partial = true
+			continue
+		}
+		if len(entryData) > archiveEntryBytes {
+			partial = true
+			continue
+		}
+		totalBytes += int64(len(entryData))
+
+		entryFindings, skipped, err := scanContent(reportPath+"!"+filepath.ToSlash(header.Name), header.Name, entryData, rules, false)
+		if err != nil {
+			return nil, false, err
+		}
+		findings = append(findings, entryFindings...)
+		if skipped != nil {
+			partial = true
+		}
+	}
+
+	return findings, partial, nil
+}
+
+func dedupeFindings(findings []Finding) []Finding {
+	if len(findings) < 2 {
+		return findings
+	}
+
+	seen := make(map[string]struct{}, len(findings))
+	deduped := make([]Finding, 0, len(findings))
+	for _, finding := range findings {
+		key := fmt.Sprintf("%s|%d|%s|%s", finding.Path, finding.Line, finding.Rule, finding.Match)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		deduped = append(deduped, finding)
+	}
+	return deduped
+}
+
 func truncateMatch(value string) string {
 	value = strings.TrimSpace(value)
 	if len(value) <= 24 {
@@ -383,7 +671,7 @@ func severityRank(severity Severity) int {
 }
 
 func defaultScanPaths() []string {
-	return []string{"WORKSPACE.md", ".github/copilot-instructions.md", ".cursor", ".claude", ".vscode/mcp.json", "mcp.json", ".envsync/generated", "prompts", "prompt", "logs"}
+	return []string{"WORKSPACE.md", ".github/copilot-instructions.md", ".cursor", ".claude", ".vscode/mcp.json", "mcp.json", ".devcontract/generated", "prompts", "prompt", "logs"}
 }
 
 func contractScanPaths(spec *contract.Contract) []string {
@@ -432,7 +720,7 @@ func skipDir(name string) bool {
 func shouldScanFile(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
-	case ".md", ".mdx", ".txt", ".json", ".jsonc", ".yaml", ".yml", ".toml", ".env", ".log", ".prompt", ".mdc", ".ini", ".cfg":
+	case ".md", ".mdx", ".txt", ".json", ".jsonc", ".yaml", ".yml", ".toml", ".env", ".log", ".prompt", ".mdc", ".ini", ".cfg", ".zip", ".jar", ".gz", ".tgz", ".tar", ".vsix":
 		return true
 	}
 	base := strings.ToLower(filepath.Base(path))

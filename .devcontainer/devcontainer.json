@@ -1,5 +1,5 @@
 {
-  "name": "EnvSync",
+  "name": "DevContract",
   "image": "mcr.microsoft.com/devcontainers/go:1-1.25-bookworm",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {

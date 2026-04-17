@@ -1,14 +1,16 @@
 import * as vscode from 'vscode';
 import { registerCommands } from './commands';
-import { execEnvSync, getWorkspaceFolder } from './cli';
+import { execDevContract, getWorkspaceFolder } from './cli';
 import { createStatusBar, setStatusBarState } from './statusbar';
 import { registerSidebar } from './sidebar';
+import { assessCliVersion } from './versionStatus';
 
 export async function activate(context: vscode.ExtensionContext) {
     registerCommands(context);
 
     const statusBarItem = createStatusBar(context);
-    registerSidebar(context);
+    const extensionVersion = String(context.extension.packageJSON.version || '');
+    registerSidebar(context, extensionVersion);
 
     const refresh = async () => {
         const workspace = getWorkspaceFolder();
@@ -16,25 +18,36 @@ export async function activate(context: vscode.ExtensionContext) {
             setStatusBarState(statusBarItem, {
                 icon: 'warning',
                 text: 'No Workspace',
-                tooltip: 'Open a repository to use EnvSync.',
+                tooltip: 'Open a repository to use DevContract.',
             });
             return;
         }
 
         try {
-            await execEnvSync(['version', '--short'], { cwd: workspace, timeout: 5000 });
+            const cliVersion = await execDevContract(['version', '--short'], { cwd: workspace, timeout: 5000 });
+            const assessment = assessCliVersion(cliVersion, extensionVersion);
+            if (assessment.kind === 'outdated') {
+                setStatusBarState(statusBarItem, {
+                    icon: 'warning',
+                    text: 'CLI Outdated',
+                    tooltip: `DevContract CLI ${assessment.version} is older than this extension expects (${assessment.minimumVersion}+). Click for update guidance.`,
+                    command: 'devcontract.installHelp',
+                });
+                return;
+            }
+
             setStatusBarState(statusBarItem, {
                 icon: 'check',
                 text: 'Ready',
-                tooltip: 'EnvSync CLI detected. Open the EnvSync activity view for onboarding actions.',
-                command: 'envsync.showQuickPick',
+                tooltip: `DevContract CLI ${assessment.version || 'detected'}. Open the DevContract activity view for onboarding actions.`,
+                command: 'devcontract.showQuickPick',
             });
         } catch (error) {
             setStatusBarState(statusBarItem, {
                 icon: 'warning',
                 text: 'CLI Missing',
-                tooltip: `EnvSync CLI not available: ${error instanceof Error ? error.message : String(error)}. Click for install guidance.`,
-                command: 'envsync.installHelp',
+                tooltip: `DevContract CLI not available: ${error instanceof Error ? error.message : String(error)}. Click for install guidance.`,
+                command: 'devcontract.installHelp',
             });
         }
     };

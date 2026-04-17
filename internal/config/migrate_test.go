@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package config
 
@@ -67,7 +67,7 @@ func TestLoadConfigMigratesLegacyGitHubUsername(t *testing.T) {
 		`fingerprint = "SHA256:test"`,
 		"",
 		"[relay]",
-		`url = "https://relay.envsync.dev"`,
+		`url = "https://relay.devcontract.dev"`,
 		`timeout_seconds = 10`,
 		"",
 		"[network]",

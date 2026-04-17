@@ -12,9 +12,9 @@ test('quoteArg escapes whitespace and quotes', () => {
     assert.equal(quoteArg('say "hi"'), '"say \\"hi\\""');
 });
 
-test('renderCommand prefixes envsync and quotes arguments as needed', () => {
+test('renderCommand prefixes devcontract and quotes arguments as needed', () => {
     assert.equal(
         renderCommand(['pull', '--file', 'my file.env']),
-        'envsync pull --file "my file.env"',
+        'devcontract pull --file "my file.env"',
     );
 });

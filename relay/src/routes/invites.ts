@@ -100,7 +100,7 @@ inviteRoutes.post('/:hash/join', async (c) => {
         ...body,
     });
     if (response.ok) {
-        await c.env.ENVSYNC_DATA.put(`pubkey:${body.fingerprint}`, body.public_key);
+        await c.env.DEVCONTRACT_DATA.put(`pubkey:${body.fingerprint}`, body.public_key);
         logRelayEvent('invite.joined', {
             request_id: c.get('requestId' as never),
             team_id: teamId,

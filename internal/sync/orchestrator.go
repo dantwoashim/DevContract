@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package sync
 
@@ -10,12 +10,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/crypto"
-	"github.com/dantwoashim/Env_sync/internal/discovery"
-	"github.com/dantwoashim/Env_sync/internal/peer"
-	"github.com/dantwoashim/Env_sync/internal/relay"
-	"github.com/dantwoashim/Env_sync/internal/revision"
-	"github.com/dantwoashim/Env_sync/internal/transport"
+	"github.com/dantwoashim/devcontract/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/discovery"
+	"github.com/dantwoashim/devcontract/internal/peer"
+	"github.com/dantwoashim/devcontract/internal/relay"
+	"github.com/dantwoashim/devcontract/internal/revision"
+	"github.com/dantwoashim/devcontract/internal/transport"
 	"github.com/flynn/noise"
 )
 

@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package peer
 
@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/crypto"
 )
 
 // TrustState represents the trust level of a peer.

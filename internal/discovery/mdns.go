@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package discovery
 
@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	// ServiceName is the mDNS service name for EnvSync peers.
-	ServiceName = "_envsync._tcp"
+	// ServiceName is the mDNS service name for DevContract peers.
+	ServiceName = "_devcontract._tcp"
 
 	// DefaultMDNSTimeout is how long to scan for peers.
 	DefaultMDNSTimeout = 2 * time.Second
@@ -36,7 +36,7 @@ type Peer struct {
 	// TeamID is the team this peer belongs to.
 	TeamID string
 
-	// Version is the EnvSync version the peer is running.
+	// Version is the DevContract version the peer is running.
 	Version string
 }
 
@@ -58,7 +58,7 @@ func NewAdvertiser(port int, fingerprint, teamID, version string) (*Advertiser, 
 
 	hostname, _ := os.Hostname()
 	if hostname == "" {
-		hostname = "envsync"
+		hostname = "devcontract"
 	}
 
 	// Create mDNS service entry
@@ -96,7 +96,7 @@ func (a *Advertiser) Stop() {
 	}
 }
 
-// Discover scans the LAN for EnvSync peers.
+// Discover scans the LAN for DevContract peers.
 // Returns all discovered peers within the timeout.
 func Discover(ctx context.Context, timeout time.Duration, ownFingerprint string) ([]Peer, error) {
 	if timeout == 0 {

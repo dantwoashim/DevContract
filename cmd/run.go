@@ -1,11 +1,11 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
 import (
 	"fmt"
 
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -39,7 +39,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("run target %q is not defined in %s", targetName, ctx.Path)
 	}
 
-	ui.Header("EnvSync Run")
+	ui.Header("DevContract Run")
 	ui.Line(fmt.Sprintf("  Target: %s", targetName))
 	ui.Line(fmt.Sprintf("  Command: %s", renderShellCommand("", target.Command)))
 	ui.Blank()

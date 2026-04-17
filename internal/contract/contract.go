@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package contract
 
@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dantwoashim/Env_sync/internal/config"
+	"github.com/dantwoashim/devcontract/internal/config"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -249,7 +249,7 @@ func Default(projectName string) *Contract {
 			Steps: []BootstrapStep{
 				{
 					Name:        "install-dependencies",
-					Run:         "echo \"Define your install command in .envsync/contract.yaml\"",
+					Run:         "echo \"Define your install command in .devcontract/contract.yaml\"",
 					Description: "Replace this placeholder with your real setup step",
 				},
 			},
@@ -265,7 +265,7 @@ func Default(projectName string) *Contract {
 		Run: RunConfig{
 			Default: "dev",
 			Targets: map[string]RunTarget{
-				"dev": {Command: "echo \"Define your default dev command in .envsync/contract.yaml\"", Description: "Start the default development workflow"},
+				"dev": {Command: "echo \"Define your default dev command in .devcontract/contract.yaml\"", Description: "Start the default development workflow"},
 			},
 		},
 	}
@@ -513,11 +513,11 @@ func defaultAgentOutput(name string) string {
 	case "assistant":
 		return "WORKSPACE.md"
 	case "cursor":
-		return filepath.Join(".cursor", "rules", "envsync.mdc")
+		return filepath.Join(".cursor", "rules", "devcontract.mdc")
 	case "claude":
-		return filepath.Join(".claude", "ENVSYNC.md")
+		return filepath.Join(".claude", "DEVCONTRACT.md")
 	default:
-		return filepath.Join(".envsync", "generated", name+".md")
+		return filepath.Join(".devcontract", "generated", name+".md")
 	}
 }
 
@@ -526,13 +526,13 @@ func defaultMCPOutput(name string) string {
 	case "copilot":
 		return filepath.Join(".vscode", "mcp.json")
 	case "assistant":
-		return filepath.Join(".envsync", "generated", "assistant.mcp.json")
+		return filepath.Join(".devcontract", "generated", "assistant.mcp.json")
 	case "cursor":
 		return filepath.Join(".cursor", "mcp.json")
 	case "claude":
 		return filepath.Join(".claude", "mcp.json")
 	default:
-		return filepath.Join(".envsync", "generated", name+".mcp.json")
+		return filepath.Join(".devcontract", "generated", name+".mcp.json")
 	}
 }
 
@@ -547,7 +547,7 @@ func firstToken(value string) string {
 func slugify(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	if value == "" {
-		return "envsync-project"
+		return "devcontract-project"
 	}
 	var b strings.Builder
 	lastDash := false
@@ -565,7 +565,7 @@ func slugify(value string) string {
 	}
 	result := strings.Trim(b.String(), "-")
 	if result == "" {
-		return "envsync-project"
+		return "devcontract-project"
 	}
 	return result
 }
@@ -573,7 +573,7 @@ func slugify(value string) string {
 func mustWd() string {
 	wd, err := os.Getwd()
 	if err != nil {
-		return "envsync-project"
+		return "devcontract-project"
 	}
 	return wd
 }

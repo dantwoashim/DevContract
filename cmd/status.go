@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/audit"
-	"github.com/dantwoashim/Env_sync/internal/peer"
-	"github.com/dantwoashim/Env_sync/internal/relay"
-	"github.com/dantwoashim/Env_sync/internal/store"
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/audit"
+	"github.com/dantwoashim/devcontract/internal/peer"
+	"github.com/dantwoashim/devcontract/internal/relay"
+	"github.com/dantwoashim/devcontract/internal/store"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +34,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	project, projectErr := loadProjectContext()
 
-	ui.Header("EnvSync Status")
+	ui.Header("DevContract Status")
 
 	short := kp.Fingerprint
 	if len(short) > 30 {
@@ -64,7 +64,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		ui.Line(fmt.Sprintf("  File:       %s", project.Config.DefaultFile))
 		ui.Line(fmt.Sprintf("  Strategy:   %s", project.Config.SyncStrategy))
 	} else {
-		ui.Line("  Project:    (not configured — run 'envsync init')")
+		ui.Line("  Project:    (not configured — run 'devcontract init')")
 	}
 	ui.Blank()
 
@@ -73,7 +73,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		pending, err := client.ListPending(teamID)
 		if err == nil {
 			if len(pending) > 0 {
-				ui.Warning(fmt.Sprintf("  %d pending blobs on relay — run 'envsync pull'", len(pending)))
+				ui.Warning(fmt.Sprintf("  %d pending blobs on relay — run 'devcontract pull'", len(pending)))
 			} else {
 				ui.Success("  No pending blobs on relay")
 			}

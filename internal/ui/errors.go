@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package ui
 
@@ -62,9 +62,9 @@ func ErrNoSSHKey(path string) StructuredError {
 func ErrNotInitialized() StructuredError {
 	return StructuredError{
 		Category:   ErrConfig,
-		Message:    "EnvSync not initialized",
-		Cause:      "No config file found. Run 'envsync init' first.",
-		Suggestion: "envsync init",
+		Message:    "DevContract not initialized",
+		Cause:      "No config file found. Run 'devcontract init' first.",
+		Suggestion: "devcontract init",
 	}
 }
 
@@ -73,8 +73,8 @@ func ErrNoPeers() StructuredError {
 	return StructuredError{
 		Category:   ErrNetwork,
 		Message:    "No peers found on LAN",
-		Cause:      "mDNS discovery found no EnvSync instances. The recipient may not be running 'envsync pull'.",
-		Suggestion: "Ask another project member to run: envsync pull",
+		Cause:      "mDNS discovery found no DevContract instances. The recipient may not be running 'devcontract pull'.",
+		Suggestion: "Ask another project member to run: devcontract pull",
 	}
 }
 

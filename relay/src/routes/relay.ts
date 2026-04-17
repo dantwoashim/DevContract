@@ -28,10 +28,10 @@ relayRoutes.put('/:team/:blob', async (c) => {
         }, 413);
     }
 
-    const senderFingerprint = c.req.header('X-EnvSync-Sender') || '';
-    const recipientFingerprint = c.req.header('X-EnvSync-Recipient') || '';
+    const senderFingerprint = c.req.header('X-DevContract-Sender') || '';
+    const recipientFingerprint = c.req.header('X-DevContract-Recipient') || '';
     if (!senderFingerprint || !recipientFingerprint) {
-        return c.json({ error: 'missing_headers', message: 'X-EnvSync-Sender and X-EnvSync-Recipient headers required' }, 400);
+        return c.json({ error: 'missing_headers', message: 'X-DevContract-Sender and X-DevContract-Recipient headers required' }, 400);
     }
     if (actorFingerprint !== senderFingerprint) {
         return c.json({ error: 'forbidden', message: 'Authenticated fingerprint must match sender' }, 403);
@@ -65,17 +65,17 @@ relayRoutes.put('/:team/:blob', async (c) => {
         team_id: teamId,
         sender_fingerprint: senderFingerprint,
         recipient_fingerprint: recipientFingerprint,
-        ephemeral_public_key: c.req.header('X-EnvSync-EphemeralKey') || '',
-        sender_signature: c.req.header('X-EnvSync-Signature') || '',
+        ephemeral_public_key: c.req.header('X-DevContract-EphemeralKey') || '',
+        sender_signature: c.req.header('X-DevContract-Signature') || '',
         size: body.byteLength,
         uploaded_at: Math.floor(Date.now() / 1000),
         expires_at: Math.floor(Date.now() / 1000) + ttlSeconds,
-        filename: c.req.header('X-EnvSync-Filename') || '.env',
+        filename: c.req.header('X-DevContract-Filename') || '.env',
         status: 'pending',
     };
 
-    await c.env.ENVSYNC_DATA.put(`blob:${teamId}:${blobId}:data`, body, { expirationTtl: ttlSeconds });
-    await c.env.ENVSYNC_DATA.put(`blob:${teamId}:${blobId}:meta`, JSON.stringify(metadata), { expirationTtl: ttlSeconds });
+    await c.env.DEVCONTRACT_DATA.put(`blob:${teamId}:${blobId}:data`, body, { expirationTtl: ttlSeconds });
+    await c.env.DEVCONTRACT_DATA.put(`blob:${teamId}:${blobId}:meta`, JSON.stringify(metadata), { expirationTtl: ttlSeconds });
 
     await enqueuePending(c.env, teamId, recipientFingerprint, blobId);
     await recordTeamEvent(c.env, teamId, 'relay.blob_stored');
@@ -118,7 +118,7 @@ relayRoutes.get('/:team/pending', async (c) => {
 
     const blobs: BlobMetadata[] = [];
     for (const blobId of pendingList) {
-        const metaData = await c.env.ENVSYNC_DATA.get(`blob:${teamId}:${blobId}:meta`);
+        const metaData = await c.env.DEVCONTRACT_DATA.get(`blob:${teamId}:${blobId}:meta`);
         if (metaData) {
             const blob = JSON.parse(metaData) as BlobMetadata;
             if (blob.status === 'pending' || !blob.status) {
@@ -145,13 +145,13 @@ relayRoutes.get('/:team/rejected', async (c) => {
         return c.json({ error: 'forbidden', message: 'Only project administrators can view rejected relay blobs' }, 403);
     }
 
-    const listed = await c.env.ENVSYNC_DATA.list({ prefix: `blob:${teamId}:`, limit: 1000 });
+    const listed = await c.env.DEVCONTRACT_DATA.list({ prefix: `blob:${teamId}:`, limit: 1000 });
     const rejected: BlobMetadata[] = [];
     for (const entry of listed.keys) {
         if (!entry.name.endsWith(':meta')) {
             continue;
         }
-        const raw = await c.env.ENVSYNC_DATA.get(entry.name);
+        const raw = await c.env.DEVCONTRACT_DATA.get(entry.name);
         if (!raw) {
             continue;
         }
@@ -169,7 +169,7 @@ relayRoutes.get('/:team/:blob', async (c) => {
     const blobId = c.req.param('blob');
     const actorFingerprint = c.get('fingerprint' as never) as string;
 
-    const metaData = await c.env.ENVSYNC_DATA.get(`blob:${teamId}:${blobId}:meta`);
+    const metaData = await c.env.DEVCONTRACT_DATA.get(`blob:${teamId}:${blobId}:meta`);
     if (!metaData) {
         return c.json({ error: 'not_found', message: 'Blob not found or expired' }, 404);
     }
@@ -187,7 +187,7 @@ relayRoutes.get('/:team/:blob', async (c) => {
         return c.json({ error: 'gone', message: `Blob is no longer pending (${metadata.status})` }, 410);
     }
 
-    const data = await c.env.ENVSYNC_DATA.get(`blob:${teamId}:${blobId}:data`, 'arrayBuffer');
+    const data = await c.env.DEVCONTRACT_DATA.get(`blob:${teamId}:${blobId}:data`, 'arrayBuffer');
     if (!data) {
         return c.json({ error: 'not_found', message: 'Blob data not found' }, 404);
     }
@@ -206,11 +206,11 @@ relayRoutes.get('/:team/:blob', async (c) => {
     return new Response(data, {
         headers: {
             'Content-Type': 'application/octet-stream',
-            'X-EnvSync-Sender': metadata.sender_fingerprint,
-            'X-EnvSync-EphemeralKey': metadata.ephemeral_public_key,
-            'X-EnvSync-Filename': metadata.filename,
-            'X-EnvSync-UploadedAt': String(metadata.uploaded_at),
-            'X-EnvSync-Signature': metadata.sender_signature,
+            'X-DevContract-Sender': metadata.sender_fingerprint,
+            'X-DevContract-EphemeralKey': metadata.ephemeral_public_key,
+            'X-DevContract-Filename': metadata.filename,
+            'X-DevContract-UploadedAt': String(metadata.uploaded_at),
+            'X-DevContract-Signature': metadata.sender_signature,
         },
     });
 });
@@ -220,7 +220,7 @@ relayRoutes.delete('/:team/:blob', async (c) => {
     const blobId = c.req.param('blob');
     const actorFingerprint = c.get('fingerprint' as never) as string;
 
-    const metaData = await c.env.ENVSYNC_DATA.get(`blob:${teamId}:${blobId}:meta`);
+    const metaData = await c.env.DEVCONTRACT_DATA.get(`blob:${teamId}:${blobId}:meta`);
     if (!metaData) {
         return c.json({ status: 'deleted' });
     }
@@ -235,8 +235,8 @@ relayRoutes.delete('/:team/:blob', async (c) => {
         return c.json({ error: 'forbidden', message: 'This principal may not delete relay blobs' }, 403);
     }
 
-    await c.env.ENVSYNC_DATA.delete(`blob:${teamId}:${blobId}:data`);
-    await c.env.ENVSYNC_DATA.delete(`blob:${teamId}:${blobId}:meta`);
+    await c.env.DEVCONTRACT_DATA.delete(`blob:${teamId}:${blobId}:data`);
+    await c.env.DEVCONTRACT_DATA.delete(`blob:${teamId}:${blobId}:meta`);
 
     await removePending(c.env, teamId, actorFingerprint, blobId);
     await recordTeamEvent(c.env, teamId, 'relay.blob_deleted');
@@ -265,7 +265,7 @@ relayRoutes.post('/:team/:blob/reject', async (c) => {
     const actorFingerprint = c.get('fingerprint' as never) as string;
     const body = await c.req.json<{ reason?: string }>();
 
-    const metaData = await c.env.ENVSYNC_DATA.get(`blob:${teamId}:${blobId}:meta`);
+    const metaData = await c.env.DEVCONTRACT_DATA.get(`blob:${teamId}:${blobId}:meta`);
     if (!metaData) {
         return c.json({ error: 'not_found', message: 'Blob not found or expired' }, 404);
     }
@@ -284,8 +284,8 @@ relayRoutes.post('/:team/:blob/reject', async (c) => {
     metadata.status = 'rejected_client';
     metadata.failure_reason = (body.reason || 'client rejected blob').slice(0, 512);
     metadata.rejected_at = Math.floor(Date.now() / 1000);
-    await c.env.ENVSYNC_DATA.delete(`blob:${teamId}:${blobId}:data`);
-    await c.env.ENVSYNC_DATA.put(`blob:${teamId}:${blobId}:meta`, JSON.stringify(metadata), { expirationTtl: 7 * 24 * 3600 });
+    await c.env.DEVCONTRACT_DATA.delete(`blob:${teamId}:${blobId}:data`);
+    await c.env.DEVCONTRACT_DATA.put(`blob:${teamId}:${blobId}:meta`, JSON.stringify(metadata), { expirationTtl: 7 * 24 * 3600 });
     await removePending(c.env, teamId, actorFingerprint, blobId);
     await recordTeamEvent(c.env, teamId, 'relay.blob_rejected');
     await appendTeamAuditEvent(c.env, teamId, {

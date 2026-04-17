@@ -1,11 +1,11 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
 import (
 	"fmt"
 
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -50,7 +50,7 @@ func runRestore(cmd *cobra.Command, args []string) error {
 	versions, err := vStore.List(project.ProjectID)
 	if err != nil || len(versions) == 0 {
 		ui.Header("Restore")
-		ui.Line("No backups found. Run 'envsync backup' first.")
+		ui.Line("No backups found. Run 'devcontract backup' first.")
 		ui.Blank()
 		return nil
 	}

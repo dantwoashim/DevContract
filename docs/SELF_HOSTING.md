@@ -1,6 +1,6 @@
 # Self-Hosting
 
-EnvSync can use a self-hosted relay instead of the default hosted endpoint.
+DevContract can use a self-hosted relay instead of the default hosted endpoint.
 
 ## What You Are Hosting
 
@@ -31,7 +31,7 @@ http://127.0.0.1:8787/health
 
 The worker expects:
 
-- one KV namespace bound as `ENVSYNC_DATA`
+- one KV namespace bound as `DEVCONTRACT_DATA`
 - one Durable Object binding named `TEAM_COORDINATOR`
 - one Durable Object binding named `RATE_LIMIT_COORDINATOR`
 

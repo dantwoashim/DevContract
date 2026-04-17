@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package store
 
@@ -234,7 +234,7 @@ func TestSaveLeavesNoTempFiles(t *testing.T) {
 		t.Fatalf("readdir: %v", err)
 	}
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".envsync-") {
+		if strings.HasPrefix(entry.Name(), ".devcontract-") {
 			t.Fatalf("temporary file %s was left behind", entry.Name())
 		}
 	}

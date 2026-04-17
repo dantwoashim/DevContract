@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package crypto
 
@@ -27,7 +27,7 @@ func TestServiceKeyGenerateAndExport(t *testing.T) {
 	if len(privPEM) == 0 {
 		t.Fatal("empty private PEM")
 	}
-	if !bytes.Contains(privPEM, []byte("ENVSYNC SERVICE KEY")) {
+	if !bytes.Contains(privPEM, []byte("DEVCONTRACT SERVICE KEY")) {
 		t.Error("private PEM missing type header")
 	}
 
@@ -35,7 +35,7 @@ func TestServiceKeyGenerateAndExport(t *testing.T) {
 	if len(pubPEM) == 0 {
 		t.Fatal("empty public PEM")
 	}
-	if !bytes.Contains(pubPEM, []byte("ENVSYNC SERVICE PUBLIC KEY")) {
+	if !bytes.Contains(pubPEM, []byte("DEVCONTRACT SERVICE PUBLIC KEY")) {
 		t.Error("public PEM missing type header")
 	}
 }

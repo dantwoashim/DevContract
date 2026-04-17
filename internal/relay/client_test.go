@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package relay
 
@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/crypto"
 )
 
 func TestListPendingSignsPathWithoutQueryString(t *testing.T) {

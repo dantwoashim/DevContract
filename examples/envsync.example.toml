@@ -1,5 +1,5 @@
-# Example local project config for EnvSync.
-# Copy to .envsync.toml in your own repository and adjust values.
+# Example local project config for DevContract.
+# Copy to .devcontract.toml in your own repository and adjust values.
 
 config_version = 1
 project_id = "replace-with-your-project-id"

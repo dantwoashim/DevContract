@@ -7,7 +7,7 @@ export const healthRoutes = new Hono<{ Bindings: Env }>();
 healthRoutes.get('/', async (c) => {
     return c.json({
         status: 'ok',
-        service: 'envsync-relay',
+        service: 'devcontract-relay',
         version: '1.0.0',
         environment: c.env.ENVIRONMENT,
         timestamp: new Date().toISOString(),
@@ -17,14 +17,14 @@ healthRoutes.get('/', async (c) => {
 healthRoutes.get('/live', async (c) => {
     return c.json({
         status: 'live',
-        service: 'envsync-relay',
+        service: 'devcontract-relay',
         timestamp: new Date().toISOString(),
     });
 });
 
 healthRoutes.get('/ready', async (c) => {
     try {
-        await c.env.ENVSYNC_DATA.get('healthcheck:ready');
+        await c.env.DEVCONTRACT_DATA.get('healthcheck:ready');
         const stats = await loadTeamStats(c.env, 'health');
         const rateLimitCoordinator = c.env.RATE_LIMIT_COORDINATOR.get(c.env.RATE_LIMIT_COORDINATOR.idFromName('global'));
         const rateLimitResponse = await rateLimitCoordinator.fetch('https://ratelimit/check', {
@@ -41,7 +41,7 @@ healthRoutes.get('/ready', async (c) => {
         }
         return c.json({
             status: 'ready',
-            service: 'envsync-relay',
+            service: 'devcontract-relay',
             dependencies: {
                 kv: 'ok',
                 team_coordinator: 'ok',
@@ -53,7 +53,7 @@ healthRoutes.get('/ready', async (c) => {
     } catch (error) {
         return c.json({
             status: 'not_ready',
-            service: 'envsync-relay',
+            service: 'devcontract-relay',
             message: error instanceof Error ? error.message : 'KV binding unavailable',
             timestamp: new Date().toISOString(),
         }, 503);

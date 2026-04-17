@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -10,19 +10,19 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dantwoashim/Env_sync/internal/audit"
-	"github.com/dantwoashim/Env_sync/internal/crypto"
-	"github.com/dantwoashim/Env_sync/internal/peer"
-	"github.com/dantwoashim/Env_sync/internal/relay"
-	"github.com/dantwoashim/Env_sync/internal/store"
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/audit"
+	"github.com/dantwoashim/devcontract/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/peer"
+	"github.com/dantwoashim/devcontract/internal/relay"
+	"github.com/dantwoashim/devcontract/internal/store"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	"github.com/spf13/cobra"
 )
 
 var keyRotateCmd = &cobra.Command{
 	Use:   "key-rotate",
 	Short: "Rotate your identity after an SSH key change",
-	Long: `Rotate your EnvSync identity when you move to a different Ed25519 SSH key.
+	Long: `Rotate your DevContract identity when you move to a different Ed25519 SSH key.
 
 This command:
   1. loads the previous and replacement SSH keys
@@ -44,7 +44,7 @@ func runKeyRotate(cmd *cobra.Command, args []string) error {
 	}
 
 	if cfg.Identity.Fingerprint == "" {
-		return fmt.Errorf("no existing identity found\n\n  Run 'envsync init' first")
+		return fmt.Errorf("no existing identity found\n\n  Run 'devcontract init' first")
 	}
 
 	currentKeyPath := cfg.Identity.SSHKeyPath

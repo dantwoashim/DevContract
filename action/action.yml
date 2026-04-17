@@ -1,6 +1,6 @@
-name: 'EnvSync - Bootstrap Shared Env'
-description: 'Pull shared repo secrets with EnvSync and inject them into GitHub Actions'
-author: 'EnvSync'
+name: 'DevContract - Bootstrap Shared Env'
+description: 'Pull shared repo secrets with DevContract and inject them into GitHub Actions'
+author: 'DevContract'
 
 branding:
   icon: 'lock'
@@ -8,14 +8,14 @@ branding:
 
 inputs:
   version:
-    description: 'EnvSync CLI version to install (default: latest release tag)'
+    description: 'DevContract CLI version to install (default: latest release tag)'
     required: false
     default: 'latest'
   service_key:
-    description: 'Base64-encoded service key (from ENVSYNC_SERVICE_KEY secret)'
+    description: 'Base64-encoded service key (from DEVCONTRACT_SERVICE_KEY secret)'
     required: true
   team_id:
-    description: 'EnvSync project or team ID'
+    description: 'DevContract project or team ID'
     required: true
   env_file:
     description: 'Target .env file to pull'
@@ -24,7 +24,7 @@ inputs:
   relay_url:
     description: 'Relay server URL'
     required: false
-    default: 'https://relay.envsync.dev'
+    default: 'https://relay.devcontract.dev'
   mask_values:
     description: 'Mask secret values in logs'
     required: false
@@ -45,35 +45,35 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Install EnvSync
+    - name: Install DevContract
       shell: bash
       run: |
-        if command -v envsync >/dev/null 2>&1; then
-          echo "Using existing EnvSync from PATH"
+        if command -v devcontract >/dev/null 2>&1; then
+          echo "Using existing DevContract from PATH"
         else
           bash "${{ github.action_path }}/../scripts/install.sh" \
             --version "${{ inputs.version }}" \
             --install-dir "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
         fi
-        echo "EnvSync installed: $(envsync version --short 2>/dev/null || echo 'unknown')"
+        echo "DevContract installed: $(devcontract version --short 2>/dev/null || echo 'unknown')"
 
     - name: Import service key
       shell: bash
       env:
-        ENVSYNC_SERVICE_KEY: ${{ inputs.service_key }}
+        DEVCONTRACT_SERVICE_KEY: ${{ inputs.service_key }}
       run: |
-        echo "$ENVSYNC_SERVICE_KEY" | base64 -d > /tmp/envsync-service-key
-        chmod 600 /tmp/envsync-service-key
+        echo "$DEVCONTRACT_SERVICE_KEY" | base64 -d > /tmp/devcontract-service-key
+        chmod 600 /tmp/devcontract-service-key
 
     - name: Pull shared environment
       id: pull
       shell: bash
       run: |
-        PULL_REPORT="$RUNNER_TEMP/envsync-pull.json"
+        PULL_REPORT="$RUNNER_TEMP/devcontract-pull.json"
         set +e
-        envsync pull \
-          --service-key /tmp/envsync-service-key \
+        devcontract pull \
+          --service-key /tmp/devcontract-service-key \
           --project "${{ inputs.team_id }}" \
           --file "${{ inputs.env_file }}" \
           --relay "${{ inputs.relay_url }}" \
@@ -109,10 +109,10 @@ runs:
 
         if [ "$STATUS" -ne 0 ]; then
           if [ "${{ inputs.soft_fail }}" = "true" ]; then
-            echo "::warning::EnvSync pull failed but soft_fail=true. Check service key, relay access, and project membership."
+            echo "::warning::DevContract pull failed but soft_fail=true. Check service key, relay access, and project membership."
             exit 0
           fi
-          echo "::error::EnvSync pull failed."
+          echo "::error::DevContract pull failed."
           if [ -f "$PULL_REPORT" ]; then
             cat "$PULL_REPORT"
           fi
@@ -137,7 +137,7 @@ runs:
           MASK_FLAG="--mask-values"
         fi
 
-        envsync env export \
+        devcontract env export \
           --source "$ENV_FILE" \
           --format github-actions \
           --write "$GITHUB_ENV" \
@@ -153,5 +153,5 @@ runs:
       shell: bash
       if: always()
       run: |
-        rm -f /tmp/envsync-service-key
+        rm -f /tmp/devcontract-service-key
         rm -f "${{ inputs.env_file }}"

@@ -1,8 +1,40 @@
-# EnvSync
+# DevContract
 
-EnvSync is an open-source tool for reproducible local development setup, encrypted `.env` sharing, and safer repository onboarding.
+DevContract is an open-source repo-first tool for developer onboarding, local setup contracts, and encrypted `.env` sharing.
 
-It is for teams that still pass local config through chat threads, stale setup docs, copied `.env` files, and tribal knowledge. EnvSync gives the repository a setup contract, keeps sync history locally encrypted, and uses direct peer delivery with a relay fallback when needed.
+It is built for teams that still onboard people through stale docs, copied `.env` files, chat messages, and tribal knowledge. DevContract lets the repository describe how local development should work, helps teammates receive shared config more safely, and keeps local revision history encrypted on each machine.
+
+## Why It Exists
+
+Most teams do local setup with some messy mix of:
+
+- README steps that drift over time
+- copied `.env` files in chat or DMs
+- hand-written onboarding checklists
+- "ask someone on the team" as the real setup process
+
+DevContract tries to replace that with one repo-owned contract for setup, health checks, and shared local config workflows.
+
+## What Makes It Different
+
+- The repo can declare a local setup contract in `.devcontract/contract.yaml`
+- The CLI can bootstrap, validate, and run that contract
+- Shared `.env` updates can move directly between trusted machines or through an encrypted relay fallback
+- Local history and backups stay encrypted on the developer machine
+- It is designed for development environments, not production secret injection
+
+## Who It Is For
+
+- small engineering teams with painful onboarding
+- solo builders managing more than one machine
+- repos that need repeatable local setup, not just secret storage
+- teams that want something lighter than a full hosted secrets platform
+
+## Who It Is Not For
+
+- production runtime secrets management
+- enterprise compliance-heavy environments
+- teams that only need a hosted secret dashboard and nothing else
 
 ## What It Does Today
 
@@ -17,9 +49,9 @@ It is for teams that still pass local config through chat threads, stale setup d
 
 - generated assistant/editor instruction files and MCP config
 - some extension surfaces
-- entitlement and upgrade messaging
+- relay limits messaging
 
-EnvSync is for development environments. It is not a production secrets manager or a hosted control plane by itself.
+DevContract is for development environments. It is not a production secrets manager or a hosted control plane by itself.
 
 ## Quick Start
 
@@ -28,21 +60,21 @@ EnvSync is for development environments. It is not a production secrets manager 
 macOS and Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dantwoashim/Env_sync/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dantwoashim/devcontract/main/scripts/install.sh | bash
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/dantwoashim/Env_sync/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/dantwoashim/devcontract/main/scripts/install.ps1 | iex
 ```
 
 ### Build from Source
 
 ```bash
-git clone https://github.com/dantwoashim/Env_sync.git
-cd Env_sync
-go build -o envsync ./
+git clone https://github.com/dantwoashim/devcontract.git
+cd devcontract
+go build -o devcontract ./
 ```
 
 For contributors and auditors, the repository includes a devcontainer and a canonical `make verify` path using Go `1.25.8` and Node `22`.
@@ -52,38 +84,49 @@ For contributors and auditors, the repository includes a devcontainer and a cano
 In your own repository:
 
 ```bash
-envsync init
-envsync bootstrap
-envsync doctor
+devcontract init
+devcontract bootstrap
+devcontract doctor
 ```
 
 Invite a teammate:
 
 ```bash
-envsync invite teammate
+devcontract invite teammate
 ```
 
 Sync changes:
 
 ```bash
-envsync push
-envsync pull
+devcontract push
+devcontract pull
 ```
+
+## The Main Idea
+
+In a typical repo, you can:
+
+1. define local setup in `.devcontract/contract.yaml`
+2. run `devcontract init`
+3. run `devcontract bootstrap`
+4. run `devcontract doctor`
+5. share `.env` updates with `devcontract push` and `devcontract pull`
 
 ## Core Commands
 
-- `envsync init`: create local identity state and scaffold a starter contract in your repository
-- `envsync bootstrap`: run the repository setup contract after trust review
-- `envsync doctor`: check local prerequisites and repository health
-- `envsync guard scan`: scan repo text surfaces for likely secret leaks
-- `envsync invite` / `envsync join`: manage human project membership
-- `envsync service-key`: register scoped relay machine identities
-- `envsync push` / `envsync pull`: exchange encrypted `.env` state
-- `envsync backup`, `restore`, `rollback`: inspect and recover local history
+- `devcontract init`: create local identity state and scaffold a starter contract in your repository
+- `devcontract bootstrap`: run the repository setup contract after trust review
+- `devcontract doctor`: check local prerequisites and repository health
+- `devcontract guard scan`: scan repo text surfaces for likely secret leaks
+- `devcontract invite` / `devcontract join`: manage human project membership
+- `devcontract limits`: inspect relay-side limits and usage configured by the current deployment
+- `devcontract service-key`: register scoped relay machine identities
+- `devcontract push` / `devcontract pull`: exchange encrypted `.env` state
+- `devcontract backup`, `restore`, `rollback`: inspect and recover local history
 
 ## How It Works
 
-- Each repository can define its local setup contract in `.envsync/contract.yaml`.
+- Each repository can define its local setup contract in `.devcontract/contract.yaml`.
 - Human identity comes from an Ed25519 SSH key.
 - LAN sync uses direct peer transport when a trusted peer is reachable.
 - Relay sync uploads a per-recipient encrypted blob when direct delivery is unavailable.
@@ -120,7 +163,7 @@ The VS Code extension lives in [extension](extension). It shells out to the CLI 
 
 ## Examples
 
-- [examples/envsync.example.toml](examples/envsync.example.toml)
+- [examples/devcontract.example.toml](examples/devcontract.example.toml)
 - [examples/demo/.env.example](examples/demo/.env.example)
 - [examples/contracts](examples/contracts)
 

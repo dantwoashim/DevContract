@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -11,10 +11,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dantwoashim/Env_sync/internal/config"
-	"github.com/dantwoashim/Env_sync/internal/contract"
-	"github.com/dantwoashim/Env_sync/internal/guard"
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/config"
+	"github.com/dantwoashim/devcontract/internal/contract"
+	"github.com/dantwoashim/devcontract/internal/guard"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -71,7 +71,7 @@ func runGuardScan(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Println(string(encoded))
 	} else {
-		ui.Header("EnvSync Guard")
+		ui.Header("DevContract Guard")
 		ui.Line(fmt.Sprintf("  Files scanned: %d", report.FilesScanned))
 		ui.Line(fmt.Sprintf("  Files skipped: %d", report.FilesSkipped))
 		if len(report.FindingsByCategory) > 0 {
@@ -125,7 +125,7 @@ func runGuardHookInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	hookPath := filepath.Join(hooksDir, "pre-commit")
-	content := "#!/bin/sh\nenvsync guard scan --staged --fail-on error\n"
+	content := "#!/bin/sh\ndevcontract guard scan --staged --fail-on error\n"
 	if err := os.WriteFile(hookPath, []byte(content), 0755); err != nil {
 		return err
 	}

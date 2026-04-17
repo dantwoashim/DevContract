@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/dantwoashim/Env_sync/internal/agent"
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/agent"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -48,7 +48,7 @@ func runAgentInstall(cmd *cobra.Command, args []string) error {
 	}
 	sort.Strings(targets)
 
-	ui.Header("EnvSync Agent Install")
+	ui.Header("DevContract Agent Install")
 	for _, target := range targets {
 		files, err := agent.Generate(ctx.Contract, target)
 		if err != nil {

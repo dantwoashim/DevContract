@@ -1,4 +1,4 @@
-name = "envsync-relay"
+name = "devcontract-relay"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
@@ -10,7 +10,7 @@ BLOB_TTL_HOURS = "72"
 
 # KV namespace binding
 [[kv_namespaces]]
-binding = "ENVSYNC_DATA"
+binding = "DEVCONTRACT_DATA"
 id = "placeholder-kv-id"
 
 [[durable_objects.bindings]]

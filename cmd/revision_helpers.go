@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dantwoashim/Env_sync/internal/revision"
+	"github.com/dantwoashim/devcontract/internal/revision"
 )
 
 type resolvedRevisionLineage struct {

@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package crypto
 
@@ -28,7 +28,7 @@ func GenerateServiceKey() (*ServiceKey, error) {
 // ExportPrivateKey serializes the private key as PEM.
 func (sk *ServiceKey) ExportPrivateKey() []byte {
 	return pem.EncodeToMemory(&pem.Block{
-		Type:  "ENVSYNC SERVICE KEY",
+		Type:  "DEVCONTRACT SERVICE KEY",
 		Bytes: sk.PrivateKey.Seed(),
 	})
 }
@@ -36,7 +36,7 @@ func (sk *ServiceKey) ExportPrivateKey() []byte {
 // ExportPublicKey serializes the public key as PEM.
 func (sk *ServiceKey) ExportPublicKey() []byte {
 	return pem.EncodeToMemory(&pem.Block{
-		Type:  "ENVSYNC SERVICE PUBLIC KEY",
+		Type:  "DEVCONTRACT SERVICE PUBLIC KEY",
 		Bytes: sk.PublicKey,
 	})
 }
@@ -48,7 +48,7 @@ func ImportServiceKey(data []byte) (*ServiceKey, error) {
 		return nil, fmt.Errorf("invalid PEM data")
 	}
 
-	if block.Type != "ENVSYNC SERVICE KEY" {
+	if block.Type != "DEVCONTRACT SERVICE KEY" {
 		return nil, fmt.Errorf("unexpected PEM type: %s", block.Type)
 	}
 

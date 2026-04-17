@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package contract
 
@@ -10,7 +10,7 @@ import (
 
 func TestLoadAndValidate(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, ".envsync", "contract.yaml")
+	path := filepath.Join(dir, ".devcontract", "contract.yaml")
 	spec := Default("Demo Service")
 	spec.Env.Optional = nil
 	spec.Env.Required = []EnvVar{{Name: "SERVICE_TOKEN", Source: "shared"}}
@@ -37,7 +37,7 @@ func TestLoadAndValidate(t *testing.T) {
 
 func TestEnsureDefault(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, ".envsync", "contract.yaml")
+	path := filepath.Join(dir, ".devcontract", "contract.yaml")
 
 	created, err := EnsureDefault(path, "Test Repo")
 	if err != nil {

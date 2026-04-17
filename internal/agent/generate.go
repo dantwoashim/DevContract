@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package agent
 
@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/dantwoashim/Env_sync/internal/contract"
+	"github.com/dantwoashim/devcontract/internal/contract"
 )
 
 type GeneratedFile struct {
@@ -38,7 +38,7 @@ func Generate(spec *contract.Contract, agentName string) ([]GeneratedFile, error
 	if len(spec.MCP.Servers) > 0 {
 		mcpPath := target.MCPOutput
 		if mcpPath == "" {
-			mcpPath = filepath.Join(".envsync", "generated", agentName+".mcp.json")
+			mcpPath = filepath.Join(".devcontract", "generated", agentName+".mcp.json")
 		}
 		payload, err := renderMCP(spec)
 		if err != nil {
@@ -63,7 +63,7 @@ func renderInstructions(spec *contract.Contract, agentName string, target contra
 	switch agentName {
 	case "cursor":
 		b.WriteString("---\n")
-		b.WriteString("description: EnvSync-generated agent rules\n")
+		b.WriteString("description: DevContract-generated agent rules\n")
 		b.WriteString("globs: [\"**/*\"]\n")
 		b.WriteString("alwaysApply: false\n")
 		b.WriteString("---\n\n")
@@ -78,17 +78,17 @@ func renderInstructions(spec *contract.Contract, agentName string, target contra
 	}
 
 	b.WriteString("## Workflow\n\n")
-	b.WriteString("- Run `envsync bootstrap` on a fresh clone.\n")
-	b.WriteString("- Run `envsync doctor` before major edits.\n")
-	b.WriteString("- Run `envsync guard scan` before commits touching generated instruction files or config.\n")
+	b.WriteString("- Run `devcontract bootstrap` on a fresh clone.\n")
+	b.WriteString("- Run `devcontract doctor` before major edits.\n")
+	b.WriteString("- Run `devcontract guard scan` before commits touching generated instruction files or config.\n")
 	if spec.Run.Default != "" {
-		fmt.Fprintf(&b, "- Use `envsync run %s` for the default development workflow.\n", spec.Run.Default)
+		fmt.Fprintf(&b, "- Use `devcontract run %s` for the default development workflow.\n", spec.Run.Default)
 	}
 
 	b.WriteString("\n## Secret Safety\n\n")
 	b.WriteString("- Never inline secrets in markdown instructions, JSON config, or logs.\n")
 	b.WriteString("- Use environment variables only when configuring tools or MCP servers.\n")
-	b.WriteString("- If you touch `.env`, `WORKSPACE.md`, `.github/copilot-instructions.md`, `.cursor/`, `.claude/`, or MCP config, run `envsync guard scan`.\n")
+	b.WriteString("- If you touch `.env`, `WORKSPACE.md`, `.github/copilot-instructions.md`, `.cursor/`, `.claude/`, or MCP config, run `devcontract guard scan`.\n")
 
 	if envNames := spec.AllEnvNames(); len(envNames) > 0 {
 		b.WriteString("\n## Environment Variables\n\n")

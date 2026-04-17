@@ -27,12 +27,12 @@ app.use('*', cors({
     allowHeaders: [
         'Authorization',
         'Content-Type',
-        'X-EnvSync-Fingerprint',
-        'X-EnvSync-Sender',
-        'X-EnvSync-Recipient',
-        'X-EnvSync-EphemeralKey',
-        'X-EnvSync-Filename',
-        'X-EnvSync-Signature',
+        'X-DevContract-Fingerprint',
+        'X-DevContract-Sender',
+        'X-DevContract-Recipient',
+        'X-DevContract-EphemeralKey',
+        'X-DevContract-Filename',
+        'X-DevContract-Signature',
     ],
     exposeHeaders: [
         'X-Request-ID',
@@ -73,7 +73,7 @@ async function authMiddleware(c: any, next: any) {
     try {
         const bodyClone = await c.req.raw.clone().arrayBuffer();
         const bodyHash = await hashBody(bodyClone);
-        const kv = c.env.ENVSYNC_DATA;
+        const kv = c.env.DEVCONTRACT_DATA;
         const pubKeyB64 = await kv.get(`pubkey:${parsed.fingerprint}`);
 
         if (pubKeyB64) {

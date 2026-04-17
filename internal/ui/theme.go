@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package ui
 
@@ -69,11 +69,11 @@ const (
 )
 
 // Formatted icon helpers
-func BrandIcon() string  { return StyleBrand.Render(IconBrand) }
+func BrandIcon() string   { return StyleBrand.Render(IconBrand) }
 func SuccessIcon() string { return StyleSuccess.Render(IconSuccess) }
-func ErrorIcon() string  { return StyleError.Render(IconError) }
+func ErrorIcon() string   { return StyleError.Render(IconError) }
 func WarningIcon() string { return StyleWarning.Render(IconWarning) }
-func InfoIcon() string   { return StyleBrand.Render(IconInfo) }
+func InfoIcon() string    { return StyleBrand.Render(IconInfo) }
 
 // Box styles
 var (

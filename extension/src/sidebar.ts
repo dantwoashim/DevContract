@@ -1,65 +1,94 @@
 import * as vscode from 'vscode';
-import { execEnvSyncCapture, getWorkspaceFolder } from './cli';
+import { execDevContractCapture, getWorkspaceFolder } from './cli';
 import { buildHealthRows, parseDoctorReport } from './doctorView';
+import { assessCliVersion } from './versionStatus';
 
-export function registerSidebar(context: vscode.ExtensionContext) {
+export function registerSidebar(context: vscode.ExtensionContext, extensionVersion: string) {
     const actionsProvider = new ActionsProvider();
-    const healthProvider = new HealthProvider();
+    const healthProvider = new HealthProvider(extensionVersion);
 
     context.subscriptions.push(
-        vscode.window.registerTreeDataProvider('envsync.actions', actionsProvider),
-        vscode.window.registerTreeDataProvider('envsync.health', healthProvider),
+        vscode.window.registerTreeDataProvider('devcontract.actions', actionsProvider),
+        vscode.window.registerTreeDataProvider('devcontract.health', healthProvider),
     );
 
     const timer = setInterval(() => healthProvider.refresh(), 30000);
     context.subscriptions.push({ dispose: () => clearInterval(timer) });
 }
 
-class ActionsProvider implements vscode.TreeDataProvider<EnvSyncItem> {
-    getTreeItem(element: EnvSyncItem): vscode.TreeItem {
+class ActionsProvider implements vscode.TreeDataProvider<DevContractItem> {
+    getTreeItem(element: DevContractItem): vscode.TreeItem {
         return element;
     }
 
-    getChildren(): EnvSyncItem[] {
+    getChildren(): DevContractItem[] {
         return [
-            new EnvSyncItem('Bootstrap Repo', 'Scaffold local outputs and run setup', 'envsync.bootstrap'),
-            new EnvSyncItem('Run Doctor', 'Check repo health and onboarding prerequisites', 'envsync.doctor'),
-            new EnvSyncItem('Install Tool Files', 'Generate instruction files and JSON tool config', 'envsync.agentInstall'),
-            new EnvSyncItem('Run Guard Scan', 'Scan instruction files and config for secrets', 'envsync.guardScan'),
-            new EnvSyncItem('Run Default Target', 'Execute the contract default workflow', 'envsync.run'),
-            new EnvSyncItem('Show Status', 'Inspect current project sync status', 'envsync.status'),
+            new DevContractItem('Bootstrap Repo', 'Scaffold local outputs and run setup', 'devcontract.bootstrap'),
+            new DevContractItem('Run Doctor', 'Check repo health and onboarding prerequisites', 'devcontract.doctor'),
+            new DevContractItem('Install Tool Files', 'Generate instruction files and JSON tool config', 'devcontract.agentInstall'),
+            new DevContractItem('Run Guard Scan', 'Scan instruction files and config for secrets', 'devcontract.guardScan'),
+            new DevContractItem('Run Default Target', 'Execute the contract default workflow', 'devcontract.run'),
+            new DevContractItem('Show Status', 'Inspect current project sync status', 'devcontract.status'),
         ];
     }
 }
 
-class HealthProvider implements vscode.TreeDataProvider<EnvSyncItem> {
+class HealthProvider implements vscode.TreeDataProvider<DevContractItem> {
     private readonly emitter = new vscode.EventEmitter<void>();
     readonly onDidChangeTreeData = this.emitter.event;
+
+    constructor(private readonly extensionVersion: string) {}
 
     refresh() {
         this.emitter.fire();
     }
 
-    getTreeItem(element: EnvSyncItem): vscode.TreeItem {
+    getTreeItem(element: DevContractItem): vscode.TreeItem {
         return element;
     }
 
-    async getChildren(): Promise<EnvSyncItem[]> {
+    async getChildren(): Promise<DevContractItem[]> {
         const cwd = getWorkspaceFolder();
         if (!cwd) {
-            return [new EnvSyncItem('Open a workspace folder', 'EnvSync health is repo-scoped')];
+            return [new DevContractItem('Open a workspace folder', 'DevContract health is repo-scoped')];
         }
 
         try {
-            const result = await execEnvSyncCapture(['doctor', '--json', '--quiet'], {
+            const versionResult = await execDevContractCapture(['version', '--short'], {
+                cwd,
+                timeout: 5000,
+            });
+            if (versionResult.exitCode !== 0) {
+                throw new Error(versionResult.stderr || versionResult.stdout || `devcontract exited with status ${versionResult.exitCode}`);
+            }
+            const assessment = assessCliVersion(versionResult.stdout || versionResult.stderr, this.extensionVersion);
+            if (assessment.kind === 'outdated') {
+                return [
+                    new DevContractItem(
+                        'CLI outdated',
+                        `DevContract CLI ${assessment.version} is older than this extension expects (${assessment.minimumVersion}+).`,
+                    ),
+                ];
+            }
+        } catch (error) {
+            return [
+                new DevContractItem(
+                    'CLI unavailable',
+                    error instanceof Error ? error.message : String(error),
+                ),
+            ];
+        }
+
+        try {
+            const result = await execDevContractCapture(['doctor', '--json', '--quiet'], {
                 cwd,
                 timeout: 20000,
             });
             const report = parseDoctorReport(result.stdout || result.stderr);
-            return buildHealthRows(report).map((row) => new EnvSyncItem(row.label, row.description));
+            return buildHealthRows(report).map((row) => new DevContractItem(row.label, row.description));
         } catch (error) {
             return [
-                new EnvSyncItem(
+                new DevContractItem(
                     'Doctor unavailable',
                     error instanceof Error ? error.message : String(error),
                 ),
@@ -68,7 +97,7 @@ class HealthProvider implements vscode.TreeDataProvider<EnvSyncItem> {
     }
 }
 
-class EnvSyncItem extends vscode.TreeItem {
+class DevContractItem extends vscode.TreeItem {
     constructor(label: string, description: string, command?: string) {
         super(label, vscode.TreeItemCollapsibleState.None);
         this.description = description;

@@ -1,26 +1,26 @@
 import * as vscode from 'vscode';
-import { createEnvSyncTerminal, getWorkspaceFolder } from './cli';
+import { createDevContractTerminal, getWorkspaceFolder } from './cli';
 
 export function registerCommands(context: vscode.ExtensionContext) {
     context.subscriptions.push(
-        vscode.commands.registerCommand('envsync.bootstrap', () => runTerminalCommand('EnvSync Bootstrap', ['bootstrap'])),
-        vscode.commands.registerCommand('envsync.doctor', () => runTerminalCommand('EnvSync Doctor', ['doctor'])),
-        vscode.commands.registerCommand('envsync.agentInstall', () => runTerminalCommand('EnvSync Agent Install', ['agent', 'install', '--all'])),
-        vscode.commands.registerCommand('envsync.guardScan', () => runTerminalCommand('EnvSync Guard', ['guard', 'scan'])),
-        vscode.commands.registerCommand('envsync.run', () => runTerminalCommand('EnvSync Run', ['run'])),
-        vscode.commands.registerCommand('envsync.status', () => runTerminalCommand('EnvSync Status', ['status'])),
-        vscode.commands.registerCommand('envsync.installHelp', showInstallHelp),
+        vscode.commands.registerCommand('devcontract.bootstrap', () => runTerminalCommand('DevContract Bootstrap', ['bootstrap'])),
+        vscode.commands.registerCommand('devcontract.doctor', () => runTerminalCommand('DevContract Doctor', ['doctor'])),
+        vscode.commands.registerCommand('devcontract.agentInstall', () => runTerminalCommand('DevContract Agent Install', ['agent', 'install', '--all'])),
+        vscode.commands.registerCommand('devcontract.guardScan', () => runTerminalCommand('DevContract Guard', ['guard', 'scan'])),
+        vscode.commands.registerCommand('devcontract.run', () => runTerminalCommand('DevContract Run', ['run'])),
+        vscode.commands.registerCommand('devcontract.status', () => runTerminalCommand('DevContract Status', ['status'])),
+        vscode.commands.registerCommand('devcontract.installHelp', showInstallHelp),
     );
 }
 
 function runTerminalCommand(name: string, args: string[]) {
     const cwd = getWorkspaceFolder();
     if (!cwd) {
-        void vscode.window.showWarningMessage('Open a workspace folder before running EnvSync commands.');
+        void vscode.window.showWarningMessage('Open a workspace folder before running DevContract commands.');
         return;
     }
 
-    createEnvSyncTerminal(name, args, cwd);
+    createDevContractTerminal(name, args, cwd);
 }
 
 async function showInstallHelp() {
@@ -30,14 +30,14 @@ async function showInstallHelp() {
             ? 'macOS'
             : 'Linux';
     const command = process.platform === 'win32'
-        ? 'go build -o envsync.exe ./'
-        : 'go build -o envsync ./';
+        ? 'go build -o devcontract.exe ./'
+        : 'go build -o devcontract ./';
 
     const choice = await vscode.window.showInformationMessage(
-        `EnvSync CLI is not installed or not on PATH for this ${platform} workspace. Build it from the repository root with: ${command}`,
+        `DevContract CLI is missing or older than this ${platform} extension expects. Build or update it from the repository root with: ${command}`,
         'Open README',
     );
     if (choice === 'Open README') {
-        await vscode.env.openExternal(vscode.Uri.parse('https://github.com/dantwoashim/Env_sync#quick-start'));
+        await vscode.env.openExternal(vscode.Uri.parse('https://github.com/dantwoashim/devcontract#quick-start'));
     }
 }

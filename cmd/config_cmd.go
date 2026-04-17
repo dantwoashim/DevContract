@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dantwoashim/Env_sync/internal/config"
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/config"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 )
@@ -17,11 +17,11 @@ import (
 var configCmd = &cobra.Command{
 	Use:   "config [key] [value]",
 	Short: "View or modify configuration",
-	Long: `View or modify EnvSync configuration.
+	Long: `View or modify DevContract configuration.
 
-  envsync config                    Show all settings
-  envsync config relay.url          Show a specific setting
-  envsync config relay.url <value>  Set a specific value`,
+  devcontract config                    Show all settings
+  devcontract config relay.url          Show a specific setting
+  devcontract config relay.url <value>  Set a specific value`,
 	RunE: runConfig,
 }
 
@@ -42,7 +42,7 @@ func runConfig(cmd *cobra.Command, args []string) error {
 		// Set
 		return setConfigKey(cfg, args[0], args[1])
 	default:
-		return fmt.Errorf("too many arguments — use: envsync config [key] [value]")
+		return fmt.Errorf("too many arguments — use: devcontract config [key] [value]")
 	}
 }
 

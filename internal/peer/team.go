@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package peer
 
@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dantwoashim/Env_sync/internal/config"
-	"github.com/dantwoashim/Env_sync/internal/fsutil"
+	"github.com/dantwoashim/devcontract/internal/config"
+	"github.com/dantwoashim/devcontract/internal/fsutil"
 	toml "github.com/pelletier/go-toml/v2"
 )
 
@@ -58,7 +58,7 @@ func (t *Team) HasMember(fingerprint string) bool {
 	return false
 }
 
-// ProjectConfig represents the per-project .envsync.toml file.
+// ProjectConfig represents the per-project .devcontract.toml file.
 type ProjectConfig struct {
 	ConfigVersion int    `toml:"config_version,omitempty"`
 	ProjectID     string `toml:"project_id,omitempty"`
@@ -133,7 +133,7 @@ func loadProjectConfigFromPath(path string) (*ProjectConfig, error) {
 	return &pc, nil
 }
 
-// LoadProjectConfig reads the .envsync.toml from the current (or parent) directory.
+// LoadProjectConfig reads the .devcontract.toml from the current (or parent) directory.
 func LoadProjectConfig() (*ProjectConfig, error) {
 	path, err := config.FindProjectConfig()
 	if err != nil {
@@ -149,7 +149,7 @@ func projectConfigWritePath() string {
 	return config.ProjectConfigPath()
 }
 
-// SaveProjectConfig writes .envsync.toml in the current directory.
+// SaveProjectConfig writes .devcontract.toml in the current directory.
 func SaveProjectConfig(pc *ProjectConfig) error {
 	pc.Normalize()
 	data, err := toml.Marshal(pc)

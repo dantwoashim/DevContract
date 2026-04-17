@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package sync
 
@@ -16,14 +16,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/apply"
-	"github.com/dantwoashim/Env_sync/internal/config"
-	"github.com/dantwoashim/Env_sync/internal/crypto"
-	"github.com/dantwoashim/Env_sync/internal/discovery"
-	"github.com/dantwoashim/Env_sync/internal/envfile"
-	"github.com/dantwoashim/Env_sync/internal/fsutil"
-	"github.com/dantwoashim/Env_sync/internal/peer"
-	"github.com/dantwoashim/Env_sync/internal/transport"
+	"github.com/dantwoashim/devcontract/internal/apply"
+	"github.com/dantwoashim/devcontract/internal/config"
+	"github.com/dantwoashim/devcontract/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/discovery"
+	"github.com/dantwoashim/devcontract/internal/envfile"
+	"github.com/dantwoashim/devcontract/internal/fsutil"
+	"github.com/dantwoashim/devcontract/internal/peer"
+	"github.com/dantwoashim/devcontract/internal/transport"
 	"github.com/flynn/noise"
 )
 
@@ -356,7 +356,7 @@ func verifyTrustedPullPeer(publicKey []byte, teamID string) error {
 	}
 
 	if len(teams) == 0 {
-		return errors.New("no trusted projects configured for LAN pull; run 'envsync invite' or 'envsync join' first")
+		return errors.New("no trusted projects configured for LAN pull; run 'devcontract invite' or 'devcontract join' first")
 	}
 
 	hadPeers := false
@@ -383,10 +383,10 @@ func verifyTrustedPullPeer(publicKey []byte, teamID string) error {
 
 	if !hadPeers {
 		if teamID != "" {
-			return fmt.Errorf("no trusted peers configured for project %s; run 'envsync invite' or 'envsync join' first", teamID)
+			return fmt.Errorf("no trusted peers configured for project %s; run 'devcontract invite' or 'devcontract join' first", teamID)
 		}
-		return errors.New("no trusted peers configured for LAN pull; run 'envsync invite' or 'envsync join' first")
+		return errors.New("no trusted peers configured for LAN pull; run 'devcontract invite' or 'devcontract join' first")
 	}
 
-	return fmt.Errorf("unknown peer transport key - use 'envsync invite' or 'envsync join' first")
+	return fmt.Errorf("unknown peer transport key - use 'devcontract invite' or 'devcontract join' first")
 }

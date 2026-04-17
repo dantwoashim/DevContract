@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -8,14 +8,14 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dantwoashim/Env_sync/internal/apply"
-	"github.com/dantwoashim/Env_sync/internal/audit"
-	"github.com/dantwoashim/Env_sync/internal/config"
-	"github.com/dantwoashim/Env_sync/internal/crypto"
-	"github.com/dantwoashim/Env_sync/internal/envfile"
-	"github.com/dantwoashim/Env_sync/internal/relay"
-	envsync "github.com/dantwoashim/Env_sync/internal/sync"
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/apply"
+	"github.com/dantwoashim/devcontract/internal/audit"
+	"github.com/dantwoashim/devcontract/internal/config"
+	"github.com/dantwoashim/devcontract/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/envfile"
+	"github.com/dantwoashim/devcontract/internal/relay"
+	devcontract "github.com/dantwoashim/devcontract/internal/sync"
+	"github.com/dantwoashim/devcontract/internal/ui"
 )
 
 type pullApplyOptions struct {
@@ -81,14 +81,14 @@ func pullPendingRelay(projectID, relayURL, targetFile string, cfg *config.Config
 			continue
 		}
 
-		payload, err := envsync.DecodeEnvPayload(plaintext)
+		payload, err := devcontract.DecodeEnvPayload(plaintext)
 		if err != nil {
 			summary.Warnings = append(summary.Warnings, fmt.Sprintf("relay payload decode failed for %s: %v", blob.BlobID, err))
 			ui.Warning(fmt.Sprintf("  Invalid relay payload: %s", err))
 			rejectRelayBlob(relayClient, projectID, blob.BlobID, fmt.Sprintf("payload decode failed: %v", err), summary)
 			continue
 		}
-		if payload.Checksum != envsync.NewEnvPayload(payload.FileName, payload.Data, payload.Sequence, payload.BaseRevisionID, payload.RevisionID).Checksum {
+		if payload.Checksum != devcontract.NewEnvPayload(payload.FileName, payload.Data, payload.Sequence, payload.BaseRevisionID, payload.RevisionID).Checksum {
 			summary.Warnings = append(summary.Warnings, fmt.Sprintf("relay checksum mismatch for %s", blob.BlobID))
 			ui.Warning("  Relay payload checksum mismatch")
 			rejectRelayBlob(relayClient, projectID, blob.BlobID, "payload checksum mismatch", summary)

@@ -1,8 +1,8 @@
-# EnvSync Governance
+# DevContract Governance
 
 ## Decision-Making Model
 
-EnvSync follows a **Benevolent Dictator For Life (BDFL)** governance model.
+DevContract follows a **Benevolent Dictator For Life (BDFL)** governance model.
 
 **Current Maintainer:** @dantwoashim
 

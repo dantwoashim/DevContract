@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -7,7 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/crypto"
 )
 
 func verifyRelayBlobSignature(memberKeyMap map[string]ed25519.PublicKey, senderFingerprint string, data []byte, ephKey [32]byte, sigB64 string) error {

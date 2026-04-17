@@ -1,8 +1,8 @@
 .PHONY: build test test-race test-relay test-extension verify verify-go lint vet cover repo-hygiene release-snapshot clean
 
-BINARY=envsync
+BINARY=devcontract
 
-## Build the envsync binary
+## Build the devcontract binary
 build:
 	go build -o $(BINARY) .
 
@@ -63,7 +63,7 @@ clean:
 ## Show help
 help:
 	@echo "Available targets:"
-	@echo "  build            Build the envsync binary"
+	@echo "  build            Build the devcontract binary"
 	@echo "  test             Run all tests"
 	@echo "  test-race        Run tests with race detector"
 	@echo "  test-relay       Install and test the relay"

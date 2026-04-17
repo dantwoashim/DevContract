@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/apply"
-	"github.com/dantwoashim/Env_sync/internal/audit"
-	"github.com/dantwoashim/Env_sync/internal/config"
-	"github.com/dantwoashim/Env_sync/internal/crypto"
-	"github.com/dantwoashim/Env_sync/internal/envfile"
-	envsync "github.com/dantwoashim/Env_sync/internal/sync"
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/apply"
+	"github.com/dantwoashim/devcontract/internal/audit"
+	"github.com/dantwoashim/devcontract/internal/config"
+	"github.com/dantwoashim/devcontract/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/envfile"
+	devcontract "github.com/dantwoashim/devcontract/internal/sync"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -91,9 +91,9 @@ func runPull(cmd *cobra.Command, args []string) error {
 			Category:   ui.ErrConfig,
 			Message:    "Not initialized",
 			Cause:      "No identity configured",
-			Suggestion: "Run 'envsync init' to set up your identity",
+			Suggestion: "Run 'devcontract init' to set up your identity",
 		})
-		return fmt.Errorf("not initialized: run 'envsync init' first")
+		return fmt.Errorf("not initialized: run 'devcontract init' first")
 	}
 
 	project, _ := loadProjectContext()
@@ -105,7 +105,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if project == nil || project.ProjectID == "" {
-		return fmt.Errorf("project ID is not configured\n\n  Run 'envsync init' or use '--project <project-id>'")
+		return fmt.Errorf("project ID is not configured\n\n  Run 'devcontract init' or use '--project <project-id>'")
 	}
 
 	policy, interactiveAllowed, err := effectivePullPolicy(cmd, cfg, project)
@@ -133,7 +133,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 		relayURL = projectRelayURL(project, cfg)
 	}
 
-	ui.Header("EnvSync Pull")
+	ui.Header("DevContract Pull")
 	ui.Line(fmt.Sprintf("  Conflict policy: %s", policy))
 
 	report.RelayChecked = true
@@ -197,7 +197,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 		defer cancel()
 	}
 
-	result, err := envsync.Pull(lanCtx, envsync.PullOptions{
+	result, err := devcontract.Pull(lanCtx, devcontract.PullOptions{
 		EnvFilePath:        targetFile,
 		Port:               config.DefaultPort,
 		TeamID:             project.ProjectID,
@@ -215,7 +215,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 		OnListening: func(port int) {
 			ui.Line(fmt.Sprintf("  - Listening on port %d", port))
 		},
-		OnReceived: func(payload envsync.EnvPayload, diff *envfile.DiffResult) {
+		OnReceived: func(payload devcontract.EnvPayload, diff *envfile.DiffResult) {
 			ui.Line(fmt.Sprintf("  - Received %s (%d bytes)", payload.FileName, len(payload.Data)))
 			if diff != nil && diff.HasChanges() {
 				ui.Blank()
@@ -240,7 +240,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 				Category:   ui.ErrSync,
 				Message:    "Pull failed",
 				Cause:      err.Error(),
-				Suggestion: "Ensure the sender is running 'envsync push' or that relay delivery is enabled",
+				Suggestion: "Ensure the sender is running 'devcontract push' or that relay delivery is enabled",
 			})
 		}
 		report.Warnings = append(report.Warnings, err.Error())
@@ -387,7 +387,7 @@ func resolvePullConflicts(conflicts []envfile.Conflict) ([]apply.ConflictResolut
 
 func init() {
 	pullCmd.Flags().IntVar(&pullTimeoutSeconds, "timeout", 0, "Optional timeout in seconds for LAN listen mode")
-	pullCmd.Flags().StringVar(&pullServiceKeyPath, "service-key", "", "Path to an EnvSync service key for relay-only automation")
+	pullCmd.Flags().StringVar(&pullServiceKeyPath, "service-key", "", "Path to an DevContract service key for relay-only automation")
 	pullCmd.Flags().StringVar(&pullProjectID, "project", "", "Override the current project ID")
 	pullCmd.Flags().StringVar(&pullProjectID, "team", "", "Deprecated alias for --project")
 	_ = pullCmd.Flags().MarkHidden("team")

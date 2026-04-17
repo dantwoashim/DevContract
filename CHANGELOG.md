@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to EnvSync will be documented in this file.
+All notable changes to DevContract will be documented in this file.
 
 The format follows a simple Keep a Changelog style, and releases are tagged in Git.
 

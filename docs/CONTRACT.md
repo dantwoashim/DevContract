@@ -1,6 +1,6 @@
 # Contract Reference
 
-EnvSync stores repository setup in `.envsync/contract.yaml`.
+DevContract stores repository setup in `.devcontract/contract.yaml`.
 
 The contract is the repository-owned description of how local development should work: which variables exist, which runtimes are expected, which services should be available, what bootstrap should do, and which checks the team cares about.
 
@@ -131,11 +131,11 @@ services:
     description: Local web application
 ```
 
-`envsync doctor` checks whether the service is reachable. If `required: true`, a missing service is blocking.
+`devcontract doctor` checks whether the service is reachable. If `required: true`, a missing service is blocking.
 
 ## `bootstrap`
 
-Bootstrap steps run during `envsync bootstrap`.
+Bootstrap steps run during `devcontract bootstrap`.
 
 Scalar form:
 
@@ -181,7 +181,7 @@ doctor:
   checks:
     - name: contract-file
       type: file_exists
-      target: .envsync/contract.yaml
+      target: .devcontract/contract.yaml
       required: true
     - name: workspace-config
       type: json_valid
@@ -212,7 +212,7 @@ run:
       command: make test
 ```
 
-`envsync run` executes the default target when one is defined.
+`devcontract run` executes the default target when one is defined.
 
 ## `policies`
 
@@ -234,7 +234,7 @@ policies:
 
 The `agents` and `mcp` sections are optional and should be treated as experimental companion features. This repository does not commit the generated outputs; generate them locally if you need them.
 
-They exist for repositories that want EnvSync to generate instruction files and companion JSON config for supported tools.
+They exist for repositories that want DevContract to generate instruction files and companion JSON config for supported tools.
 
 Example:
 
@@ -244,7 +244,7 @@ agents:
     output: .github/copilot-instructions.md
     mcp_output: .vscode/mcp.json
   cursor:
-    output: .cursor/rules/envsync.mdc
+    output: .cursor/rules/devcontract.mdc
     mcp_output: .cursor/mcp.json
 mcp:
   servers:
@@ -259,7 +259,7 @@ mcp:
 If you use these sections:
 
 - keep secrets in environment variables, not inline JSON
-- let EnvSync write the generated files
+- let DevContract write the generated files
 - include those paths in guard scanning if they are not already covered
 
 ## Complete Example
@@ -310,8 +310,8 @@ run:
 
 ## Related Commands
 
-- `envsync init`: creates a starter contract when one does not already exist
-- `envsync bootstrap`: reads the contract and performs local setup
-- `envsync doctor`: validates the contract, environment, services, and local state
-- `envsync run`: executes named workflow targets from the contract
-- `envsync agent install`: generates optional tool-specific files when `agents` is configured
+- `devcontract init`: creates a starter contract when one does not already exist
+- `devcontract bootstrap`: reads the contract and performs local setup
+- `devcontract doctor`: validates the contract, environment, services, and local state
+- `devcontract run`: executes named workflow targets from the contract
+- `devcontract agent install`: generates optional tool-specific files when `agents` is configured

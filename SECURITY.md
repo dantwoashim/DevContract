@@ -20,7 +20,7 @@ The current repository is open source code, not a managed security service. Oper
 | Request Auth | Ed25519 signatures (`ES-SIG`) | Relay API authentication |
 | Key Derivation | HKDF-SHA256 | Backup and relay encryption key derivation |
 
-EnvSync relies on audited libraries from `golang.org/x/crypto` and `github.com/flynn/noise`. It does not define custom cryptographic primitives.
+DevContract relies on audited libraries from `golang.org/x/crypto` and `github.com/flynn/noise`. It does not define custom cryptographic primitives.
 
 ## Trust Model
 
@@ -40,7 +40,7 @@ The relay never stores plaintext `.env` contents.
 1. Payloads are encrypted client-side before upload.
 2. Each relay blob is encrypted for one intended recipient.
 3. The relay stores only ciphertext plus routing metadata.
-4. Blob retention is controlled by the team's relay tier configuration.
+4. Blob retention is controlled by the relay retention policy configured on that deployment.
 
 Visible relay metadata includes sender fingerprint, recipient fingerprint, filename, size, and upload timing.
 
@@ -48,9 +48,9 @@ Visible relay metadata includes sender fingerprint, recipient fingerprint, filen
 
 Revoking a member stops new relay deliveries and removes them from active membership.
 
-Revocation does **not** retroactively erase secrets that member already received. If previously shared secrets must be invalidated, rotate them in the application and, when appropriate, rotate the EnvSync identity or project material as well.
+Revocation does **not** retroactively erase secrets that member already received. If previously shared secrets must be invalidated, rotate them in the application and, when appropriate, rotate the DevContract identity or project material as well.
 
-## What EnvSync Does Not Protect Against
+## What DevContract Does Not Protect Against
 
 - A compromised SSH private key.
 - A compromised local machine where plaintext values are already present.

@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package fsutil
 
@@ -15,7 +15,7 @@ func AtomicWriteFile(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 
-	tempFile, err := os.CreateTemp(dir, ".envsync-*")
+	tempFile, err := os.CreateTemp(dir, ".devcontract-*")
 	if err != nil {
 		return err
 	}

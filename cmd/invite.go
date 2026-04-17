@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/audit"
-	"github.com/dantwoashim/Env_sync/internal/config"
-	"github.com/dantwoashim/Env_sync/internal/crypto"
-	"github.com/dantwoashim/Env_sync/internal/peer"
-	"github.com/dantwoashim/Env_sync/internal/relay"
-	"github.com/dantwoashim/Env_sync/internal/ui"
+	"github.com/dantwoashim/devcontract/internal/audit"
+	"github.com/dantwoashim/devcontract/internal/config"
+	"github.com/dantwoashim/devcontract/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/peer"
+	"github.com/dantwoashim/devcontract/internal/relay"
+	"github.com/dantwoashim/devcontract/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -108,7 +108,7 @@ func runInvite(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Printf("    %s\n", token)
 	fmt.Println()
-	fmt.Printf("  They run: envsync join %s\n", token)
+	fmt.Printf("  They run: devcontract join %s\n", token)
 	fmt.Println()
 	fmt.Println("  Code expires in 24 hours.")
 
@@ -243,7 +243,7 @@ func runJoin(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  - Trusted identity: %s\n", joinResp.InviterFingerprint)
 	fmt.Println("  - Other relay members were imported as pending until you verify them locally.")
 	fmt.Println()
-	fmt.Println("  Ready. Run 'envsync pull' to receive the latest .env.")
+	fmt.Println("  Ready. Run 'devcontract pull' to receive the latest .env.")
 
 	logger, _ := audit.NewLogger()
 	if logger != nil {
@@ -309,7 +309,7 @@ func projectRelayURL(project *projectContext, cfg *config.Config) string {
 	if cfg != nil && cfg.Relay.URL != "" {
 		return cfg.Relay.URL
 	}
-	return "https://relay.envsync.dev"
+	return "https://relay.devcontract.dev"
 }
 
 func init() {
@@ -336,7 +336,7 @@ func currentContractHash() string {
 func tokenNonce() string {
 	random := make([]byte, 16)
 	if _, err := rand.Read(random); err != nil {
-		return fmt.Sprintf("envsync-%d", time.Now().UnixNano())
+		return fmt.Sprintf("devcontract-%d", time.Now().UnixNano())
 	}
 	return fmt.Sprintf("%x:%s", random, filepath.Base(mustGetwd()))
 }

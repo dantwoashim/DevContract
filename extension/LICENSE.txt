@@ -1,1 +1,1 @@
-See the repository root [LICENSE](../LICENSE) for the EnvSync project license.
+See the repository root [LICENSE](../LICENSE) for the DevContract project license.

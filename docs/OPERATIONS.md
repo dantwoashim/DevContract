@@ -1,6 +1,6 @@
 # Operations Guide
 
-EnvSync's relay is designed for small-team supportability. This guide documents what to watch, what the relay guarantees, and how to recover when something goes wrong.
+DevContract's relay is designed for small-team supportability. This guide documents what to watch, what the relay guarantees, and how to recover when something goes wrong.
 
 ## What the Relay Stores
 
@@ -86,7 +86,7 @@ Lifecycle events also emit structured JSON entries with team and actor fields. S
 
 ## Alerting Recommendations
 
-EnvSync does not create hosted dashboards from inside this repo. The relay now exposes the fields needed to wire them up quickly.
+DevContract does not create hosted dashboards from inside this repo. The relay now exposes the fields needed to wire them up quickly.
 
 Recommended alerts:
 
@@ -105,7 +105,7 @@ Be explicit about the relay's recovery model:
 
 - Team membership and invite state can be restored from KV backups or deployment exports.
 - Pending queues and daily counters live in Durable Objects and should be treated as reconstructible operational state.
-- If pending queue state is lost, ask senders to re-run `envsync push`.
+- If pending queue state is lost, ask senders to re-run `devcontract push`.
 - Delivered secrets are not retroactively revoked. Revocation blocks future delivery only.
 
 Recovery checklist:
@@ -129,7 +129,7 @@ Before a rollout:
 
 ## Support Boundaries
 
-EnvSync is supportable for small teams when:
+DevContract is supportable for small teams when:
 
 - membership changes are visible through metrics and logs
 - queue growth is monitored

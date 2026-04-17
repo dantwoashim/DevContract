@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dantwoashim/Env_sync/internal/contract"
+	"github.com/dantwoashim/devcontract/internal/contract"
 )
 
 func TestGenerateIncludesEnvPlaceholdersInMCP(t *testing.T) {

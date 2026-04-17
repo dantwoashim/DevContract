@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package relay
 
@@ -15,10 +15,10 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/crypto"
 )
 
-// Client is an HTTP client for the EnvSync relay API.
+// Client is an HTTP client for the DevContract relay API.
 type Client struct {
 	baseURL     string
 	httpClient  *http.Client
@@ -123,9 +123,9 @@ func (c *Client) doRequest(method, path string, body []byte) (*http.Response, er
 		}
 		authHeader := crypto.SignRequest(c.privateKey, c.fingerprint, method, signingPath(path), bodyHash)
 		req.Header.Set("Authorization", authHeader)
-		req.Header.Set("X-EnvSync-Fingerprint", c.fingerprint)
+		req.Header.Set("X-DevContract-Fingerprint", c.fingerprint)
 
-		// #nosec G704 -- the request target is the configured EnvSync relay endpoint.
+		// #nosec G704 -- the request target is the configured DevContract relay endpoint.
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			lastErr = err
@@ -173,9 +173,9 @@ func (c *Client) doUploadRequest(method, path string, body []byte, headers map[s
 		}
 		authHeader := crypto.SignRequest(c.privateKey, c.fingerprint, method, signingPath(path), bodyHash)
 		req.Header.Set("Authorization", authHeader)
-		req.Header.Set("X-EnvSync-Fingerprint", c.fingerprint)
+		req.Header.Set("X-DevContract-Fingerprint", c.fingerprint)
 
-		// #nosec G704 -- the request target is the configured EnvSync relay endpoint.
+		// #nosec G704 -- the request target is the configured DevContract relay endpoint.
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			lastErr = err
@@ -383,12 +383,12 @@ func (c *Client) BootstrapTeam(teamID string, req BootstrapTeamRequest) error {
 func (c *Client) UploadBlob(teamID, blobID string, data []byte, senderFP, recipientFP, ephemeralKey, filename, senderSig string) error {
 	path := "/relay/" + teamID + "/" + blobID
 	resp, err := c.doUploadRequest("PUT", path, data, map[string]string{
-		"Content-Type":           "application/octet-stream",
-		"X-EnvSync-Sender":       senderFP,
-		"X-EnvSync-Recipient":    recipientFP,
-		"X-EnvSync-EphemeralKey": ephemeralKey,
-		"X-EnvSync-Filename":     filename,
-		"X-EnvSync-Signature":    senderSig,
+		"Content-Type":               "application/octet-stream",
+		"X-DevContract-Sender":       senderFP,
+		"X-DevContract-Recipient":    recipientFP,
+		"X-DevContract-EphemeralKey": ephemeralKey,
+		"X-DevContract-Filename":     filename,
+		"X-DevContract-Signature":    senderSig,
 	})
 	if err != nil {
 		return err
@@ -453,9 +453,9 @@ func (c *Client) DownloadBlob(teamID, blobID string) ([]byte, string, string, st
 	}
 
 	return data,
-		resp.Header.Get("X-EnvSync-EphemeralKey"),
-		resp.Header.Get("X-EnvSync-Filename"),
-		resp.Header.Get("X-EnvSync-Signature"),
+		resp.Header.Get("X-DevContract-EphemeralKey"),
+		resp.Header.Get("X-DevContract-Filename"),
+		resp.Header.Get("X-DevContract-Signature"),
 		nil
 }
 

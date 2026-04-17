@@ -1,13 +1,13 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package ui
 
-// Banner prints the EnvSync ASCII art banner.
+// Banner prints the DevContract ASCII art banner.
 func Banner(version string) string {
 	brand := StyleBrand.Render
 
 	art := brand("  ╔═══════════════════════════════╗") + "\n" +
-		brand("  ║") + "  " + StyleBold.Render("EnvSync") + "  " + StyleDim.Render(version) + brand("          ║") + "\n" +
+		brand("  ║") + "  " + StyleBold.Render("DevContract") + "  " + StyleDim.Render(version) + brand("          ║") + "\n" +
 		brand("  ║") + "  " + StyleDim.Render("Secure .env sync for teams") + brand("  ║") + "\n" +
 		brand("  ╚═══════════════════════════════╝")
 

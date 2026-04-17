@@ -61,7 +61,7 @@ export function shouldInjectRateLimitFailure(c: Context<{ Bindings: Env }>, scop
     if (c.env.ENVIRONMENT !== 'test') {
         return false;
     }
-    const header = (c.req.header('X-EnvSync-Test-RateLimit-Failure') || '').toLowerCase();
+    const header = (c.req.header('X-DevContract-Test-RateLimit-Failure') || '').toLowerCase();
     return header === scope || header === 'all';
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dantwoashim/Env_sync/internal/crypto"
+	"github.com/dantwoashim/devcontract/internal/crypto"
 	"golang.org/x/term"
 )
 
 // #nosec G101 -- This is the name of an environment variable, not a credential.
-const sshKeyPassphraseEnv = "ENVSYNC_SSH_KEY_PASSPHRASE"
+const sshKeyPassphraseEnv = "DEVCONTRACT_SSH_KEY_PASSPHRASE"
 
 func loadSSHKeyWithPrompt(path string) (*crypto.KeyPair, error) {
 	kp, err := crypto.LoadSSHKey(path)

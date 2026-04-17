@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -20,7 +20,7 @@ var versionCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Printf("  EnvSync %s\n", Version)
+		fmt.Printf("  DevContract %s\n", Version)
 		fmt.Printf("    Commit:  %s\n", GitCommit)
 		fmt.Printf("    Built:   %s\n", BuildDate)
 		fmt.Printf("    Go:      %s\n", runtime.Version())

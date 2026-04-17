@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package ui
 
@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dantwoashim/Env_sync/internal/envfile"
+	"github.com/dantwoashim/devcontract/internal/envfile"
 )
 
 // RenderDiff displays a color-coded diff between two env files.

@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package cmd
 
@@ -19,7 +19,7 @@ func TestLoadSSHKeyWithPromptUsesEnvironmentPassphrase(t *testing.T) {
 		t.Fatalf("generate key: %v", err)
 	}
 
-	block, err := ssh.MarshalPrivateKeyWithPassphrase(privateKey, "test", []byte("envsync-secret"))
+	block, err := ssh.MarshalPrivateKeyWithPassphrase(privateKey, "test", []byte("devcontract-secret"))
 	if err != nil {
 		t.Fatalf("marshal encrypted key: %v", err)
 	}
@@ -29,7 +29,7 @@ func TestLoadSSHKeyWithPromptUsesEnvironmentPassphrase(t *testing.T) {
 		t.Fatalf("write key: %v", err)
 	}
 
-	t.Setenv(sshKeyPassphraseEnv, "envsync-secret")
+	t.Setenv(sshKeyPassphraseEnv, "devcontract-secret")
 
 	keyPair, err := loadSSHKeyWithPrompt(keyPath)
 	if err != nil {

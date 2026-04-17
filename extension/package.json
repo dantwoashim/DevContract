@@ -1,9 +1,9 @@
 {
-  "name": "envsync-vscode",
-  "displayName": "EnvSync",
+  "name": "devcontract-vscode",
+  "displayName": "DevContract",
   "description": "Repository setup, shared local secrets, and health checks for development teams",
   "version": "1.0.0",
-  "publisher": "envsync",
+  "publisher": "devcontract",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -19,11 +19,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/dantwoashim/Env_sync"
+    "url": "https://github.com/dantwoashim/devcontract"
   },
   "activationEvents": [
     "onStartupFinished",
-    "workspaceContains:.envsync/contract.yaml",
+    "workspaceContains:.devcontract/contract.yaml",
     "workspaceContains:WORKSPACE.md"
   ],
   "files": [
@@ -37,51 +37,51 @@
   "contributes": {
     "commands": [
       {
-        "command": "envsync.bootstrap",
-        "title": "EnvSync: Bootstrap"
+        "command": "devcontract.bootstrap",
+        "title": "DevContract: Bootstrap"
       },
       {
-        "command": "envsync.doctor",
-        "title": "EnvSync: Doctor"
+        "command": "devcontract.doctor",
+        "title": "DevContract: Doctor"
       },
       {
-        "command": "envsync.agentInstall",
-        "title": "EnvSync: Install Tool Files"
+        "command": "devcontract.agentInstall",
+        "title": "DevContract: Install Tool Files"
       },
       {
-        "command": "envsync.guardScan",
-        "title": "EnvSync: Guard Scan"
+        "command": "devcontract.guardScan",
+        "title": "DevContract: Guard Scan"
       },
       {
-        "command": "envsync.run",
-        "title": "EnvSync: Run Default Target"
+        "command": "devcontract.run",
+        "title": "DevContract: Run Default Target"
       },
       {
-        "command": "envsync.status",
-        "title": "EnvSync: Status"
+        "command": "devcontract.status",
+        "title": "DevContract: Status"
       },
       {
-        "command": "envsync.installHelp",
-        "title": "EnvSync: Install CLI Help"
+        "command": "devcontract.installHelp",
+        "title": "DevContract: Install CLI Help"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "envsync",
-          "title": "EnvSync",
+          "id": "devcontract",
+          "title": "DevContract",
           "icon": "icon.svg"
         }
       ]
     },
     "views": {
-      "envsync": [
+      "devcontract": [
         {
-          "id": "envsync.actions",
+          "id": "devcontract.actions",
           "name": "Workflow"
         },
         {
-          "id": "envsync.health",
+          "id": "devcontract.health",
           "name": "Health"
         }
       ]

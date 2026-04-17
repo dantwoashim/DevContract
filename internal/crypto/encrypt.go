@@ -1,4 +1,4 @@
-// Copyright (c) EnvSync Contributors. SPDX-License-Identifier: MIT
+// Copyright (c) DevContract Contributors. SPDX-License-Identifier: MIT
 
 package crypto
 
@@ -16,15 +16,16 @@ import (
 )
 
 const (
-	// MagicBytes identifies an EnvSync encrypted file.
-	MagicBytes = "ENVSYNC\x01"
-	magicLen   = 8
+	// MagicBytes identifies a DevContract encrypted file.
+	MagicBytes       = "DEVCONT\x01"
+	legacyMagicBytes = "ENVSYNC\x01"
+	magicLen         = len(MagicBytes)
 
 	// NonceSize for XChaCha20-Poly1305 (24 bytes).
 	NonceSize = 24
 
 	// hkdfSalt for at-rest encryption key derivation.
-	hkdfSalt = "envsync-at-rest-v1"
+	hkdfSalt = "devcontract-at-rest-v1"
 
 	// hkdfInfo for at-rest encryption key derivation.
 	hkdfInfo = "local-storage-encryption"
@@ -47,7 +48,7 @@ func DeriveAtRestKey(sshPrivateKeyBytes []byte) ([32]byte, error) {
 }
 
 // Encrypt encrypts plaintext using XChaCha20-Poly1305 with the given key.
-// Returns the EnvSync file format: magic (8) + nonce (24) + ciphertext + tag (16).
+// Returns the DevContract file format: magic (8) + nonce (24) + ciphertext + tag (16).
 func Encrypt(plaintext []byte, key [32]byte) ([]byte, error) {
 	aead, err := chacha20poly1305.NewX(key[:])
 	if err != nil {
@@ -72,7 +73,7 @@ func Encrypt(plaintext []byte, key [32]byte) ([]byte, error) {
 	return result, nil
 }
 
-// Decrypt decrypts an EnvSync encrypted file using XChaCha20-Poly1305.
+// Decrypt decrypts a DevContract encrypted file using XChaCha20-Poly1305.
 // Expects format: magic (8) + nonce (24) + ciphertext + tag (16).
 func Decrypt(data []byte, key [32]byte) ([]byte, error) {
 	minSize := magicLen + NonceSize + chacha20poly1305.Overhead
@@ -80,9 +81,10 @@ func Decrypt(data []byte, key [32]byte) ([]byte, error) {
 		return nil, fmt.Errorf("encrypted data too short: got %d bytes, minimum %d", len(data), minSize)
 	}
 
-	// Verify magic bytes
-	if string(data[:magicLen]) != MagicBytes {
-		return nil, errors.New("not an EnvSync encrypted file (invalid magic bytes)")
+	// Accept the legacy EnvSync prefix so existing local history survives the rebrand.
+	magic := string(data[:magicLen])
+	if magic != MagicBytes && magic != legacyMagicBytes {
+		return nil, errors.New("not a DevContract encrypted file (invalid magic bytes)")
 	}
 
 	// Extract nonce and ciphertext
@@ -133,7 +135,7 @@ func EncryptForRecipient(plaintext []byte, recipientPublicKey [32]byte) (ephemer
 
 	// Derive encryption key via HKDF
 	recipientFP := ComputeFingerprint(recipientPublicKey)
-	hkdfReader := hkdf.New(sha256.New, shared[:], []byte("envsync-relay-v1"), []byte(recipientFP))
+	hkdfReader := hkdf.New(sha256.New, shared[:], []byte("devcontract-relay-v1"), []byte(recipientFP))
 
 	var encKey [32]byte
 	if _, err := io.ReadFull(hkdfReader, encKey[:]); err != nil {
@@ -176,7 +178,7 @@ func DecryptFromSender(encrypted []byte, ephemeralPublicKey [32]byte, recipientP
 
 	// Derive decryption key via HKDF (must match sender's derivation)
 	recipientFP := ComputeFingerprint(recipientPublicKey)
-	hkdfReader := hkdf.New(sha256.New, shared[:], []byte("envsync-relay-v1"), []byte(recipientFP))
+	hkdfReader := hkdf.New(sha256.New, shared[:], []byte("devcontract-relay-v1"), []byte(recipientFP))
 
 	var decKey [32]byte
 	if _, err := io.ReadFull(hkdfReader, decKey[:]); err != nil {

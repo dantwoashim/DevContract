@@ -6,15 +6,15 @@ Use this only if previously committed local state or generated artifacts should 
 
 - `.env.local`
 - `.env.agent`
-- `.envsync.toml`
-- `.envsync/`
+- `.devcontract.toml`
+- `.devcontract/`
 - `.cursor/`
 - `.claude/`
 - `.vscode/mcp.json`
 - `mcp.json`
 - `WORKSPACE.md`
 - `.gocache/`
-- `envsync.exe`
+- `devcontract.exe`
 - `extension/out/`
 - `extension/*.vsix`
 - `extension/node_modules/`
@@ -28,21 +28,21 @@ Use [`git filter-repo`](https://github.com/newren/git-filter-repo) on a fresh cl
 ## Example
 
 ```bash
-git clone --mirror https://github.com/dantwoashim/Env_sync.git envsync-history-clean.git
-cd envsync-history-clean.git
+git clone --mirror https://github.com/dantwoashim/devcontract.git devcontract-history-clean.git
+cd devcontract-history-clean.git
 
 git filter-repo \
   --path .env.local --invert-paths \
   --path .env.agent --invert-paths \
-  --path .envsync.toml --invert-paths \
-  --path .envsync --invert-paths \
+  --path .devcontract.toml --invert-paths \
+  --path .devcontract --invert-paths \
   --path .cursor --invert-paths \
   --path .claude --invert-paths \
   --path .vscode/mcp.json --invert-paths \
   --path mcp.json --invert-paths \
   --path WORKSPACE.md --invert-paths \
   --path .gocache --invert-paths \
-  --path envsync.exe --invert-paths \
+  --path devcontract.exe --invert-paths \
   --path extension/out --invert-paths \
   --path extension/node_modules --invert-paths \
   --path relay/node_modules --invert-paths \
