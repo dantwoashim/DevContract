@@ -56,7 +56,6 @@ DevContract is for development environments. It is not a production secrets mana
 ## Portfolio docs
 
 - [Case study](docs/CASE_STUDY.md)
-- [Demo script](docs/DEMO_SCRIPT.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Threat model](docs/THREAT_MODEL.md)
 - [Self-hosting](docs/SELF_HOSTING.md)
